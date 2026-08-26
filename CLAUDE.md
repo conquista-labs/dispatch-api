@@ -86,6 +86,23 @@ dotnet run --project src/Dispatch.Api   # sobe a API localmente
 
 ## Estado atual
 
-Solution (`Dispatch.slnx`) e os 4 projetos + `Dispatch.Domain.Tests` criados e compilando,
-sem lógica de negócio ainda. Próximo passo: modelar as entidades do domínio e o motor de
-distribuição (seção 4 do documento de requisitos) dentro de `Dispatch.Domain`.
+Solution, scaffold Docker/Postgres local e commit inicial feitos (ver seções acima).
+
+Primeiro corte do motor de distribuição (seção 4 do documento de requisitos) modelado em
+`Dispatch.Domain`, com 10 testes cobrindo os casos de precedência de alçada e os 5 passos
+do motor — `dotnet test` verde. Estrutura:
+
+- `Dispatch.Domain/` (raiz): `TipoAto`, `Conferente`, `Protocolo`, enums `Nivel`/`Etapa`/`Prioridade`.
+- `Dispatch.Domain/Alcada/`: `SujeitoAlcada` e `AlvoAlcada` (hierarquias fechadas — record
+  abstrato com construtor privado + tipos aninhados, emulando um sum type), `RegraAlcada`,
+  `ResolvedorAlcada` (implementa a precedência pessoa > nível, negação > permissão, ausência
+  de regra = permitido).
+- `Dispatch.Domain/Distribuicao/`: `MotorDistribuicao` (os 5 passos), `AvaliacaoCandidato` e
+  `ResultadoDistribuicao` (Atribuido / EnviadoParaPool / Excecao — carrega a regra aplicada
+  por candidato, para auditabilidade — RNF-02).
+
+Pendências conhecidas desse primeiro corte (não é lacuna, é escopo deliberado):
+`Protocolo.Urgente` hoje só reflete `Prioridade.Alta`; o gatilho por prazo (1h, D+0) entra
+quando **Prazo e Vencimento** (seção 5 do documento) forem modelados — próximo passo natural
+depois deste. Ainda não há persistência (EF Core) nem casos de uso na Application — o motor
+hoje só existe como função pura em memória, do jeito que o RNF-01 pede.
