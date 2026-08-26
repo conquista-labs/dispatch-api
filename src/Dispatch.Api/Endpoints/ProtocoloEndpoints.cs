@@ -1,0 +1,58 @@
+using Dispatch.Application;
+using Dispatch.Domain;
+
+namespace Dispatch.Api.Endpoints;
+
+public static class ProtocoloEndpoints
+{
+    public static void MapProtocoloEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/protocolos/distribuir", async (
+                DistribuirProtocoloRequest request,
+                DistribuirProtocolo casoDeUso,
+                CancellationToken cancellationToken) =>
+            {
+                var protocolo = new Protocolo(Guid.NewGuid(), request.Numero, request.TipoAtoId, request.Etapa, request.Prioridade);
+                var escrevente = new Escrevente(request.EscreventeId, request.EscreventeNome, request.EquipeId);
+
+                var resultado = await casoDeUso.ExecutarAsync(protocolo, escrevente, cancellationToken);
+
+                return Results.Ok(ParaResponse(protocolo, resultado));
+            })
+            .WithName("DistribuirProtocolo")
+            .WithSummary("Resolve o prazo do protocolo e decide o destino: atribuído, pool ou exceção.")
+            .Produces<DistribuirProtocoloResponse>();
+    }
+
+    // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
+    // resposta próprio da Api, achatado, fácil de serializar e estável independente de como
+    // o Domain organiza o resultado internamente.
+    private static DistribuirProtocoloResponse ParaResponse(Protocolo protocolo, ResultadoDistribuicao resultado) => resultado switch
+    {
+        ResultadoDistribuicao.Atribuido atribuido => new DistribuirProtocoloResponse(
+            "Atribuido", atribuido.Conferente.Id, Motivo: null, protocolo.VencimentoEm),
+
+        ResultadoDistribuicao.EnviadoParaPool => new DistribuirProtocoloResponse(
+            "EnviadoParaPool", ConferenteId: null, Motivo: null, protocolo.VencimentoEm),
+
+        ResultadoDistribuicao.Excecao excecao => new DistribuirProtocoloResponse(
+            "Excecao", ConferenteId: null, excecao.Motivo, protocolo.VencimentoEm),
+
+        _ => throw new InvalidOperationException($"Resultado de distribuição não mapeado: {resultado.GetType().Name}")
+    };
+}
+
+public sealed record DistribuirProtocoloRequest(
+    string Numero,
+    Guid TipoAtoId,
+    Etapa Etapa,
+    Prioridade Prioridade,
+    Guid EscreventeId,
+    string EscreventeNome,
+    Guid? EquipeId);
+
+public sealed record DistribuirProtocoloResponse(
+    string Resultado,
+    Guid? ConferenteId,
+    string? Motivo,
+    DateTimeOffset? VencimentoEm);

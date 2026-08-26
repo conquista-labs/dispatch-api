@@ -143,6 +143,20 @@ Duas decisões de mapeamento que valem registrar (não são óbvias vindo de Pri
 cadeia de DI sem exception, `/health` responde 200 contra o Postgres local. `dotnet-ef`
 instalado como tool local (`.config/dotnet-tools.json`).
 
-Pendências conhecidas: nenhum endpoint chama `DistribuirProtocolo` ainda — falta a Api de
-verdade (endpoint + DTO de entrada/saída). Nenhuma seed de dados (tipos de ato, equipes)
-existe ainda, então o banco está com schema mas vazio.
+Primeiro endpoint em `Dispatch.Api`: `POST /protocolos/distribuir`
+(`Endpoints/ProtocoloEndpoints.cs`), com `DistribuirProtocoloRequest`/`Response` como DTOs
+próprios da Api — `ResultadoDistribuicao` do Domain não vaza pro cliente HTTP, é traduzido
+por um `switch` na hierarquia fechada. Testado ponta a ponta de verdade (Api → Application →
+Domain → Postgres local) com dado inserido manualmente via DBeaver/psql, cobrindo os três
+destinos (atribuído, pool, exceção).
+
+Swagger UI ligado: `Microsoft.AspNetCore.OpenApi` (já presente) gera o JSON da spec em
+`/openapi/v1.json`; `Swashbuckle.AspNetCore.SwaggerUI` (só a UI, sem o SwaggerGen deles —
+sem gerador de spec duplicado) renderiza em `/swagger`, ambos só em Development. Enums
+serializados como string no JSON (`JsonStringEnumConverter`), mesma decisão já tomada pro
+banco — legível no Swagger, não quebra se a ordem do enum mudar no C#.
+
+Pendências conhecidas: o endpoint não persiste o `Protocolo` (não existe porta de escrita
+pra protocolo ainda, só leitura das outras entidades) — é efetivamente uma "prévia" de
+distribuição. Não há endpoint pra cadastrar tipo de ato/conferente/equipe/escrevente ainda;
+testar hoje exige inserir linha manualmente (DBeaver ou psql). Nenhuma seed de dados existe.
