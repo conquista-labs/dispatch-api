@@ -101,8 +101,19 @@ do motor — `dotnet test` verde. Estrutura:
   `ResultadoDistribuicao` (Atribuido / EnviadoParaPool / Excecao — carrega a regra aplicada
   por candidato, para auditabilidade — RNF-02).
 
-Pendências conhecidas desse primeiro corte (não é lacuna, é escopo deliberado):
-`Protocolo.Urgente` hoje só reflete `Prioridade.Alta`; o gatilho por prazo (1h, D+0) entra
-quando **Prazo e Vencimento** (seção 5 do documento) forem modelados — próximo passo natural
-depois deste. Ainda não há persistência (EF Core) nem casos de uso na Application — o motor
-hoje só existe como função pura em memória, do jeito que o RNF-01 pede.
+Prazo e vencimento (seção 5) modelados em `Dispatch.Domain/Prazos/`: `Prazo`/`TipoPrazo`
+(os 4 valores fixos — 1 hora, D+0, D+1, D+2), `Equipe`/`Escrevente`, `ResolvedorDePrazo`
+(escrevente sem equipe cai no padrão D+1 e sinaliza — RF-09) e `Semaforo`/`FaixaSemaforo`
+(as duas faixas de atenção/urgência entram como parâmetro, são configuração do sistema, não
+constante do domínio). `Protocolo` ganhou `Prazo`/`VencimentoEm` (definidos via
+`DefinirPrazo`, não no construtor — só existem depois da resolução) e `Urgente` agora
+considera prazo curto (1h/D+0) além de prioridade alta. 28 testes, `dotnet test` verde.
+
+Suposição assumida (não confirmada com a operação — ver seção 11 do documento): "vence no
+fim do dia D" foi modelado como "vence no início do dia seguinte" (mesmo instante, cálculo
+mais simples). Ajustar se a operação confirmar outra fronteira (ex.: 23:59:59 exatas).
+
+Pendências conhecidas: ainda não há persistência (EF Core) nem casos de uso na Application —
+o motor e a resolução de prazo hoje só existem como funções puras em memória, do jeito que o
+RNF-01 pede. `Equipe`/`Escrevente`/config do semáforo (as faixas) ainda não têm nenhum lugar
+que os carregue de fora — isso é trabalho de Application/Infrastructure, não do Domain.
