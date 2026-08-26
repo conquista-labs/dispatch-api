@@ -121,6 +121,28 @@ portas em `Portas/` (`IConferenteRepository`, `IEquipeRepository`, `IRegraAlcada
 depois. `Dispatch.Application.Tests` criado, testado com fakes in-memory dessas portas
 (sem banco). 31 testes no total, `dotnet test` verde.
 
-Pendências conhecidas: ainda não há persistência (EF Core) — as portas existem mas não têm
-implementação real, então `DistribuirProtocolo` não é chamado por nenhum endpoint ainda.
-Isso é o próximo passo (Infrastructure + Api).
+Persistência real em `Dispatch.Infrastructure`: `DispatchDbContext` (Npgsql), mapeamento via
+`IEntityTypeConfiguration<T>` em `Configuracoes/` (uma classe por entidade), implementação das
+5 portas em `Repositorios/`, e `EFCore.NamingConventions` ligado (`UseSnakeCaseNamingConvention`)
+pra manter o banco em snake_case por convenção, sem precisar nomear coluna a coluna na mão.
+Primeira migration (`InicializarSchema`) aplicada no Postgres local.
+
+Duas decisões de mapeamento que valem registrar (não são óbvias vindo de Prisma/outros ORMs):
+- **`Prazo` (value object de um campo só) usa `ValueConverter`, não `OwnsOne`.** EF Core não
+  permite ligar uma navegação "owned" via parâmetro de construtor — só via propriedade com
+  setter, o que forçaria abrir mão da imutabilidade de `Equipe`/`Protocolo` só por causa do
+  ORM. Um conversor (`PrazoConversoes`, em `Configuracoes/`) trata a coluna como texto simples
+  e resolve isso sem exigir setter nenhum.
+- **`SujeitoAlcada`/`AlvoAlcada` (hierarquias fechadas / sum types) não são mapeadas
+  diretamente.** `RegraAlcada` tem uma classe de persistência paralela, só pra EF Core
+  (`RegraAlcadaRegistro`, em `Persistencia/`), com colunas achatadas (par nulo/preenchido) e
+  um `CHECK` no Postgres (`num_nonnulls`) garantindo o invariante também no banco. Quem
+  traduz de volta pro tipo rico do Domain é `RegraAlcadaRepository`, não o EF Core.
+
+`Program.cs` chama `AddInfrastructure` (composition root) — API sobe e resolve toda a
+cadeia de DI sem exception, `/health` responde 200 contra o Postgres local. `dotnet-ef`
+instalado como tool local (`.config/dotnet-tools.json`).
+
+Pendências conhecidas: nenhum endpoint chama `DistribuirProtocolo` ainda — falta a Api de
+verdade (endpoint + DTO de entrada/saída). Nenhuma seed de dados (tipos de ato, equipes)
+existe ainda, então o banco está com schema mas vazio.
