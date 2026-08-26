@@ -1,11 +1,41 @@
+using System.Text;
 using System.Text.Json.Serialization;
 using Dispatch.Api.Endpoints;
+using Dispatch.Api.OpenApi;
 using Dispatch.Infrastructure;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+    options.AddOperationTransformer<BearerSecuritySchemeTransformer>();
+    options.AddSchemaTransformer<EnumSchemaTransformer>();
+});
 builder.Services.AddInfrastructure(builder.Configuration);
+
+var jwt = builder.Configuration.GetSection(JwtOptions.Secao).Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Configuração 'Jwt' ausente.");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwt.Emissor,
+            ValidateAudience = true,
+            ValidAudience = jwt.Audiencia,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.ChaveDeAssinatura))
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // Enum como string no JSON ("PreConferencia", não 0) — mesma decisão que já vale pro banco
 // (ver PrazoConversoes/HasConversion<string>): legível no Swagger e não quebra silenciosamente
@@ -25,7 +55,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapAuthEndpoints();
 app.MapProtocoloEndpoints();
 
 app.Run();

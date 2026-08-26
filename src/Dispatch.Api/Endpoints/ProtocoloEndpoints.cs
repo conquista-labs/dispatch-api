@@ -21,7 +21,9 @@ public static class ProtocoloEndpoints
             })
             .WithName("DistribuirProtocolo")
             .WithSummary("Resolve o prazo do protocolo e decide o destino: atribuído, pool ou exceção.")
-            .Produces<DistribuirProtocoloResponse>();
+            .Produces<DistribuirProtocoloResponse>()
+            // Seção 3 do requisito: importação/distribuição é ação de gestão — só Distribuidora.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de

@@ -20,9 +20,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEquipeRepository, EquipeRepository>();
         services.AddScoped<IRegraAlcadaRepository, RegraAlcadaRepository>();
         services.AddScoped<ITipoAtoRepository, TipoAtoRepository>();
+        services.AddScoped<IUsuarioRepository, UsuarioRepository>();
         services.AddSingleton<IRelogio, RelogioDoSistema>();
+        services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
+        services.AddScoped<IEmissorDeToken, EmissorDeTokenJwt>();
+
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Secao));
 
         services.AddScoped<DistribuirProtocolo>();
+        services.AddScoped<Autenticar>();
 
         return services;
     }

@@ -160,3 +160,55 @@ Pendências conhecidas: o endpoint não persiste o `Protocolo` (não existe port
 pra protocolo ainda, só leitura das outras entidades) — é efetivamente uma "prévia" de
 distribuição. Não há endpoint pra cadastrar tipo de ato/conferente/equipe/escrevente ainda;
 testar hoje exige inserir linha manualmente (DBeaver ou psql). Nenhuma seed de dados existe.
+
+## Autenticação e autorização
+
+Fechado o buraco de segurança que existia até aqui (nenhum endpoint tinha proteção nenhuma).
+Escopo deliberadamente mínimo — só o suficiente pra ter login e checagem de papel no servidor
+(RNF-04); cadastro completo de usuário fica pra quando RF-25 (cadastro de conferentes) entrar.
+
+- **`Usuario`/`Papel`** em `Dispatch.Domain/Usuarios/` — entidade simples (id, nome, email,
+  senha_hash, papel, ativo). O algoritmo de hash em si não mora aqui (é infraestrutura).
+- **`Autenticar`** em `Dispatch.Application` — porta `IUsuarioRepository` (leitura por e-mail),
+  `IHashDeSenha` (verificação) e `IEmissorDeToken` (emissão). Resultado (`Autenticado`/
+  `Rejeitado`) não diferencia e-mail inexistente de senha errada — evita dar pista de quais
+  e-mails estão cadastrados.
+- **Hash de senha**: `PasswordHasher<TUser>` do pacote `Microsoft.Extensions.Identity.Core` —
+  só o hasher, sem trazer o ASP.NET Core Identity inteiro (não precisamos de reset de senha,
+  confirmação de e-mail, external login etc.; o requisito pede só e-mail+senha).
+  `HashDeSenhaAspNetCore` usa `PasswordHasher<object>` porque a implementação não usa a
+  instância do usuário pra nada — é só um parâmetro de extensibilidade da API.
+- **JWT**: `EmissorDeTokenJwt` (`System.IdentityModel.Tokens.Jwt`) inclui o papel como
+  `ClaimTypes.Role`, não claim customizada — deixa `RequireRole`/`[Authorize(Roles=...)]`
+  funcionarem prontos, sem policy customizada. Config em `Jwt:*` no `appsettings` — a chave
+  de assinatura do ambiente de Development é só pra local, a de produção entra como secret
+  do Fly.io (`fly secrets set Jwt__ChaveDeAssinatura=...`), igual a connection string do Neon.
+- **`POST /auth/login`** (`AllowAnonymous`) e `/protocolos/distribuir` agora exige papel
+  `Distribuidora` (`RequireAuthorization(policy => policy.RequireRole(...))`) — importação/
+  distribuição é ação de gestão (seção 3 do requisito).
+
+### Duas armadilhas do EF Core que já apareceram duas vezes
+
+Ao adicionar uma entidade nova com propriedade `bool`/`int`/`Guid` só de `get` (sem setter),
+o EF Core às vezes falha o constructor binding em tempo de design (`dotnet ef migrations add`)
+achando que não consegue ligar o parâmetro — mesmo a propriedade existindo. Aconteceu com
+`Conferente.NaEscala`/`CargaAtual` e de novo com `Usuario.Ativo`. Solução: declarar a
+propriedade explicitamente na `IEntityTypeConfiguration<T>` (`builder.Property(x => x.Ativo)`)
+antes de gerar a migration — parece bobo mas resolve.
+
+### Duas armadilhas do Swagger/OpenAPI (Microsoft.OpenApi 2.x)
+
+1. `Microsoft.AspNetCore.OpenApi` v10 gera `"enum": [...]` pro schema de um enum, mas sem
+   `"type": "string"` — o Swagger UI não sabe rotular isso e mostra "any". Corrigido com um
+   `IOpenApiSchemaTransformer` (`EnumSchemaTransformer`) que preenche o `type` que falta.
+2. Uma classe pode implementar `IOpenApiDocumentTransformer` **e**
+   `IOpenApiOperationTransformer` ao mesmo tempo, mas isso não basta — cada papel precisa ser
+   registrado separadamente (`AddDocumentTransformer<T>()` e `AddOperationTransformer<T>()`);
+   registrar só um deles faz o outro método nunca ser chamado, silenciosamente.
+
+## Decisões adiadas conscientemente
+
+- **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há
+  nenhum consumidor de verdade (o `dispatch-web` não existe), então não há contrato pra
+  quebrar. Reavaliar quando o front-end começar ou antes do primeiro deploy em produção; nesse
+  ponto um prefixo de rota simples provavelmente já resolve, sem precisar de biblioteca.
