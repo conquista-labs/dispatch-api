@@ -61,5 +61,6 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapProtocoloEndpoints();
+app.MapConferenteEndpoints();
 
 app.Run();

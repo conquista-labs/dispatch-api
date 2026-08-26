@@ -5,7 +5,7 @@ public class ResolvedorAlcadaTests
     [Fact]
     public void RegraDeNivelNegaEAusenciaDeRegraPessoal_Nega()
     {
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Junior, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PreConferencia);
         var regra = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, alvo);
 
@@ -22,7 +22,7 @@ public class ResolvedorAlcadaTests
         // nível "não pode pré-conferência" e regra pessoal "pode pré e pós" -> pode fazer
         // pré-conferência, porque a regra pessoal cobre o alvo e substitui a de nível.
         var conferenteId = Guid.NewGuid();
-        var conferente = new Conferente(conferenteId, Nivel.Junior, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PreConferencia);
 
         var regraDeNivel = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, alvo);
@@ -37,7 +37,7 @@ public class ResolvedorAlcadaTests
     [Fact]
     public void AusenciaDeRegraAplicavel_Permite()
     {
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PosConferencia);
 
         var decisao = ResolvedorAlcada.Resolver(conferente, alvo, []);
@@ -49,7 +49,7 @@ public class ResolvedorAlcadaTests
     [Fact]
     public void DentroDoMesmoEscopo_NegacaoVenceQuandoHaPermiteENegaParaOMesmoAlvo()
     {
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Senior, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Senior, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PosConferencia);
 
         var permite = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Senior), PermissaoRegra.Permite, alvo);
@@ -64,7 +64,7 @@ public class ResolvedorAlcadaTests
     public void RegraInativaNaoEhConsiderada()
     {
         var conferenteId = Guid.NewGuid();
-        var conferente = new Conferente(conferenteId, Nivel.Junior, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PreConferencia);
 
         var regraInativa = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Nega, alvo, Ativa: false);

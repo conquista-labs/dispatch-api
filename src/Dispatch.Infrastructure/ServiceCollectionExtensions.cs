@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRegraAlcadaRepository, RegraAlcadaRepository>();
         services.AddScoped<ITipoAtoRepository, TipoAtoRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWorkEfCore>();
         services.AddSingleton<IRelogio, RelogioDoSistema>();
         services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
         services.AddScoped<IEmissorDeToken, EmissorDeTokenJwt>();
@@ -29,6 +30,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<DistribuirProtocolo>();
         services.AddScoped<Autenticar>();
+        services.AddScoped<CadastrarConferente>();
+        services.AddScoped<EditarNivelEJornada>();
+        services.AddScoped<MarcarPresenca>();
+        services.AddScoped<RemoverConferente>();
 
         return services;
     }

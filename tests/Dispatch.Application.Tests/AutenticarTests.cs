@@ -2,12 +2,6 @@ using Dispatch.Domain;
 
 namespace Dispatch.Application.Tests;
 
-internal sealed class FakeUsuarioRepository(Usuario? usuario) : IUsuarioRepository
-{
-    public Task<Usuario?> ObterPorEmailAsync(string email, CancellationToken cancellationToken) =>
-        Task.FromResult(usuario is not null && usuario.Email == email ? usuario : null);
-}
-
 internal sealed class FakeHashDeSenha : IHashDeSenha
 {
     public string Hash(string senha) => $"hash:{senha}";
@@ -27,7 +21,7 @@ public class AutenticarTests
     public async Task CredenciaisCorretas_EmiteToken()
     {
         var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Distribuidora);
-        var autenticar = new Autenticar(new FakeUsuarioRepository(usuario), HashDeSenha, new FakeEmissorDeToken());
+        var autenticar = new Autenticar(new FakeUsuarioRepository([usuario]), HashDeSenha, new FakeEmissorDeToken());
 
         var resultado = await autenticar.ExecutarAsync("fulano@cartorio.com", "senha-correta");
 
@@ -39,7 +33,7 @@ public class AutenticarTests
     public async Task SenhaErrada_Rejeita()
     {
         var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Distribuidora);
-        var autenticar = new Autenticar(new FakeUsuarioRepository(usuario), HashDeSenha, new FakeEmissorDeToken());
+        var autenticar = new Autenticar(new FakeUsuarioRepository([usuario]), HashDeSenha, new FakeEmissorDeToken());
 
         var resultado = await autenticar.ExecutarAsync("fulano@cartorio.com", "senha-errada");
 
@@ -49,7 +43,7 @@ public class AutenticarTests
     [Fact]
     public async Task EmailNaoCadastrado_Rejeita()
     {
-        var autenticar = new Autenticar(new FakeUsuarioRepository(usuario: null), HashDeSenha, new FakeEmissorDeToken());
+        var autenticar = new Autenticar(new FakeUsuarioRepository([]), HashDeSenha, new FakeEmissorDeToken());
 
         var resultado = await autenticar.ExecutarAsync("ninguem@cartorio.com", "qualquer-senha");
 
@@ -60,7 +54,7 @@ public class AutenticarTests
     public async Task UsuarioInativo_Rejeita()
     {
         var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Conferente, ativo: false);
-        var autenticar = new Autenticar(new FakeUsuarioRepository(usuario), HashDeSenha, new FakeEmissorDeToken());
+        var autenticar = new Autenticar(new FakeUsuarioRepository([usuario]), HashDeSenha, new FakeEmissorDeToken());
 
         var resultado = await autenticar.ExecutarAsync("fulano@cartorio.com", "senha-correta");
 

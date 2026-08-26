@@ -206,6 +206,33 @@ antes de gerar a migration — parece bobo mas resolve.
    registrado separadamente (`AddDocumentTransformer<T>()` e `AddOperationTransformer<T>()`);
    registrar só um deles faz o outro método nunca ser chamado, silenciosamente.
 
+## Cadastro de conferentes (RF-25/RF-26/RF-27)
+
+`Conferente` ganhou `UsuarioId` (FK única pra `usuarios`, sem navigation property no Domain —
+mesmo padrão já usado em `Escrevente`/`Equipe`) e `JornadaHoras`; `Nivel` e `NaEscala` viraram
+`private set` porque agora têm comportamento de domínio de verdade (`AtualizarNivelEJornada`,
+`MarcarPresenca`). `Usuario.Ativo` também virou `private set` (+ `Desativar()`).
+
+Quatro casos de uso novos em `Dispatch.Application`, todos atrás de `/conferentes` (`Api`),
+exigindo papel Distribuidora:
+
+- **`CadastrarConferente`** — cria `Usuario` (papel fixo `Conferente`, nunca escolhido) +
+  `Conferente` juntos, atômico. Rejeita e-mail duplicado antes de criar qualquer coisa.
+- **`EditarNivelEJornada`**, **`MarcarPresenca`** — simples, devolvem `bool` (achou/não achou).
+- **`RemoverConferente`** — soft delete: `Usuario.Desativar()` + sai da escala. Não apaga a
+  linha — decisão registrada aqui porque o requisito não deixa isso explícito (RF-25 só diz
+  "remover"); manter histórico de quem conferiu o quê pesou mais que apagar de verdade.
+
+**`IUnitOfWork`** (nova porta): `CadastrarConferente` precisa gravar `Usuario` + `Conferente`
+como uma coisa só — daí os métodos de escrita dos repositórios (`Adicionar`) só marcam o
+estado, e quem decide gravar de fato é o caso de uso, chamando `unitOfWork.SalvarAsync()`
+uma vez no final. Equivalente ao `prisma.$transaction([...])`, só que explícito por injeção
+em vez de um wrapper de array.
+
+Pendência conhecida (RF-27): marcar ausente ou remover deveria devolver ao pool os protocolos
+já atribuídos àquela pessoa — não dá pra implementar ainda porque `Protocolo` não é persistido
+(mesma pendência já registrada na seção de endpoints). Fica pra quando isso existir.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

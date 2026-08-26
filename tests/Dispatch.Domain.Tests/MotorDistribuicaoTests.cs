@@ -19,7 +19,7 @@ public class MotorDistribuicaoTests
     public void NenhumConferenteComAlcada_RetornaExcecaoComMotivoPorPessoa()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Junior, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var regraNegaTipo = new RegraAlcada(
             Guid.NewGuid(),
             new SujeitoAlcada.PorNivel(Nivel.Junior),
@@ -39,7 +39,7 @@ public class MotorDistribuicaoTests
     public void ConferenteForaDaEscala_NaoEhCandidato()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
-        var ausente = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: false, cargaAtual: 0);
+        var ausente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: false, cargaAtual: 0);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [ausente], [], [Inventario]);
 
@@ -51,7 +51,7 @@ public class MotorDistribuicaoTests
     public void ProtocoloNaoUrgenteComCandidatoElegivel_VaiParaOPool()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [conferente], [], [Inventario]);
 
@@ -63,8 +63,8 @@ public class MotorDistribuicaoTests
     public void ProtocoloUrgente_AtribuiAoCandidatoComMenorCargaAtual()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, Prioridade.Alta);
-        var maisCarregado = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 5);
-        var menosCarregado = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 1);
+        var maisCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 5);
+        var menosCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [maisCarregado, menosCarregado], [], [Inventario]);
 

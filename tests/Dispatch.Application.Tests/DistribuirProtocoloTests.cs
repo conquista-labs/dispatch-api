@@ -13,7 +13,7 @@ public class DistribuirProtocoloTests
         var equipeId = Guid.NewGuid();
         var equipe = new Equipe(equipeId, "5º andar", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D1));
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId);
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
 
         var caso = new DistribuirProtocolo(
@@ -35,7 +35,7 @@ public class DistribuirProtocoloTests
     public async Task EscreventeSemEquipe_CaiNoPadraoD1EVaiParaOPool()
     {
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId: null);
-        var conferente = new Conferente(Guid.NewGuid(), Nivel.Pleno, naEscala: true, cargaAtual: 0);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "124", Inventario.Id, Etapa.PosConferencia);
 
         var caso = new DistribuirProtocolo(
