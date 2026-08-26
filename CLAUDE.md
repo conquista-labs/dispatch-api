@@ -113,7 +113,14 @@ Suposição assumida (não confirmada com a operação — ver seção 11 do doc
 fim do dia D" foi modelado como "vence no início do dia seguinte" (mesmo instante, cálculo
 mais simples). Ajustar se a operação confirmar outra fronteira (ex.: 23:59:59 exatas).
 
-Pendências conhecidas: ainda não há persistência (EF Core) nem casos de uso na Application —
-o motor e a resolução de prazo hoje só existem como funções puras em memória, do jeito que o
-RNF-01 pede. `Equipe`/`Escrevente`/config do semáforo (as faixas) ainda não têm nenhum lugar
-que os carregue de fora — isso é trabalho de Application/Infrastructure, não do Domain.
+Primeiro caso de uso em `Dispatch.Application`: `DistribuirProtocolo` (`CasosDeUso/`), que
+orquestra `ResolvedorDePrazo` + `MotorDistribuicao` sem reimplementar nenhuma regra. As
+dependências externas (conferentes, equipes, regras, catálogo de tipos, relógio) entram como
+portas em `Portas/` (`IConferenteRepository`, `IEquipeRepository`, `IRegraAlcadaRepository`,
+`ITipoAtoRepository`, `IRelogio`) — implementação real fica pra `Dispatch.Infrastructure`
+depois. `Dispatch.Application.Tests` criado, testado com fakes in-memory dessas portas
+(sem banco). 31 testes no total, `dotnet test` verde.
+
+Pendências conhecidas: ainda não há persistência (EF Core) — as portas existem mas não têm
+implementação real, então `DistribuirProtocolo` não é chamado por nenhum endpoint ainda.
+Isso é o próximo passo (Infrastructure + Api).
