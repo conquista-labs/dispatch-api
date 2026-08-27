@@ -329,6 +329,38 @@ avulso aparecendo agrupado em `porConferente`.
 Pendências conscientes: RF-15 (observação no card), RF-16 (redistribuir pool) e RF-17 (ação de
 resolver exceção) ficaram de fora — são ações, não fazem parte da leitura em si.
 
+## RF-15/16/17 — fecha o módulo de Distribuição
+
+- **RF-15** (`Protocolo.Observacao`) — campo livre, editável "em qualquer estado" (sem guarda
+  no Domain), exposto em cada card da visão de distribuição. `PUT /protocolos/{id}/observacao`,
+  hoje só Distribuidora — RF-23 (o próprio conferente dono editando) fica pra quando "Minha
+  fila" existir, é ali que faz sentido decidir a regra de "só o dono edita".
+- **RF-16** (`RedistribuirPool`) — reaplica `MotorDistribuicao` a todo protocolo **sem dono**
+  (Pool ou Exceção — os dois únicos status com `DonoId` nulo; `Descartado` também tem `DonoId`
+  nulo mas não entra, não faz sentido redistribuir algo descartado). Não recalcula prazo — só
+  reavalia elegibilidade contra o estado atual de conferentes/regras, que pode ter mudado desde
+  a distribuição original. `POST /protocolos/redistribuir-pool`, devolve quantos mudaram de
+  status.
+- **RF-17** — duas ações na fila de exceções: `POST /protocolos/{id}/atribuir` (manual, sem
+  passar pelo motor — só funciona se `Status == Excecao`, 409 caso contrário) e
+  `POST /protocolos/{id}/descartar` (novo status `Descartado`, mantém `MotivoExcecao` pra
+  auditoria de por que existiu). "Definir alçada" (a outra ação de resolução que RF-17 cita)
+  fica de fora — depende de CRUD de `RegraAlcada`, que é Central de Regras, ainda não existe.
+
+**Bug real encontrado testando ponta a ponta**: o endpoint avulso `/protocolos/distribuir`
+nunca validava se o `TipoAtoId` do request existia no catálogo — confiava direto no Guid
+recebido. Simular "tipo desconhecido" (Guid que não existe) quebrava a FK na hora de gravar,
+porque só `ImportarLote` tinha esse cuidado (resolvendo por nome). Corrigido: o endpoint agora
+verifica contra o catálogo antes de construir o `Protocolo`, igual `ImportarLote` já fazia.
+Não pego por teste automatizado nenhum — só apareceu testando de verdade contra o Postgres
+(os testes de `DistribuirProtocolo` usam fakes que não têm FK pra violar). Reforça o hábito de
+sempre validar contra o banco real antes de considerar uma feature pronta.
+
+Testado ponta a ponta: observação sobrevivendo a um redistribute, exceção "ninguém com alçada"
+virando pool sozinha depois que um conferente foi cadastrado, atribuição manual com guarda de
+estado (409 na segunda tentativa) e descarte preservando o motivo original. 39 testes na
+Application (67 no total do projeto).
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

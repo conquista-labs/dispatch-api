@@ -50,6 +50,8 @@ public static class DistribuicaoEndpoints
         protocolo.DonoId,
         protocolo.VencimentoEm,
         protocolo.MotivoExcecao,
+        // RF-15: a observação do conferente aparece no card pra gestão.
+        protocolo.Observacao,
         protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null);
 }
 
@@ -62,6 +64,7 @@ public sealed record ProtocoloResumo(
     Guid? DonoId,
     DateTimeOffset? VencimentoEm,
     string? MotivoExcecao,
+    string? Observacao,
     FaixaSemaforo? Semaforo);
 
 public sealed record GrupoPorConferenteResponse(Guid ConferenteId, IReadOnlyList<ProtocoloResumo> Protocolos);

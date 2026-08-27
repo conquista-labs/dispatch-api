@@ -24,6 +24,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
 
         builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.MotivoExcecao);
+        builder.Property(p => p.Observacao);
 
         builder.HasOne<TipoAto>()
             .WithMany()

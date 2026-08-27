@@ -39,6 +39,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RemoverConferente>();
         services.AddScoped<ImportarLote>();
         services.AddScoped<ObterVisaoDistribuicao>();
+        services.AddScoped<RedistribuirPool>();
+        services.AddScoped<AtribuirManualmente>();
+        services.AddScoped<DescartarExcecao>();
+        services.AddScoped<DefinirObservacao>();
 
         return services;
     }

@@ -21,6 +21,7 @@ public sealed class Protocolo
     public StatusProtocolo Status { get; private set; } = StatusProtocolo.Pool;
     public Guid? DonoId { get; private set; }
     public string? MotivoExcecao { get; private set; }
+    public string? Observacao { get; private set; }
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Etapa etapa, DateTimeOffset andamentoEm,
@@ -71,4 +72,15 @@ public sealed class Protocolo
         DonoId = null;
         MotivoExcecao = motivo;
     }
+
+    // RF-17: descartar uma exceção que não vale a pena resolver. Mantém MotivoExcecao —
+    // é o registro de por que ela existiu, não faz sentido apagar isso ao descartar.
+    public void Descartar()
+    {
+        Status = StatusProtocolo.Descartado;
+        DonoId = null;
+    }
+
+    // RF-15/RF-23: editável em qualquer estado, por isso não tem guarda de status nenhuma aqui.
+    public void DefinirObservacao(string? observacao) => Observacao = observacao;
 }
