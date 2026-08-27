@@ -564,6 +564,14 @@ Testado ponta a ponta: login devolvendo usuário completo, `/auth/me` com token 
 dois papéis (Distribuidora e Conferente), 401 sem token. 132 testes automatizados no total
 (40 Domain + 92 Application).
 
+## CORS pro dispatch-web
+
+Achado planejando o front: nenhum teste anterior (todos via `curl`) esbarrou em CORS, porque
+`curl` não faz preflight — só o navegador faz. `Program.cs` ganhou `AddCors`/`UseCors`, só em
+`Development`, liberando `http://localhost:5173` (porta padrão do Vite dev server). A origem
+de produção entra como config quando o `dispatch-web` tiver deploy de verdade — mesma lógica
+de "decisão adiada conscientemente" do versionamento de API, abaixo.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há
