@@ -11,9 +11,12 @@ public static class ProtocoloEndpoints
         app.MapPost("/protocolos/distribuir", async (
                 DistribuirProtocoloRequest request,
                 DistribuirProtocolo casoDeUso,
+                IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
-                var protocolo = new Protocolo(Guid.NewGuid(), request.Numero, request.TipoAtoId, request.Etapa, request.Prioridade);
+                // Endpoint avulso, sem relatório por trás — usa "agora" como o instante do
+                // andamento, já que não existe um de verdade vindo de importação nenhuma.
+                var protocolo = new Protocolo(Guid.NewGuid(), request.Numero, request.TipoAtoId, request.Etapa, relogio.Agora, request.Prioridade);
                 var escrevente = new Escrevente(request.EscreventeId, request.EscreventeNome, request.EquipeId);
 
                 var resultado = await casoDeUso.ExecutarAsync(protocolo, escrevente, cancellationToken);

@@ -30,7 +30,7 @@ public class MarcarPresencaTests
     public async Task MarcarAusente_DevolveProtocolosAtribuidosParaOPool()
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(conferente.Id);
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new MarcarPresenca(new FakeConferenteRepository([conferente]), protocolos, new FakeUnitOfWork());
@@ -45,7 +45,7 @@ public class MarcarPresencaTests
     public async Task MarcarPresente_NaoMexeNosProtocolosAtribuidos()
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: false, cargaAtual: 1);
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(conferente.Id);
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new MarcarPresenca(new FakeConferenteRepository([conferente]), protocolos, new FakeUnitOfWork());

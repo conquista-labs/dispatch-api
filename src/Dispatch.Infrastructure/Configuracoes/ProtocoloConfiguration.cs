@@ -13,6 +13,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.Numero).IsRequired().HasMaxLength(50);
         builder.Property(p => p.Etapa).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.Prioridade).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.AndamentoEm);
 
         // Prazo aqui é opcional (só existe depois de DistribuirProtocolo rodar).
         builder.Property(p => p.Prazo)

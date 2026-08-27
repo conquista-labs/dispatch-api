@@ -7,5 +7,6 @@ internal static class OpenApiTags
     public const string Autenticacao = "Autenticação";
     public const string Conferentes = "Conferentes";
     public const string Protocolos = "Protocolos";
+    public const string Importacao = "Importação";
     public const string Sistema = "Sistema";
 }

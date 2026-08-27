@@ -67,6 +67,22 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
     public Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());
+
+    public int Quantidade => _protocolos.Count;
+}
+
+internal sealed class FakeEscreventeRepository : IEscreventeRepository
+{
+    private readonly List<Escrevente> _escreventes;
+
+    public FakeEscreventeRepository(IReadOnlyCollection<Escrevente> escreventes) => _escreventes = escreventes.ToList();
+
+    public Task<IReadOnlyCollection<Escrevente>> ObterTodosAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Escrevente>>(_escreventes.ToList());
+
+    public void Adicionar(Escrevente escrevente) => _escreventes.Add(escrevente);
+
+    public int Quantidade => _escreventes.Count;
 }
 
 internal sealed class FakeUnitOfWork : IUnitOfWork

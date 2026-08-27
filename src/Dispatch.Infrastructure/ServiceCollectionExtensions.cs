@@ -22,6 +22,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITipoAtoRepository, TipoAtoRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
         services.AddScoped<IProtocoloRepository, ProtocoloRepository>();
+        services.AddScoped<IEscreventeRepository, EscreventeRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWorkEfCore>();
         services.AddSingleton<IRelogio, RelogioDoSistema>();
         services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
@@ -35,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EditarNivelEJornada>();
         services.AddScoped<MarcarPresenca>();
         services.AddScoped<RemoverConferente>();
+        services.AddScoped<ImportarLote>();
 
         return services;
     }

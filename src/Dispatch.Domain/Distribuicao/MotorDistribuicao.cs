@@ -21,7 +21,8 @@ public static class MotorDistribuicao
             .Select(c => new AvaliacaoCandidato(
                 c,
                 DecisaoEtapa: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEtapa(protocolo.Etapa), regras),
-                DecisaoTipo: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(protocolo.TipoAtoId), regras)))
+                // .Value é seguro aqui: se TipoAtoId fosse nulo, já teríamos retornado acima.
+                DecisaoTipo: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(protocolo.TipoAtoId!.Value), regras)))
             .ToList();
 
         var elegiveis = avaliacoes.Where(a => a.Elegivel).ToList();

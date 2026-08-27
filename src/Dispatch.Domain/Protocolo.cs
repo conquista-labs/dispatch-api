@@ -4,21 +4,28 @@ public sealed class Protocolo
 {
     public Guid Id { get; }
     public string Numero { get; }
-    public Guid TipoAtoId { get; }
+    // Nulo = tipo de ato desconhecido (RF-09) — sinalizado, não inventado na hora. O motor de
+    // distribuição já trata isso como "tipo desconhecido" (exceção) sem precisar de FK válida.
+    public Guid? TipoAtoId { get; }
     public Etapa Etapa { get; }
     public Prioridade Prioridade { get; }
+    // Instante do "andamento" que originou este registro (vem do relatório importado, não de
+    // quando a importação rodou) — é o momentoDeReferencia usado pra calcular o vencimento, e
+    // também a base da "linha de corte" que evita reimportar o que já foi processado.
+    public DateTimeOffset AndamentoEm { get; }
     public Prazo? Prazo { get; private set; }
     public DateTimeOffset? VencimentoEm { get; private set; }
     public StatusProtocolo Status { get; private set; } = StatusProtocolo.Pool;
     public Guid? DonoId { get; private set; }
     public string? MotivoExcecao { get; private set; }
 
-    public Protocolo(Guid id, string numero, Guid tipoAtoId, Etapa etapa, Prioridade prioridade = Prioridade.Normal)
+    public Protocolo(Guid id, string numero, Guid? tipoAtoId, Etapa etapa, DateTimeOffset andamentoEm, Prioridade prioridade = Prioridade.Normal)
     {
         Id = id;
         Numero = numero;
         TipoAtoId = tipoAtoId;
         Etapa = etapa;
+        AndamentoEm = andamentoEm;
         Prioridade = prioridade;
     }
 

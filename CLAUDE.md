@@ -248,6 +248,60 @@ voltou pra `Pool` com `dono_id` nulo.
 Resposta de `POST /protocolos/distribuir` ganhou `ProtocoloId`, já que agora existe um
 registro de verdade pra referenciar depois.
 
+## Importação de lote (RF-05 a RF-12)
+
+Fonte real do relatório do cartório é **PDF**, não csv/xlsx como o requisito original supõe —
+descoberto com um relatório de exemplo real do cliente. Decisão: PDF fica **fora do sistema**.
+O dono passa o PDF por uma IA externa antes (prompt padronizado, guardado fora do código) e
+cola/envia o CSV resultante — RF-05 já cobre "colagem de linhas", então não precisou de modo
+de entrada novo. `Etapa` nunca é coluna do CSV: cada relatório do cartório é 100% Pré ou 100%
+Pós, então a etapa é um parâmetro do pedido de importação inteiro, não por linha.
+
+**Linha de corte substitui dedup por número de protocolo (RF-07).** Descoberta operacional
+importante: um protocolo reprovado volta a aparecer em relatórios seguintes com um novo
+andamento — `Numero` não é único, não tem índice único nele, e nunca deve ganhar um. O
+mecanismo real: cada pedido de importação leva um `linhaDeCorte` (instante); toda linha do
+CSV com `dataHoraAndamento` igual ou anterior a esse instante é ignorada (já processada num
+lote anterior), sem olhar pro número do protocolo. Isso resolve duplicata acidental (reimportar
+o mesmo relatório) e reprocessamento legítimo (protocolo reprovado voltando) com um mecanismo
+só. Testado ponta a ponta: reimportar o mesmo arquivo com corte posterior → 0 processadas;
+mesmo número com andamento novo após o corte → processado como registro novo, histórico
+preservado (2 linhas pra 1 número no banco, de propósito).
+
+`Protocolo.AndamentoEm` (novo campo, obrigatório) guarda esse instante — é também o
+`momentoDeReferencia` usado por `Prazo.CalcularVencimento`, **não** mais "agora"
+(`IRelogio.Agora`, que era o comportamento antigo e errado pra lote: um protocolo criado às
+9h e importado às 14h não pode ter o prazo contado a partir das 14h). O endpoint avulso
+`/protocolos/distribuir` continua usando `IRelogio.Agora` como `AndamentoEm`, já que ali não
+existe um andamento de relatório de verdade por trás — é só simulação manual.
+
+`Protocolo.TipoAtoId` virou `Guid?` — tipo de ato desconhecido (RF-09) é **sinalizado**, nunca
+criado sozinho no catálogo (a seção 7, "aprendizado sem ia", já deixa claro que evolução de
+catálogo passa por proposta revisada por humano, não por criação automática na importação).
+`MotorDistribuicao` já tratava tipo desconhecido como exceção — só precisou aceitar nulo.
+
+**`Escrevente` é criado automaticamente quando desconhecido** (confirmado com o dono — RF-09):
+nasce sem equipe, aparece sinalizado no resumo (`ResumoImportacao.EscreventesSemEquipe`), fica
+pra alocar na Central de Regras depois. Isso já reaproveita o `ResolvedorDePrazo` existente
+(que já sabia lidar com escrevente sem equipe, caindo no padrão D+1) — nenhuma lógica nova de
+domínio, só a porta nova `IEscreventeRepository`.
+
+**`ImportarLote`**: duas operações públicas (`PreVisualizarAsync`/`ConfirmarAsync`) com a
+mesma lógica por dentro — a diferença é só se persiste no final ou não (RF-11: nada grava até
+confirmar). Não existe "lote pendente" guardado em lugar nenhum entre prévia e confirmação;
+confirmar reprocessa as mesmas linhas do zero. A sequência "resolve prazo → roda motor →
+aplica resultado" foi extraída pra `AplicadorDeDistribuicao`, reaproveitada tanto por
+`DistribuirProtocolo` (avulso) quanto por `ImportarLote` (lote) — nenhuma duplicação de regra.
+
+Endpoints: `POST /protocolos/importar/pre-visualizar` e `POST /protocolos/importar/confirmar`,
+mesmo formato de corpo, só Distribuidora. Testado ponta a ponta com um CSV real (10 linhas de
+um relatório de Pós-Conferência de verdade): prévia não grava nada, confirmação grava os 10 +
+cria os 8 escreventes distintos sem equipe, todos sinalizados corretamente.
+
+Pendência conhecida: não existe `LoteImportacao` (entidade da seção 8) ainda — cada protocolo
+importado não sabe de qual importação veio. Adiado pra quando a visão "por lote" (RF-13) for
+construída; não é necessário pro que existe hoje.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

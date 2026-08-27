@@ -14,7 +14,7 @@ public class DistribuirProtocoloTests
         var equipe = new Equipe(equipeId, "5º andar", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D1));
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, Agora);
         var protocolos = new FakeProtocoloRepository([]);
 
         var caso = new DistribuirProtocolo(
@@ -23,8 +23,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             protocolos,
-            new FakeUnitOfWork(),
-            new FakeRelogio(Agora));
+            new FakeUnitOfWork());
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
@@ -43,7 +42,7 @@ public class DistribuirProtocoloTests
     {
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId: null);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
-        var protocolo = new Protocolo(Guid.NewGuid(), "124", Inventario.Id, Etapa.PosConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "124", Inventario.Id, Etapa.PosConferencia, Agora);
 
         var caso = new DistribuirProtocolo(
             new FakeConferenteRepository([conferente]),
@@ -51,8 +50,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeProtocoloRepository([]),
-            new FakeUnitOfWork(),
-            new FakeRelogio(Agora));
+            new FakeUnitOfWork());
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
@@ -66,7 +64,7 @@ public class DistribuirProtocoloTests
     public async Task TipoDeAtoDesconhecido_RetornaExcecao()
     {
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId: null);
-        var protocolo = new Protocolo(Guid.NewGuid(), "125", Guid.NewGuid(), Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "125", Guid.NewGuid(), Etapa.PreConferencia, Agora);
 
         var caso = new DistribuirProtocolo(
             new FakeConferenteRepository([]),
@@ -74,8 +72,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeProtocoloRepository([]),
-            new FakeUnitOfWork(),
-            new FakeRelogio(Agora));
+            new FakeUnitOfWork());
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 

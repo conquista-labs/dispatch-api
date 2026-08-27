@@ -7,7 +7,7 @@ public class MotorDistribuicaoTests
     [Fact]
     public void TipoDeAtoDesconhecido_RetornaExcecao()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [], [], [Inventario]);
 
@@ -18,7 +18,7 @@ public class MotorDistribuicaoTests
     [Fact]
     public void NenhumConferenteComAlcada_RetornaExcecaoComMotivoPorPessoa()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var regraNegaTipo = new RegraAlcada(
             Guid.NewGuid(),
@@ -38,7 +38,7 @@ public class MotorDistribuicaoTests
     [Fact]
     public void ConferenteForaDaEscala_NaoEhCandidato()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var ausente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: false, cargaAtual: 0);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [ausente], [], [Inventario]);
@@ -50,7 +50,7 @@ public class MotorDistribuicaoTests
     [Fact]
     public void ProtocoloNaoUrgenteComCandidatoElegivel_VaiParaOPool()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
 
         var resultado = MotorDistribuicao.Distribuir(protocolo, [conferente], [], [Inventario]);
@@ -62,7 +62,7 @@ public class MotorDistribuicaoTests
     [Fact]
     public void ProtocoloUrgente_AtribuiAoCandidatoComMenorCargaAtual()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, Prioridade.Alta);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow, Prioridade.Alta);
         var maisCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 5);
         var menosCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
 
