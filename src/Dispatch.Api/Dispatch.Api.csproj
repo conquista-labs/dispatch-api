@@ -4,6 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Sdk.Web liga o pipeline de static web assets (pensado pra wwwroot) por padrão, mesmo
+         numa API pura sem arquivo estático nenhum — é o que faz o dotnet watch tentar ler um
+         manifesto que nunca existe de verdade. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>
