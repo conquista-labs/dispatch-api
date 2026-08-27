@@ -7,7 +7,7 @@ public class DescartarExcecaoTests
     [Fact]
     public async Task ProtocoloEmExcecao_EhDescartado()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao("tipo desconhecido");
         var casoDeUso = new DescartarExcecao(new FakeProtocoloRepository([protocolo]), new FakeUnitOfWork());
 
@@ -22,7 +22,7 @@ public class DescartarExcecaoTests
     [Fact]
     public async Task ProtocoloNaoEstaEmExcecao_Rejeita()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var casoDeUso = new DescartarExcecao(new FakeProtocoloRepository([protocolo]), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);

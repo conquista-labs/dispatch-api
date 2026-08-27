@@ -385,6 +385,33 @@ desativação devolvendo o alcance, remoção esvaziando a lista; e o ciclo comp
 `Equipe`/`Escrevente` — importação cria escrevente órfão → aparece em "sem equipe" → move
 pra equipe recém-criada → some da lista de órfãos. 83 testes automatizados no total.
 
+## Protocolo.EscreventeId — fecha RF-14 e RF-38
+
+`Protocolo` ganhou `EscreventeId` (obrigatório) — o gap que tinha ficado registrado desde a
+visão de distribuição (RF-14) e bloqueava o recálculo de vencimento (RF-38) foi fechado numa
+tacada só.
+
+- **RF-14**: `ProtocoloResumo` agora leva `EscreventeId`. Equipe não vai no card — dá pra
+  cruzar via `GET /escreventes` (novo endpoint de listagem geral, além do `/sem-equipe` que já
+  existia), que devolve o `EquipeId` de cada escrevente.
+- **RF-38**: `EditarEquipe` agora recalcula de verdade. Acha os escreventes daquela equipe,
+  busca os protocolos **abertos** deles (`ObterAbertosPorEscreventesAsync` — aberto é status
+  != Aprovado/Reprovado/Descartado, **inclui Exceção** de propósito, porque o vencimento dela
+  também fica desatualizado) e chama `protocolo.DefinirPrazo(prazoNovo, protocolo.AndamentoEm)`
+  pra cada um — a referência continua sendo o `AndamentoEm` original, nunca "agora".
+
+**Efeito colateral que precisou de conserto**: o endpoint avulso `/protocolos/distribuir`
+construía um `Escrevente` só em memória, nunca persistido — com `EscreventeId` virando FK
+obrigatória, isso quebraria a gravação. Alinhei esse endpoint com o mesmo padrão do
+`ImportarLote` (busca por nome, cria sem equipe se for a primeira vez) — e simplifiquei
+`DistribuirProtocoloRequest`, que tinha `EscreventeId`/`EquipeId` redundantes desde antes dessa
+persistência existir; agora é só `EscreventeNome`, igual toda linha de importação.
+
+Testado ponta a ponta: card carregando `escreventeId` de verdade, e o cenário completo do
+RF-38 — criar equipe, mover escrevente pra ela, distribuir um protocolo, mudar o prazo da
+equipe, confirmar que o `vencimento_em` recalculou a partir do `andamento_em` original (não de
+"agora"). 84 testes automatizados no total.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

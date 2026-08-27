@@ -40,11 +40,14 @@ public static class DistribuicaoEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
-    // RF-14: cada card leva protocolo/tipo/etapa e o semáforo com o tempo restante.
+    // RF-14: cada card leva protocolo/tipo/escrevente/etapa e o semáforo com o tempo restante.
+    // Equipe não vai aqui — dá pra achar cruzando EscreventeId com GET /escreventes, que já
+    // devolve o EquipeId de cada um; card não precisa repetir esse dado.
     private static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
+        protocolo.EscreventeId,
         protocolo.Etapa,
         protocolo.Status,
         protocolo.DonoId,
@@ -59,6 +62,7 @@ public sealed record ProtocoloResumo(
     Guid Id,
     string Numero,
     Guid? TipoAtoId,
+    Guid EscreventeId,
     Etapa Etapa,
     StatusProtocolo Status,
     Guid? DonoId,

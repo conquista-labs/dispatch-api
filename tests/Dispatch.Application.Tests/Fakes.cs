@@ -130,6 +130,14 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status is StatusProtocolo.Pool or StatusProtocolo.Excecao).ToList());
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterAbertosPorEscreventesAsync(
+        IReadOnlyCollection<Guid> escreventeIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos
+                .Where(p => escreventeIds.Contains(p.EscreventeId) && p.Status is not (
+                    StatusProtocolo.Aprovado or StatusProtocolo.Reprovado or StatusProtocolo.Descartado))
+                .ToList());
+
     public int Quantidade => _protocolos.Count;
 }
 

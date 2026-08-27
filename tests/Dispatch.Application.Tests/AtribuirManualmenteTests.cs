@@ -7,7 +7,7 @@ public class AtribuirManualmenteTests
     [Fact]
     public async Task ProtocoloEmExcecao_AtribuiComSucesso()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao("ninguém com alçada");
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new AtribuirManualmente(
@@ -23,7 +23,7 @@ public class AtribuirManualmenteTests
     [Fact]
     public async Task ProtocoloNaoEstaEmExcecao_Rejeita()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new AtribuirManualmente(
             new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork());
@@ -36,7 +36,7 @@ public class AtribuirManualmenteTests
     [Fact]
     public async Task ConferenteInexistente_Rejeita()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao("ninguém com alçada");
         var casoDeUso = new AtribuirManualmente(
             new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([]), new FakeUnitOfWork());

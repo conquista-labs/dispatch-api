@@ -8,7 +8,7 @@ public class RedistribuirPoolTests
 
     private static Protocolo NovoProtocoloEmExcecao(string motivo)
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao(motivo);
         return protocolo;
     }
@@ -53,7 +53,7 @@ public class RedistribuirPoolTests
     [Fact]
     public async Task ProtocoloAtribuido_NaoEntraNaRedistribuicao()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(Guid.NewGuid());
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new RedistribuirPool(

@@ -7,7 +7,7 @@ public class DefinirObservacaoTests
     [Fact]
     public async Task ProtocoloExistente_DefineObservacao()
     {
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var casoDeUso = new DefinirObservacao(new FakeProtocoloRepository([protocolo]), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, "cliente pediu pra aguardar");

@@ -14,6 +14,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.Etapa).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.Prioridade).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.AndamentoEm);
+        builder.Property(p => p.EscreventeId);
         builder.Property(p => p.LoteImportacaoId);
 
         // Prazo aqui é opcional (só existe depois de DistribuirProtocolo rodar).
@@ -34,6 +35,11 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.HasOne<Conferente>()
             .WithMany()
             .HasForeignKey(p => p.DonoId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Escrevente>()
+            .WithMany()
+            .HasForeignKey(p => p.EscreventeId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<LoteImportacao>()

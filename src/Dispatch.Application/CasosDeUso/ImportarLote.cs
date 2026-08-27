@@ -77,7 +77,7 @@ public sealed class ImportarLote(
             }
 
             var protocolo = new Protocolo(
-                Guid.NewGuid(), linha.Protocolo, tipoAto?.Id, etapa, linha.DataHoraAndamento, loteImportacaoId: lote?.Id);
+                Guid.NewGuid(), linha.Protocolo, tipoAto?.Id, escrevente.Id, etapa, linha.DataHoraAndamento, loteImportacaoId: lote?.Id);
 
             var resultado = AplicadorDeDistribuicao.Executar(
                 protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, catalogoTipos,

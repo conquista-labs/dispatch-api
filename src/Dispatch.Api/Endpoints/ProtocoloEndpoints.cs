@@ -12,6 +12,7 @@ public static class ProtocoloEndpoints
                 DistribuirProtocoloRequest request,
                 DistribuirProtocolo casoDeUso,
                 ITipoAtoRepository tiposAto,
+                IEscreventeRepository escreventes,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
@@ -21,10 +22,21 @@ public static class ProtocoloEndpoints
                 var tipoConhecido = (await tiposAto.ObterTodosAsync(cancellationToken)).Any(t => t.Id == request.TipoAtoId);
                 var tipoAtoId = tipoConhecido ? request.TipoAtoId : (Guid?)null;
 
+                // Mesma resolução por nome do ImportarLote — cria sem equipe se for a primeira
+                // vez que esse escrevente aparece. Sem isso, EscreventeId apontaria pra uma
+                // linha que não existe (FK quebrada na hora de gravar o protocolo).
+                var escrevente = (await escreventes.ObterTodosAsync(cancellationToken))
+                    .FirstOrDefault(e => string.Equals(e.Nome, request.EscreventeNome, StringComparison.OrdinalIgnoreCase));
+                if (escrevente is null)
+                {
+                    escrevente = new Escrevente(Guid.NewGuid(), request.EscreventeNome, equipeId: null);
+                    escreventes.Adicionar(escrevente);
+                }
+
                 // Endpoint avulso, sem relatório por trás — usa "agora" como o instante do
                 // andamento, já que não existe um de verdade vindo de importação nenhuma.
-                var protocolo = new Protocolo(Guid.NewGuid(), request.Numero, tipoAtoId, request.Etapa, relogio.Agora, request.Prioridade);
-                var escrevente = new Escrevente(request.EscreventeId, request.EscreventeNome, request.EquipeId);
+                var protocolo = new Protocolo(
+                    Guid.NewGuid(), request.Numero, tipoAtoId, escrevente.Id, request.Etapa, relogio.Agora, request.Prioridade);
 
                 var resultado = await casoDeUso.ExecutarAsync(protocolo, escrevente, cancellationToken);
 
@@ -126,9 +138,7 @@ public sealed record DistribuirProtocoloRequest(
     Guid TipoAtoId,
     Etapa Etapa,
     Prioridade Prioridade,
-    Guid EscreventeId,
-    string EscreventeNome,
-    Guid? EquipeId);
+    string EscreventeNome);
 
 public sealed record DistribuirProtocoloResponse(
     Guid ProtocoloId,

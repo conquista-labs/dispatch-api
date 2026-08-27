@@ -7,6 +7,9 @@ public sealed class Protocolo
     // Nulo = tipo de ato desconhecido (RF-09) — sinalizado, não inventado na hora. O motor de
     // distribuição já trata isso como "tipo desconhecido" (exceção) sem precisar de FK válida.
     public Guid? TipoAtoId { get; }
+    // Quem produziu o ato (glossário, seção 2) — RF-14 (o card mostra escrevente/equipe) e
+    // RF-38 (recalcular vencimento quando o prazo da equipe do escrevente muda) dependem disso.
+    public Guid EscreventeId { get; }
     public Etapa Etapa { get; }
     public Prioridade Prioridade { get; }
     // Instante do "andamento" que originou este registro (vem do relatório importado, não de
@@ -24,12 +27,13 @@ public sealed class Protocolo
     public string? Observacao { get; private set; }
 
     public Protocolo(
-        Guid id, string numero, Guid? tipoAtoId, Etapa etapa, DateTimeOffset andamentoEm,
+        Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
         Prioridade prioridade = Prioridade.Normal, Guid? loteImportacaoId = null)
     {
         Id = id;
         Numero = numero;
         TipoAtoId = tipoAtoId;
+        EscreventeId = escreventeId;
         Etapa = etapa;
         AndamentoEm = andamentoEm;
         Prioridade = prioridade;

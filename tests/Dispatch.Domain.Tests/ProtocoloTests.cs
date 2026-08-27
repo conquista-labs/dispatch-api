@@ -3,7 +3,7 @@ namespace Dispatch.Domain.Tests;
 public class ProtocoloTests
 {
     private static Protocolo NovoProtocolo(Prioridade prioridade = Prioridade.Normal) =>
-        new(Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow, prioridade);
+        new(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow, prioridade);
 
     [Theory]
     [InlineData(TipoPrazo.UmaHora)]

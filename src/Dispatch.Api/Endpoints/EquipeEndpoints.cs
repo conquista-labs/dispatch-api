@@ -36,13 +36,19 @@ public static class EquipeEndpoints
                 return encontrada ? Results.NoContent() : Results.NotFound();
             })
             .WithName("EditarEquipe")
-            .WithSummary("Renomear e/ou redefinir prazo de pré e pós-conferência (RF-35/RF-36). Não recalcula vencimentos abertos (RF-38 pendente).")
+            .WithSummary("Renomear e/ou redefinir prazo de pré e pós-conferência — recalcula vencimento dos protocolos abertos de quem está nessa equipe (RF-35/RF-36/RF-38).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
         var escreventesGrupo = app.MapGroup("/escreventes")
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.CentralDeRegras);
+
+        escreventesGrupo.MapGet("/", async (ListarEscreventes casoDeUso, CancellationToken cancellationToken) =>
+                Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaResponse).ToList()))
+            .WithName("ListarEscreventes")
+            .WithSummary("Lista todos os escreventes — usado pra resolver nome/equipe dos cards da visão de distribuição (RF-14).")
+            .Produces<IReadOnlyList<EscreventeResponse>>();
 
         escreventesGrupo.MapGet("/sem-equipe", async (ListarEscreventesSemEquipe casoDeUso, CancellationToken cancellationToken) =>
                 Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaResponse).ToList()))

@@ -52,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EditarEquipe>();
         services.AddScoped<MoverEscreventeParaEquipe>();
         services.AddScoped<ListarEscreventesSemEquipe>();
+        services.AddScoped<ListarEscreventes>();
         services.AddScoped<ListarRegrasAlcada>();
         services.AddScoped<ListarEquipes>();
 

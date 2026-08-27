@@ -7,7 +7,7 @@ public class ObterVisaoDistribuicaoTests
     private static Protocolo NovoProtocolo(StatusProtocolo status, Guid? donoId = null, Guid? loteImportacaoId = null)
     {
         var protocolo = new Protocolo(
-            Guid.NewGuid(), "123", Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow, loteImportacaoId: loteImportacaoId);
+            Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow, loteImportacaoId: loteImportacaoId);
 
         switch (status)
         {
