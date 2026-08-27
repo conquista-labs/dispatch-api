@@ -18,20 +18,27 @@ public sealed class ImportarLote(
     IRelogio relogio)
 {
     public Task<ResumoImportacao> PreVisualizarAsync(
-        IReadOnlyCollection<LinhaImportacao> linhas, Etapa etapa, DateTimeOffset linhaDeCorte, CancellationToken cancellationToken = default) =>
-        ProcessarAsync(linhas, etapa, linhaDeCorte, persistir: false, cancellationToken);
+        IReadOnlyCollection<LinhaImportacao> linhas, Etapa etapa, DateTimeOffset linhaDeCorte,
+        TimeSpan faixaAtencao, TimeSpan faixaUrgente, CancellationToken cancellationToken = default) =>
+        ProcessarAsync(linhas, etapa, linhaDeCorte, persistir: false, faixaAtencao, faixaUrgente, cancellationToken);
 
     public Task<ResumoImportacao> ConfirmarAsync(
         IReadOnlyCollection<LinhaImportacao> linhas, Etapa etapa, DateTimeOffset linhaDeCorte, CancellationToken cancellationToken = default) =>
-        ProcessarAsync(linhas, etapa, linhaDeCorte, persistir: true, cancellationToken);
+        // Faixas do semáforo não importam aqui: persistir=true nunca monta LinhaPreviaImportacao
+        // (ver o `if (!persistir)` abaixo), então esses valores nunca chegam a ser lidos.
+        ProcessarAsync(linhas, etapa, linhaDeCorte, persistir: true, TimeSpan.Zero, TimeSpan.Zero, cancellationToken);
 
     private async Task<ResumoImportacao> ProcessarAsync(
         IReadOnlyCollection<LinhaImportacao> linhas,
         Etapa etapa,
         DateTimeOffset linhaDeCorte,
         bool persistir,
+        TimeSpan faixaAtencao,
+        TimeSpan faixaUrgente,
         CancellationToken cancellationToken)
     {
+        var agora = relogio.Agora;
+
         // RF-07: "duplicata" aqui não é número de protocolo repetido (um protocolo reprovado
         // volta ao relatório com andamento novo, legitimamente) — é qualquer linha com
         // andamento igual ou anterior à linha de corte, ou seja, já processada num lote antes.
@@ -40,7 +47,7 @@ public sealed class ImportarLote(
         // Criado antes do laço só quando vai persistir de verdade — na prévia não existe lote
         // nenhum (RF-11), os protocolos calculados ali são só pra mostrar, nunca gravados.
         LoteImportacao? lote = persistir
-            ? new LoteImportacao(Guid.NewGuid(), etapa, linhaDeCorte, relogio.Agora, relevantes.Count)
+            ? new LoteImportacao(Guid.NewGuid(), etapa, linhaDeCorte, agora, relevantes.Count)
             : null;
 
         var escreventesConhecidos = (await escreventes.ObterTodosAsync(cancellationToken)).ToList();
@@ -55,9 +62,22 @@ public sealed class ImportarLote(
         var excecoes = 0;
         var tiposDesconhecidos = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var escreventesSemEquipe = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var linhasPreview = persistir ? null : new List<LinhaPreviaImportacao>();
 
-        foreach (var linha in relevantes)
+        foreach (var linha in linhas)
         {
+            // RF-08 pede a regra por linha, mas uma linha antes da corte nunca é distribuída —
+            // não tem prazo, equipe ou avaliação de alçada de verdade pra mostrar, só o fato de
+            // que já foi ignorada.
+            if (linha.DataHoraAndamento <= linhaDeCorte)
+            {
+                linhasPreview?.Add(new LinhaPreviaImportacao(
+                    linha.Protocolo, linha.TipoAto, TipoConhecido: false, linha.Escrevente,
+                    Equipe: null, Prazo: null, VencimentoEm: null, Semaforo: null,
+                    JaExiste: true, ComAlcada: 0));
+                continue;
+            }
+
             var escrevente = escreventesConhecidos.FirstOrDefault(
                 e => string.Equals(e.Nome, linha.Escrevente, StringComparison.OrdinalIgnoreCase));
             if (escrevente is null)
@@ -88,6 +108,20 @@ public sealed class ImportarLote(
             {
                 escreventesSemEquipe.Add(escrevente.Nome);
             }
+
+            var comAlcada = resultado switch
+            {
+                ResultadoDistribuicao.Atribuido a => a.Elegiveis.Count,
+                ResultadoDistribuicao.EnviadoParaPool p => p.Elegiveis.Count,
+                ResultadoDistribuicao.Excecao e => e.Avaliacoes.Count(av => av.Elegivel),
+                _ => 0
+            };
+
+            linhasPreview?.Add(new LinhaPreviaImportacao(
+                linha.Protocolo, linha.TipoAto, TipoConhecido: tipoAto is not null, linha.Escrevente,
+                resolucaoPrazo.Equipe?.Nome, resolucaoPrazo.Prazo.Tipo, protocolo.VencimentoEm,
+                protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
+                JaExiste: false, comAlcada));
 
             switch (resultado)
             {
@@ -129,6 +163,7 @@ public sealed class ImportarLote(
             enviadosParaPool,
             excecoes,
             tiposDesconhecidos.ToList(),
-            escreventesSemEquipe.ToList());
+            escreventesSemEquipe.ToList(),
+            linhasPreview);
     }
 }

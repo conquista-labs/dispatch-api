@@ -298,6 +298,36 @@ mesmo formato de corpo, só Distribuidora. Testado ponta a ponta com um CSV real
 um relatório de Pós-Conferência de verdade): prévia não grava nada, confirmação grava os 10 +
 cria os 8 escreventes distintos sem equipe, todos sinalizados corretamente.
 
+**RF-08 (prévia por linha)**: `ResumoImportacao.Linhas` — `IReadOnlyList<LinhaPreviaImportacao>?`,
+populado só em `PreVisualizarAsync` (nulo em `ConfirmarAsync`, já que o front não usa e um lote
+pode ter centenas de linhas — não vale carregar isso na resposta de gravar). Cada linha já tinha
+prazo/equipe/avaliação de alçada resolvidos dentro do laço de `ProcessarAsync`; só não sobreviviam
+além do `switch` que os reduzia a contador agregado — RF-08 é aproveitar esse cálculo, não uma
+regra nova.
+
+- **Equipe vai por nome (`string?`), não por Id.** Diferente de `ProtocoloResumo` (que só manda
+  `EscreventeId` e deixa o front cruzar com `GET /escreventes`), aqui o escrevente da linha pode
+  nem existir no banco ainda — RF-09 só cria o registro na confirmação. Não dá pra cruzar o que
+  ainda não existe.
+- **`Prazo` vai cru (`TipoPrazo?`), sem formatar "D+1"/"1 hora".** Mesmo padrão de `FaixaSemaforo`
+  e de `EquipeResponse` (Central de regras): back manda o fato, front decide o rótulo. O texto
+  "5º andar · pós-conferência" do protótipo é `Equipe.Nome` + a etapa que o front já sabe (é
+  parâmetro do próprio pedido de importação, não varia por linha) — nada disso precisa viajar
+  formatado.
+- **Linha antes da linha de corte (`JaExiste: true`) não resolve nada.** Ela nunca é distribuída
+  de verdade nesta operação, então `Equipe`/`Prazo`/`VencimentoEm`/`Semaforo` ficam nulos — não
+  tem fato nenhum pra mostrar além de "já processada antes".
+- **`ComAlcada`** (RF-10, "quantos têm alçada pra este tipo/etapa") exigiu um ajuste em
+  `ResultadoDistribuicao.Atribuido`, que só guardava o candidato escolhido — sem a lista completa
+  de elegíveis, não dava pra saber quantos qualificavam quando o motor manda direto pra alguém
+  por urgência. Ganhou `Elegiveis` (mesma forma que `EnviadoParaPool`/`Excecao` já tinham),
+  preenchida em `MotorDistribuicao.cs` com a mesma lista que já existia em escopo — sem lógica
+  nova de domínio.
+- Faixas do semáforo (`FaixaAtencao`/`FaixaUrgente`) chegam como parâmetro em
+  `PreVisualizarAsync` — mesmos valores hardcoded 4h/60min de `DistribuicaoEndpoints`, duplicados
+  ali até a tabela de config (seção 8) existir. `ConfirmarAsync` passa `TimeSpan.Zero` pros dois
+  porque `persistir: true` nunca monta `Linhas` — os valores nunca chegam a ser lidos.
+
 Pendência conhecida: não existe `LoteImportacao` (entidade da seção 8) ainda — cada protocolo
 importado não sabe de qual importação veio. Adiado pra quando a visão "por lote" (RF-13) for
 construída; não é necessário pro que existe hoje.

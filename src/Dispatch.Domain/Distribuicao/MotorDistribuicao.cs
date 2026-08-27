@@ -37,6 +37,6 @@ public static class MotorDistribuicao
         }
 
         var escolhido = elegiveis.OrderBy(a => a.Conferente.CargaAtual).First();
-        return new ResultadoDistribuicao.Atribuido(escolhido.Conferente, escolhido);
+        return new ResultadoDistribuicao.Atribuido(escolhido.Conferente, escolhido, elegiveis);
     }
 }

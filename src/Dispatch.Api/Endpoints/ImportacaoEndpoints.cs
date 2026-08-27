@@ -6,6 +6,11 @@ namespace Dispatch.Api.Endpoints;
 
 public static class ImportacaoEndpoints
 {
+    // RF-08/RF-14: mesmas faixas hardcoded de DistribuicaoEndpoints — sem tabela de config
+    // (seção 8) ainda, então o valor vive duplicado nos dois lugares até ela existir.
+    private static readonly TimeSpan FaixaAtencao = TimeSpan.FromHours(4);
+    private static readonly TimeSpan FaixaUrgente = TimeSpan.FromMinutes(60);
+
     public static void MapImportacaoEndpoints(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/protocolos/importar")
@@ -18,7 +23,7 @@ public static class ImportacaoEndpoints
                 CancellationToken cancellationToken) =>
             {
                 var resumo = await casoDeUso.PreVisualizarAsync(
-                    ParaLinhas(request), request.Etapa, request.LinhaDeCorte, cancellationToken);
+                    ParaLinhas(request), request.Etapa, request.LinhaDeCorte, FaixaAtencao, FaixaUrgente, cancellationToken);
                 return Results.Ok(resumo);
             })
             .WithName("PreVisualizarImportacao")
