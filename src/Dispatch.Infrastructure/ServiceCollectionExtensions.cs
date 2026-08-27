@@ -43,6 +43,17 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AtribuirManualmente>();
         services.AddScoped<DescartarExcecao>();
         services.AddScoped<DefinirObservacao>();
+        services.AddScoped<CriarRegraAlcada>();
+        services.AddScoped<AtivarRegraAlcada>();
+        services.AddScoped<DesativarRegraAlcada>();
+        services.AddScoped<RemoverRegraAlcada>();
+        services.AddScoped<ObterAlcancePorConferente>();
+        services.AddScoped<CriarEquipe>();
+        services.AddScoped<EditarEquipe>();
+        services.AddScoped<MoverEscreventeParaEquipe>();
+        services.AddScoped<ListarEscreventesSemEquipe>();
+        services.AddScoped<ListarRegrasAlcada>();
+        services.AddScoped<ListarEquipes>();
 
         return services;
     }

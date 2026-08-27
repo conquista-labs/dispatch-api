@@ -22,5 +22,7 @@ internal sealed class RegraAlcadaRegistroConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.SujeitoNivel).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.AlvoEtapa).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.Permissao).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.Origem).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.Ativa);
     }
 }

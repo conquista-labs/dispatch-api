@@ -67,5 +67,7 @@ app.MapProtocoloEndpoints();
 app.MapConferenteEndpoints();
 app.MapImportacaoEndpoints();
 app.MapDistribuicaoEndpoints();
+app.MapRegraAlcadaEndpoints();
+app.MapEquipeEndpoints();
 
 app.Run();

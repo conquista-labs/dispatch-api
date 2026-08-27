@@ -11,22 +11,76 @@ internal sealed class FakeConferenteRepository : IConferenteRepository
     public Task<IReadOnlyCollection<Conferente>> ObterNaEscalaAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Conferente>>(_conferentes.Where(c => c.NaEscala).ToList());
 
+    public Task<IReadOnlyCollection<Conferente>> ObterTodosAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Conferente>>(_conferentes.ToList());
+
     public Task<Conferente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_conferentes.SingleOrDefault(c => c.Id == id));
 
     public void Adicionar(Conferente conferente) => _conferentes.Add(conferente);
 }
 
-internal sealed class FakeEquipeRepository(IReadOnlyCollection<Equipe> equipes) : IEquipeRepository
+internal sealed class FakeEquipeRepository : IEquipeRepository
 {
+    private readonly List<Equipe> _equipes;
+
+    public FakeEquipeRepository(IReadOnlyCollection<Equipe> equipes) => _equipes = equipes.ToList();
+
     public Task<IReadOnlyCollection<Equipe>> ObterTodasAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(equipes);
+        Task.FromResult<IReadOnlyCollection<Equipe>>(_equipes.ToList());
+
+    public Task<Equipe?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_equipes.SingleOrDefault(e => e.Id == id));
+
+    public void Adicionar(Equipe equipe) => _equipes.Add(equipe);
+
+    public int Quantidade => _equipes.Count;
 }
 
-internal sealed class FakeRegraAlcadaRepository(IReadOnlyCollection<RegraAlcada> regras) : IRegraAlcadaRepository
+internal sealed class FakeRegraAlcadaRepository : IRegraAlcadaRepository
 {
+    private readonly List<RegraAlcada> _regras;
+
+    public FakeRegraAlcadaRepository(IReadOnlyCollection<RegraAlcada> regras) => _regras = regras.ToList();
+
     public Task<IReadOnlyCollection<RegraAlcada>> ObterAtivasAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(regras);
+        Task.FromResult<IReadOnlyCollection<RegraAlcada>>(_regras.Where(r => r.Ativa).ToList());
+
+    public Task<IReadOnlyCollection<RegraAlcada>> ObterTodasAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<RegraAlcada>>(_regras.ToList());
+
+    public Task<RegraAlcada?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_regras.SingleOrDefault(r => r.Id == id));
+
+    public void Adicionar(RegraAlcada regra) => _regras.Add(regra);
+
+    public Task<bool> AtivarAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var regra = _regras.SingleOrDefault(r => r.Id == id);
+        regra?.Ativar();
+        return Task.FromResult(regra is not null);
+    }
+
+    public Task<bool> DesativarAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var regra = _regras.SingleOrDefault(r => r.Id == id);
+        regra?.Desativar();
+        return Task.FromResult(regra is not null);
+    }
+
+    public Task<bool> RemoverAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var regra = _regras.SingleOrDefault(r => r.Id == id);
+        if (regra is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        _regras.Remove(regra);
+        return Task.FromResult(true);
+    }
+
+    public int Quantidade => _regras.Count;
 }
 
 internal sealed class FakeTipoAtoRepository(IReadOnlyCollection<TipoAto> tipos) : ITipoAtoRepository
@@ -87,6 +141,9 @@ internal sealed class FakeEscreventeRepository : IEscreventeRepository
 
     public Task<IReadOnlyCollection<Escrevente>> ObterTodosAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Escrevente>>(_escreventes.ToList());
+
+    public Task<Escrevente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_escreventes.SingleOrDefault(e => e.Id == id));
 
     public void Adicionar(Escrevente escrevente) => _escreventes.Add(escrevente);
 

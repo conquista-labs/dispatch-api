@@ -15,5 +15,6 @@ internal sealed class RegraAlcadaRegistro
     public Etapa? AlvoEtapa { get; set; }
     public Guid? AlvoTipoAtoId { get; set; }
     public PermissaoRegra Permissao { get; set; }
+    public OrigemRegra Origem { get; set; }
     public bool Ativa { get; set; }
 }

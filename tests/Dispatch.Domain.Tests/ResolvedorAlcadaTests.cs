@@ -67,7 +67,7 @@ public class ResolvedorAlcadaTests
         var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var alvo = new AlvoAlcada.PorEtapa(Etapa.PreConferencia);
 
-        var regraInativa = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Nega, alvo, Ativa: false);
+        var regraInativa = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Nega, alvo, ativa: false);
 
         var decisao = ResolvedorAlcada.Resolver(conferente, alvo, [regraInativa]);
 

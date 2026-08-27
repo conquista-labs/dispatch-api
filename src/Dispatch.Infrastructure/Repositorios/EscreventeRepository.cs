@@ -9,5 +9,8 @@ public sealed class EscreventeRepository(DispatchDbContext dbContext) : IEscreve
     public async Task<IReadOnlyCollection<Escrevente>> ObterTodosAsync(CancellationToken cancellationToken) =>
         await dbContext.Escreventes.ToListAsync(cancellationToken);
 
+    public async Task<Escrevente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        await dbContext.Escreventes.SingleOrDefaultAsync(e => e.Id == id, cancellationToken);
+
     public void Adicionar(Escrevente escrevente) => dbContext.Escreventes.Add(escrevente);
 }

@@ -361,6 +361,30 @@ virando pool sozinha depois que um conferente foi cadastrado, atribuição manua
 estado (409 na segunda tentativa) e descarte preservando o motivo original. 39 testes na
 Application (67 no total do projeto).
 
+## Central de Regras — Alçada + Prazos por equipe (RF-31 a RF-38, exceto RF-32/38)
+
+`RegraAlcada` deixou de ser `record` e virou `class` — ganhou `Origem` (`OrigemRegra`: Manual
+ou Aprendida, sempre Manual por enquanto — Aprendida só nasce do módulo de aprendizado,
+RF-39 a RF-41, que não existe) e comportamento (`Ativar`/`Desativar`, RF-33) em vez de ser só
+um valor imutável. `Equipe` e `Escrevente` ganharam `Renomear`/`DefinirPrazos` e
+`MoverParaEquipe` (RF-35/RF-36).
+
+- **`POST/GET/DELETE /regras-alcada`, `/ativar`, `/desativar`** (RF-31, RF-33) — a Api monta
+  `SujeitoAlcada`/`AlvoAlcada` a partir de um request achatado (`sujeitoNivel` XOR
+  `sujeitoConferenteId`, `alvoEtapa` XOR `alvoTipoAtoId`, 400 se não bater exatamente um dos
+  dois), valida que pessoa/tipo referenciados existem antes de criar.
+- **`GET /conferentes/alcance`** (RF-34) — reaproveita `ResolvedorAlcada` puro: pra cada
+  conferente, resolve alçada contra as duas etapas e todo o catálogo de tipos, sem tocar em
+  protocolo nenhum. Zero lógica de domínio nova.
+- **`/equipes`, `/escreventes/sem-equipe`, `/escreventes/{id}/mover`** (RF-35 a RF-37).
+  **RF-38 (recalcular vencimentos abertos ao mudar prazo) continua de fora** — mesma pendência
+  do RF-14, precisa de `Protocolo.EscreventeId`, que ainda não existe.
+
+Testado ponta a ponta: regra negando Júnior em pré-conferência refletindo no alcance,
+desativação devolvendo o alcance, remoção esvaziando a lista; e o ciclo completo de
+`Equipe`/`Escrevente` — importação cria escrevente órfão → aparece em "sem equipe" → move
+pra equipe recém-criada → some da lista de órfãos. 83 testes automatizados no total.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há
