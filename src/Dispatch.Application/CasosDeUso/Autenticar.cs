@@ -11,6 +11,7 @@ public sealed class Autenticar(IUsuarioRepository usuarios, IHashDeSenha hashDeS
             return new ResultadoAutenticacao.Rejeitado();
         }
 
-        return new ResultadoAutenticacao.Autenticado(emissorDeToken.EmitirToken(usuario));
+        return new ResultadoAutenticacao.Autenticado(
+            emissorDeToken.EmitirToken(usuario), usuario.Id, usuario.Nome, usuario.Email, usuario.Papel);
     }
 }

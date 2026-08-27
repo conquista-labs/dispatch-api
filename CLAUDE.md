@@ -543,6 +543,27 @@ ponta a ponta: nome e e-mail batendo com o que foi cadastrado, inclusive pra con
 antigos já existentes no banco. 130 testes automatizados no total (40 Domain + 90
 Application).
 
+## Login devolve o usuário + GET /auth/me
+
+Decisão tomada planejando o `dispatch-web`: o front **nunca decodifica o JWT** pra saber quem
+está logado — token é credencial (o que vai no `Authorization` header), não fonte de dado de
+perfil. Misturar os dois acopla o front à forma exata das claims e não resolve sozinho o caso
+de refresh de página (SPA guarda o token, mas "quem é o usuário" não sobrevive a um F5 se a
+única fonte for a resposta do login).
+
+- **`POST /auth/login`** agora devolve `{ token, usuario: { id, nome, email, papel } }` —
+  `ResultadoAutenticacao.Autenticado` ganhou os campos do usuário, evitando uma chamada extra
+  logo depois de logar.
+- **`GET /auth/me`** (novo, autenticado, qualquer papel) devolve o mesmo formato de `usuario`,
+  resolvido a partir do `ClaimTypes.NameIdentifier` do token — é o que o front chama no boot
+  da aplicação pra reidratar a sessão a partir de um token persistido, sem abrir o token na
+  mão. `ObterUsuarioAtual` é um pass-through fino (mesmo motivo de `ListarEquipes`/
+  `ListarRegrasAlcada`: a Api nunca injeta repositório direto, mesmo pra leitura trivial).
+
+Testado ponta a ponta: login devolvendo usuário completo, `/auth/me` com token válido pros
+dois papéis (Distribuidora e Conferente), 401 sem token. 132 testes automatizados no total
+(40 Domain + 92 Application).
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

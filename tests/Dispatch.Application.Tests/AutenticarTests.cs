@@ -27,6 +27,10 @@ public class AutenticarTests
 
         var autenticado = Assert.IsType<ResultadoAutenticacao.Autenticado>(resultado);
         Assert.Equal("token-para:fulano@cartorio.com", autenticado.Token);
+        Assert.Equal(usuario.Id, autenticado.UsuarioId);
+        Assert.Equal("Fulano", autenticado.Nome);
+        Assert.Equal("fulano@cartorio.com", autenticado.Email);
+        Assert.Equal(Papel.Distribuidora, autenticado.Papel);
     }
 
     [Fact]

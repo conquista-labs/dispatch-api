@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<DistribuirProtocolo>();
         services.AddScoped<Autenticar>();
+        services.AddScoped<ObterUsuarioAtual>();
         services.AddScoped<CadastrarConferente>();
         services.AddScoped<EditarNivelEJornada>();
         services.AddScoped<MarcarPresenca>();
