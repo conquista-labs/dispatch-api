@@ -55,6 +55,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ListarEscreventes>();
         services.AddScoped<ListarRegrasAlcada>();
         services.AddScoped<ListarEquipes>();
+        services.AddScoped<ObterMinhaFila>();
+        services.AddScoped<PegarProtocolo>();
+        services.AddScoped<IniciarConferencia>();
+        services.AddScoped<ConcluirConferencia>();
+        services.AddScoped<ObterConcluidosHoje>();
 
         return services;
     }

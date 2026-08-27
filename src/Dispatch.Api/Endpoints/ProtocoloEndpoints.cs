@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Dispatch.Api.OpenApi;
 using Dispatch.Application;
 using Dispatch.Domain;
@@ -100,19 +101,42 @@ public static class ProtocoloEndpoints
                 Guid id,
                 DefinirObservacaoRequest request,
                 DefinirObservacao casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
                 CancellationToken cancellationToken) =>
             {
-                var encontrado = await casoDeUso.ExecutarAsync(id, request.Observacao, cancellationToken);
-                return encontrado ? Results.NoContent() : Results.NotFound();
+                // RF-15 (Distribuidora, sem restrição) e RF-23 (o próprio conferente dono,
+                // restrito) são o mesmo endpoint — o papel do token decide se conferenteRestritoId
+                // vai preenchido ou nulo.
+                Guid? conferenteRestritoId = null;
+                if (usuario.IsInRole(nameof(Papel.Conferente)))
+                {
+                    var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                    var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
+                    if (conferente is null)
+                    {
+                        return Results.NotFound(new { motivo = "conferente não encontrado" });
+                    }
+
+                    conferenteRestritoId = conferente.Id;
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, request.Observacao, conferenteRestritoId, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoDefinirObservacao.Sucesso => Results.NoContent(),
+                    ResultadoDefinirObservacao.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoDefinirObservacao.NaoEhSeu => Results.Forbid(),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
             })
             .WithName("DefinirObservacaoProtocolo")
-            .WithSummary("Define a observação do protocolo, visível pra gestão (RF-15/RF-23). Editável em qualquer estado.")
+            .WithSummary("Define a observação do protocolo (RF-15/RF-23). Editável em qualquer estado. Distribuidora não tem restrição; Conferente só edita protocolo do qual é dono.")
             .WithTags(OpenApiTags.Protocolos)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
-            // TODO: quando "Minha fila" existir, o próprio conferente dono do protocolo também
-            // precisa conseguir chamar isso (RF-23) — hoje só Distribuidora, por simplicidade.
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .Produces(StatusCodes.Status403Forbidden)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de

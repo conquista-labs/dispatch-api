@@ -15,5 +15,8 @@ public sealed class ConferenteRepository(DispatchDbContext dbContext) : IConfere
     public async Task<Conferente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         await dbContext.Conferentes.SingleOrDefaultAsync(c => c.Id == id, cancellationToken);
 
+    public async Task<Conferente?> ObterPorUsuarioIdAsync(Guid usuarioId, CancellationToken cancellationToken) =>
+        await dbContext.Conferentes.SingleOrDefaultAsync(c => c.UsuarioId == usuarioId, cancellationToken);
+
     public void Adicionar(Conferente conferente) => dbContext.Conferentes.Add(conferente);
 }

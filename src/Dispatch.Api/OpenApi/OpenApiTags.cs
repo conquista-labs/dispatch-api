@@ -9,5 +9,6 @@ internal static class OpenApiTags
     public const string Protocolos = "Protocolos";
     public const string Importacao = "Importação";
     public const string CentralDeRegras = "Central de Regras";
+    public const string MinhaFila = "Minha Fila";
     public const string Sistema = "Sistema";
 }

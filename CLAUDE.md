@@ -412,6 +412,53 @@ RF-38 — criar equipe, mover escrevente pra ela, distribuir um protocolo, mudar
 equipe, confirmar que o `vencimento_em` recalculou a partir do `andamento_em` original (não de
 "agora"). 84 testes automatizados no total.
 
+## Minha fila (RF-19 a RF-24)
+
+Primeiro módulo construído pro papel **Conferente** — até aqui todo endpoint era Distribuidora.
+`Protocolo` ganhou `IniciadoEm`/`ConcluidoEm` (+ `Duracao` computada, só existe depois de
+concluído) e três transições novas (`IniciarConferencia`, `Aprovar`, `Reprovar`) — a mesma
+regra de sempre: o Domain só sabe fazer a transição, quem decide se ela é permitida é o caso
+de uso.
+
+- **`VerificadorDeAlcada`** (helper interno, não é caso de uso) — "esse conferente pode pegar
+  esse protocolo" é sempre a mesma pergunta (etapa permitida E tipo permitido via
+  `ResolvedorAlcada`), reaproveitado por `ObterMinhaFila` (filtra o pool) e `PegarProtocolo`
+  (bloqueia a ação, não só esconde).
+- **`ObterMinhaFila`** (RF-19) — três colunas: pool disponível (já filtrado pela alçada),
+  atribuídos e em conferência, os dois últimos só do próprio conferente.
+- **`PegarProtocolo`** (RF-20) — só sai do `Pool` se estiver dentro da alçada.
+- **`IniciarConferencia`** (RF-21) — só se `Atribuido` e dono bater; limite de atos
+  simultâneos hardcoded em `1` (mesma pendência do semáforo — tabela `config`, seção 8,
+  ainda não existe).
+- **`ConcluirConferencia`** (RF-22) — aprova ou reprova, só se `Conferindo` e dono bater;
+  grava `ConcluidoEm` (e, por extensão, `Duracao`).
+- **`ObterConcluidosHoje`** (RF-24) — "hoje" calculado a partir de `IRelogio.Agora`, nunca
+  hardcoded.
+- **`DefinirObservacao`** (RF-15/RF-23) passou a aceitar `conferenteRestritoId` opcional —
+  mesmo caso de uso serve Distribuidora (sem restrição) e o conferente dono (restrito);
+  devolve um enum (`Sucesso`/`NaoEncontrado`/`NaoEhSeu`) em vez de `bool`, porque agora há
+  três desfechos possíveis, não dois.
+
+**`ClaimsPrincipal` como parâmetro de endpoint, pela primeira vez no projeto**: minimal API
+resolve isso automaticamente (não precisa registrar nada) — usado em
+`PUT /protocolos/{id}/observacao` e em todo `/minha-fila` pra ler `ClaimTypes.NameIdentifier`
+(`Usuario.Id`) e resolver o `Conferente` correspondente via nova porta
+`IConferenteRepository.ObterPorUsuarioIdAsync`. `PUT /protocolos/{id}/observacao` agora aceita
+os dois papéis (`RequireRole(Distribuidora, Conferente)`) e decide a restrição por dentro,
+olhando `usuario.IsInRole(...)`.
+
+Endpoints novos, todos sob `/minha-fila`, `RequireRole(Conferente)` — primeiro grupo do
+projeto exclusivo desse papel: `GET /` (RF-19), `POST /{id}/pegar` (RF-20),
+`POST /{id}/iniciar` (RF-21), `POST /{id}/concluir` com `{aprovado: bool}` (RF-22),
+`GET /concluidos-hoje` (RF-24).
+
+Testado ponta a ponta contra o Postgres local: conferente pegando um protocolo do pool,
+Distribuidora e o próprio dono editando a observação, um segundo conferente recebendo 403 ao
+tentar editar a mesma observação (e o valor no banco confirmado intacto via `psql`), limite de
+simultâneos barrando um segundo `iniciar` com 409, e conclusão gravando `Duracao` corretamente
+em `GET /minha-fila/concluidos-hoje`. 103 testes automatizados no total (28 Domain + 75
+Application).
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

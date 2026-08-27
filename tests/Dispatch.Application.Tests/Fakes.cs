@@ -17,6 +17,9 @@ internal sealed class FakeConferenteRepository : IConferenteRepository
     public Task<Conferente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_conferentes.SingleOrDefault(c => c.Id == id));
 
+    public Task<Conferente?> ObterPorUsuarioIdAsync(Guid usuarioId, CancellationToken cancellationToken) =>
+        Task.FromResult(_conferentes.SingleOrDefault(c => c.UsuarioId == usuarioId));
+
     public void Adicionar(Conferente conferente) => _conferentes.Add(conferente);
 }
 
@@ -137,6 +140,22 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
                 .Where(p => escreventeIds.Contains(p.EscreventeId) && p.Status is not (
                     StatusProtocolo.Aprovado or StatusProtocolo.Reprovado or StatusProtocolo.Descartado))
                 .ToList());
+
+    public Task<IReadOnlyCollection<Protocolo>> ObterPoolAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.Status == StatusProtocolo.Pool).ToList());
+
+    public Task<IReadOnlyCollection<Protocolo>> ObterEmConferenciaPorConferenteAsync(
+        Guid conferenteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.Status == StatusProtocolo.Conferindo && p.DonoId == conferenteId).ToList());
+
+    public Task<IReadOnlyCollection<Protocolo>> ObterConcluidosPorConferenteAsync(
+        Guid conferenteId, DateTimeOffset desde, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.DonoId == conferenteId
+                && p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
+                && p.ConcluidoEm >= desde).ToList());
 
     public int Quantidade => _protocolos.Count;
 }

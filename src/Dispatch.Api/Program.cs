@@ -69,5 +69,6 @@ app.MapImportacaoEndpoints();
 app.MapDistribuicaoEndpoints();
 app.MapRegraAlcadaEndpoints();
 app.MapEquipeEndpoints();
+app.MapMinhaFilaEndpoints();
 
 app.Run();

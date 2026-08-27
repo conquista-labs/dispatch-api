@@ -17,6 +17,7 @@ internal sealed class TagDescriptionsDocumentTransformer : IOpenApiDocumentTrans
             new() { Name = OpenApiTags.Protocolos, Description = "Motor de distribuição — resolve prazo e decide o destino de um protocolo. Só Distribuidora." },
             new() { Name = OpenApiTags.Importacao, Description = "Importação de lote de protocolos (RF-05 a RF-12) — prévia e confirmação. Só Distribuidora." },
             new() { Name = OpenApiTags.CentralDeRegras, Description = "Alçada e prazos por equipe (RF-31 a RF-38). Só Distribuidora." },
+            new() { Name = OpenApiTags.MinhaFila, Description = "Fila e ações do próprio conferente — pegar, iniciar, concluir e ver concluídos do dia (RF-19 a RF-24). Só Conferente." },
             new() { Name = OpenApiTags.Sistema, Description = "Endpoints operacionais, sem regra de negócio." }
         };
 

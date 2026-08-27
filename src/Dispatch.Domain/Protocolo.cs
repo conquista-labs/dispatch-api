@@ -25,6 +25,11 @@ public sealed class Protocolo
     public Guid? DonoId { get; private set; }
     public string? MotivoExcecao { get; private set; }
     public string? Observacao { get; private set; }
+    public DateTimeOffset? IniciadoEm { get; private set; }
+    public DateTimeOffset? ConcluidoEm { get; private set; }
+
+    // RF-24: "duração" do ato — só existe depois de concluído.
+    public TimeSpan? Duracao => IniciadoEm is { } inicio && ConcluidoEm is { } fim ? fim - inicio : null;
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
@@ -87,4 +92,25 @@ public sealed class Protocolo
 
     // RF-15/RF-23: editável em qualquer estado, por isso não tem guarda de status nenhuma aqui.
     public void DefinirObservacao(string? observacao) => Observacao = observacao;
+
+    // RF-21: arranca o cronômetro. Quem decide se pode iniciar (é do conferente certo, tá
+    // Atribuido, respeita o limite de simultâneos) é o caso de uso — aqui só a transição.
+    public void IniciarConferencia(DateTimeOffset agora)
+    {
+        Status = StatusProtocolo.Conferindo;
+        IniciadoEm = agora;
+    }
+
+    // RF-22: aprovar ou não aprovar encerra o ato e grava a duração (via ConcluidoEm/Duracao).
+    public void Aprovar(DateTimeOffset agora)
+    {
+        Status = StatusProtocolo.Aprovado;
+        ConcluidoEm = agora;
+    }
+
+    public void Reprovar(DateTimeOffset agora)
+    {
+        Status = StatusProtocolo.Reprovado;
+        ConcluidoEm = agora;
+    }
 }

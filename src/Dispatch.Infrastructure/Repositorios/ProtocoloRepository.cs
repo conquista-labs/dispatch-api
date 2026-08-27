@@ -32,4 +32,23 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
             .Where(p => escreventeIds.Contains(p.EscreventeId) && p.Status != StatusProtocolo.Aprovado
                 && p.Status != StatusProtocolo.Reprovado && p.Status != StatusProtocolo.Descartado)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<Protocolo>> ObterPoolAsync(CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => p.Status == StatusProtocolo.Pool)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<Protocolo>> ObterEmConferenciaPorConferenteAsync(
+        Guid conferenteId, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => p.Status == StatusProtocolo.Conferindo && p.DonoId == conferenteId)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyCollection<Protocolo>> ObterConcluidosPorConferenteAsync(
+        Guid conferenteId, DateTimeOffset desde, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => p.DonoId == conferenteId
+                && (p.Status == StatusProtocolo.Aprovado || p.Status == StatusProtocolo.Reprovado)
+                && p.ConcluidoEm >= desde)
+            .ToListAsync(cancellationToken);
 }
