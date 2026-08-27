@@ -572,6 +572,16 @@ Achado planejando o front: nenhum teste anterior (todos via `curl`) esbarrou em 
 de produção entra como config quando o `dispatch-web` tiver deploy de verdade — mesma lógica
 de "decisão adiada conscientemente" do versionamento de API, abaixo.
 
+## ProtocoloResumo ganha IniciadoEm — fecha o gap do cronômetro (RF-21)
+
+Achado construindo a tela Minha fila no front: `ProtocoloResumo` (compartilhado entre
+`GET /protocolos/distribuicao` e `GET /minha-fila`) não expunha `Protocolo.IniciadoEm`, embora
+o campo já existisse no domínio desde a própria feature de Minha fila. Sem isso o front não
+tinha como calcular o cronômetro ao vivo do card "Em conferência" (RF-21: "arranca um
+cronômetro") sem inventar dado. Campo adicionado no fim do record (evita quebrar quem já
+desestrutura posicionalmente) — cálculo do tempo decorrido (`agora - iniciadoEm`) é feito no
+front, atualizado por polling/tick local, não recalculado a cada request.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

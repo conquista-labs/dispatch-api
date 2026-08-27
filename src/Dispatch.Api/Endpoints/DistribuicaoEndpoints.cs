@@ -55,7 +55,8 @@ public static class DistribuicaoEndpoints
         protocolo.MotivoExcecao,
         // RF-15: a observação do conferente aparece no card pra gestão.
         protocolo.Observacao,
-        protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null);
+        protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
+        protocolo.IniciadoEm);
 }
 
 public sealed record ProtocoloResumo(
@@ -69,7 +70,10 @@ public sealed record ProtocoloResumo(
     DateTimeOffset? VencimentoEm,
     string? MotivoExcecao,
     string? Observacao,
-    FaixaSemaforo? Semaforo);
+    FaixaSemaforo? Semaforo,
+    // RF-21: o front calcula o cronômetro ao vivo (agora - IniciadoEm) — só existe depois que
+    // IniciarConferencia roda, por isso nulo em qualquer status antes de "Conferindo".
+    DateTimeOffset? IniciadoEm);
 
 public sealed record GrupoPorConferenteResponse(Guid ConferenteId, IReadOnlyList<ProtocoloResumo> Protocolos);
 
