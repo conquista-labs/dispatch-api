@@ -23,7 +23,9 @@ public class ImportarLoteTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             protocolos,
-            new FakeUnitOfWork());
+            new FakeLoteImportacaoRepository(),
+            new FakeUnitOfWork(),
+            new FakeRelogio(LinhaDeCorte));
     }
 
     [Fact]
@@ -74,10 +76,11 @@ public class ImportarLoteTests
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
         var casoDeUso = NovoCasoDeUso(out var escreventes, out var protocolos);
 
-        await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+        var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
 
         Assert.Equal(0, protocolos.Quantidade);
         Assert.Equal(0, escreventes.Quantidade);
+        Assert.Null(resumo.LoteImportacaoId);
     }
 
     [Fact]
@@ -96,6 +99,9 @@ public class ImportarLoteTests
         Assert.Equal(2, protocolos.Quantidade);
         Assert.Equal(1, escreventes.Quantidade);
         Assert.Equal(2, resumo.EnviadosParaPool);
+        Assert.NotNull(resumo.LoteImportacaoId);
+        var todosDoLote = await protocolos.ObterParaDistribuicaoAsync(resumo.LoteImportacaoId, CancellationToken.None);
+        Assert.Equal(2, todosDoLote.Count);
     }
 
     [Fact]

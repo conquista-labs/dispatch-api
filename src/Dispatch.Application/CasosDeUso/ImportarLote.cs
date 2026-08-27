@@ -13,7 +13,9 @@ public sealed class ImportarLote(
     IRegraAlcadaRepository regras,
     ITipoAtoRepository tiposAto,
     IProtocoloRepository protocolos,
-    IUnitOfWork unitOfWork)
+    ILoteImportacaoRepository lotes,
+    IUnitOfWork unitOfWork,
+    IRelogio relogio)
 {
     public Task<ResumoImportacao> PreVisualizarAsync(
         IReadOnlyCollection<LinhaImportacao> linhas, Etapa etapa, DateTimeOffset linhaDeCorte, CancellationToken cancellationToken = default) =>
@@ -34,6 +36,12 @@ public sealed class ImportarLote(
         // volta ao relatório com andamento novo, legitimamente) — é qualquer linha com
         // andamento igual ou anterior à linha de corte, ou seja, já processada num lote antes.
         var relevantes = linhas.Where(l => l.DataHoraAndamento > linhaDeCorte).ToList();
+
+        // Criado antes do laço só quando vai persistir de verdade — na prévia não existe lote
+        // nenhum (RF-11), os protocolos calculados ali são só pra mostrar, nunca gravados.
+        LoteImportacao? lote = persistir
+            ? new LoteImportacao(Guid.NewGuid(), etapa, linhaDeCorte, relogio.Agora, relevantes.Count)
+            : null;
 
         var escreventesConhecidos = (await escreventes.ObterTodosAsync(cancellationToken)).ToList();
         var equipesTodas = await equipes.ObterTodasAsync(cancellationToken);
@@ -68,7 +76,8 @@ public sealed class ImportarLote(
                 tiposDesconhecidos.Add(linha.TipoAto);
             }
 
-            var protocolo = new Protocolo(Guid.NewGuid(), linha.Protocolo, tipoAto?.Id, etapa, linha.DataHoraAndamento);
+            var protocolo = new Protocolo(
+                Guid.NewGuid(), linha.Protocolo, tipoAto?.Id, etapa, linha.DataHoraAndamento, loteImportacaoId: lote?.Id);
 
             var resultado = AplicadorDeDistribuicao.Executar(
                 protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, catalogoTipos,
@@ -100,6 +109,8 @@ public sealed class ImportarLote(
 
         if (persistir)
         {
+            lotes.Adicionar(lote!);
+
             foreach (var escrevente in novosEscreventes)
             {
                 escreventes.Adicionar(escrevente);
@@ -109,6 +120,7 @@ public sealed class ImportarLote(
         }
 
         return new ResumoImportacao(
+            lote?.Id,
             linhas.Count,
             linhas.Count - relevantes.Count,
             relevantes.Count,

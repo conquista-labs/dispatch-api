@@ -13,13 +13,18 @@ public sealed class Protocolo
     // quando a importação rodou) — é o momentoDeReferencia usado pra calcular o vencimento, e
     // também a base da "linha de corte" que evita reimportar o que já foi processado.
     public DateTimeOffset AndamentoEm { get; }
+    // Nulo quando o protocolo nasce fora de um lote (o endpoint avulso /protocolos/distribuir,
+    // por exemplo) — RF-13 filtra "visão deste lote" por aqui.
+    public Guid? LoteImportacaoId { get; }
     public Prazo? Prazo { get; private set; }
     public DateTimeOffset? VencimentoEm { get; private set; }
     public StatusProtocolo Status { get; private set; } = StatusProtocolo.Pool;
     public Guid? DonoId { get; private set; }
     public string? MotivoExcecao { get; private set; }
 
-    public Protocolo(Guid id, string numero, Guid? tipoAtoId, Etapa etapa, DateTimeOffset andamentoEm, Prioridade prioridade = Prioridade.Normal)
+    public Protocolo(
+        Guid id, string numero, Guid? tipoAtoId, Etapa etapa, DateTimeOffset andamentoEm,
+        Prioridade prioridade = Prioridade.Normal, Guid? loteImportacaoId = null)
     {
         Id = id;
         Numero = numero;
@@ -27,6 +32,7 @@ public sealed class Protocolo
         Etapa = etapa;
         AndamentoEm = andamentoEm;
         Prioridade = prioridade;
+        LoteImportacaoId = loteImportacaoId;
     }
 
     // Prazo e vencimento não entram no construtor porque, no fluxo real, só existem depois

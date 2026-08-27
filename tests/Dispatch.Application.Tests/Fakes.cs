@@ -68,6 +68,10 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterParaDistribuicaoAsync(Guid? loteImportacaoId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId).ToList());
+
     public int Quantidade => _protocolos.Count;
 }
 
@@ -83,6 +87,15 @@ internal sealed class FakeEscreventeRepository : IEscreventeRepository
     public void Adicionar(Escrevente escrevente) => _escreventes.Add(escrevente);
 
     public int Quantidade => _escreventes.Count;
+}
+
+internal sealed class FakeLoteImportacaoRepository : ILoteImportacaoRepository
+{
+    private readonly List<LoteImportacao> _lotes = [];
+
+    public void Adicionar(LoteImportacao lote) => _lotes.Add(lote);
+
+    public int Quantidade => _lotes.Count;
 }
 
 internal sealed class FakeUnitOfWork : IUnitOfWork

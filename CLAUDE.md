@@ -302,6 +302,33 @@ Pendência conhecida: não existe `LoteImportacao` (entidade da seção 8) ainda
 importado não sabe de qual importação veio. Adiado pra quando a visão "por lote" (RF-13) for
 construída; não é necessário pro que existe hoje.
 
+## Visão de distribuição (RF-13/RF-14)
+
+`GET /protocolos/distribuicao` — três visões do mesmo conjunto de protocolos numa resposta só
+(RF-13 descreve como visões da mesma massa de dados, não telas independentes): `pool`,
+`atribuidos`, `emConferencia`, `concluidos` (bucket "por status"), `excecoes` (visão própria)
+e `porConferente` (atribuídos + em conferência quebrados por dono — pool não entra aqui,
+já é ele mesmo uma "coluna"). Filtro opcional `?loteImportacaoId=` — sem ele, mostra todos os
+protocolos que já existiram, não só de um lote.
+
+**`LoteImportacao`** (estava adiado, decidi trazer pra agora): entidade simples (Id, Etapa,
+LinhaDeCorte, ImportadoEm, TotalLinhas — seção 8). `ImportarLote.ConfirmarAsync` cria um
+registro por confirmação e carimba o `Id` dele em cada `Protocolo` criado (`LoteImportacaoId`,
+nulo quando o protocolo nasce fora de importação — ex.: o endpoint avulso). Só na confirmação,
+nunca na prévia — senão a prévia estaria persistindo algo (RF-11).
+
+`Semaforo.Calcular` (já existia no Domain, seção 5) finalmente tem um consumidor: cada card da
+visão leva a faixa (RF-14). As duas faixas (atenção/urgência) continuam sem tabela de config —
+hardcoded no endpoint com os mesmos valores de exemplo do requisito (4h/60min), até a tabela
+`config` (seção 8) existir.
+
+Testado ponta a ponta: lote confirmado gerando pool + exceção com tipo desconhecido
+corretamente sinalizado (`tipoAtoId: null`), filtro por lote batendo, e um protocolo urgente
+avulso aparecendo agrupado em `porConferente`.
+
+Pendências conscientes: RF-15 (observação no card), RF-16 (redistribuir pool) e RF-17 (ação de
+resolver exceção) ficaram de fora — são ações, não fazem parte da leitura em si.
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

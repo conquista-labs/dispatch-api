@@ -66,5 +66,6 @@ app.MapAuthEndpoints();
 app.MapProtocoloEndpoints();
 app.MapConferenteEndpoints();
 app.MapImportacaoEndpoints();
+app.MapDistribuicaoEndpoints();
 
 app.Run();
