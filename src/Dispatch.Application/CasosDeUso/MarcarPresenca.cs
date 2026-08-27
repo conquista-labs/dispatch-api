@@ -1,9 +1,7 @@
 namespace Dispatch.Application;
 
-// RF-27. Pendente: quando existir persistência de Protocolo, marcar ausente aqui também
-// precisa devolver os protocolos atribuídos a esta pessoa pro pool — hoje não dá, Protocolo
-// ainda não é persistido (ver CLAUDE.md).
-public sealed class MarcarPresenca(IConferenteRepository conferentes, IUnitOfWork unitOfWork)
+// RF-27: marcar ausente devolve pro pool os protocolos já atribuídos a essa pessoa.
+public sealed class MarcarPresenca(IConferenteRepository conferentes, IProtocoloRepository protocolos, IUnitOfWork unitOfWork)
 {
     public async Task<bool> ExecutarAsync(Guid conferenteId, bool presente, CancellationToken cancellationToken = default)
     {
@@ -14,6 +12,15 @@ public sealed class MarcarPresenca(IConferenteRepository conferentes, IUnitOfWor
         }
 
         conferente.MarcarPresenca(presente);
+
+        if (!presente)
+        {
+            foreach (var protocolo in await protocolos.ObterAtribuidosAAsync(conferenteId, cancellationToken))
+            {
+                protocolo.EnviarParaPool();
+            }
+        }
+
         await unitOfWork.SalvarAsync(cancellationToken);
         return true;
     }

@@ -34,13 +34,13 @@ public static class ProtocoloEndpoints
     private static DistribuirProtocoloResponse ParaResponse(Protocolo protocolo, ResultadoDistribuicao resultado) => resultado switch
     {
         ResultadoDistribuicao.Atribuido atribuido => new DistribuirProtocoloResponse(
-            "Atribuido", atribuido.Conferente.Id, Motivo: null, protocolo.VencimentoEm),
+            protocolo.Id, "Atribuido", atribuido.Conferente.Id, Motivo: null, protocolo.VencimentoEm),
 
         ResultadoDistribuicao.EnviadoParaPool => new DistribuirProtocoloResponse(
-            "EnviadoParaPool", ConferenteId: null, Motivo: null, protocolo.VencimentoEm),
+            protocolo.Id, "EnviadoParaPool", ConferenteId: null, Motivo: null, protocolo.VencimentoEm),
 
         ResultadoDistribuicao.Excecao excecao => new DistribuirProtocoloResponse(
-            "Excecao", ConferenteId: null, excecao.Motivo, protocolo.VencimentoEm),
+            protocolo.Id, "Excecao", ConferenteId: null, excecao.Motivo, protocolo.VencimentoEm),
 
         _ => throw new InvalidOperationException($"Resultado de distribuição não mapeado: {resultado.GetType().Name}")
     };
@@ -56,6 +56,7 @@ public sealed record DistribuirProtocoloRequest(
     Guid? EquipeId);
 
 public sealed record DistribuirProtocoloResponse(
+    Guid ProtocoloId,
     string Resultado,
     Guid? ConferenteId,
     string? Motivo,

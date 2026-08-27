@@ -53,6 +53,22 @@ internal sealed class FakeUsuarioRepository : IUsuarioRepository
     public void Adicionar(Usuario usuario) => _usuarios.Add(usuario);
 }
 
+internal sealed class FakeProtocoloRepository : IProtocoloRepository
+{
+    private readonly List<Protocolo> _protocolos;
+
+    public FakeProtocoloRepository(IReadOnlyCollection<Protocolo> protocolos) => _protocolos = protocolos.ToList();
+
+    public void Adicionar(Protocolo protocolo) => _protocolos.Add(protocolo);
+
+    public Task<Protocolo?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_protocolos.SingleOrDefault(p => p.Id == id));
+
+    public Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());
+}
+
 internal sealed class FakeUnitOfWork : IUnitOfWork
 {
     public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;

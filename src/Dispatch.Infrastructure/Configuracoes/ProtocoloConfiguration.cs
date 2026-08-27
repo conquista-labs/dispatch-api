@@ -20,9 +20,17 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
             .HasColumnName("prazo_tipo")
             .HasMaxLength(20);
 
+        builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.MotivoExcecao);
+
         builder.HasOne<TipoAto>()
             .WithMany()
             .HasForeignKey(p => p.TipoAtoId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Conferente>()
+            .WithMany()
+            .HasForeignKey(p => p.DonoId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

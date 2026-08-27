@@ -15,12 +15,15 @@ public class DistribuirProtocoloTests
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Etapa.PreConferencia);
+        var protocolos = new FakeProtocoloRepository([]);
 
         var caso = new DistribuirProtocolo(
             new FakeConferenteRepository([conferente]),
             new FakeEquipeRepository([equipe]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
+            protocolos,
+            new FakeUnitOfWork(),
             new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
@@ -29,6 +32,10 @@ public class DistribuirProtocoloTests
         Assert.Equal(new DateTimeOffset(Agora.Date, Agora.Offset).AddDays(1), protocolo.VencimentoEm);
         var atribuido = Assert.IsType<ResultadoDistribuicao.Atribuido>(resultado);
         Assert.Equal(conferente.Id, atribuido.Conferente.Id);
+
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
+        Assert.Equal(conferente.Id, protocolo.DonoId);
+        Assert.NotNull(await protocolos.ObterPorIdAsync(protocolo.Id, CancellationToken.None));
     }
 
     [Fact]
@@ -43,12 +50,16 @@ public class DistribuirProtocoloTests
             new FakeEquipeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
+            new FakeProtocoloRepository([]),
+            new FakeUnitOfWork(),
             new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
         Assert.Equal(TipoPrazo.D1, protocolo.Prazo?.Tipo);
         Assert.IsType<ResultadoDistribuicao.EnviadoParaPool>(resultado);
+        Assert.Equal(StatusProtocolo.Pool, protocolo.Status);
+        Assert.Null(protocolo.DonoId);
     }
 
     [Fact]
@@ -62,10 +73,14 @@ public class DistribuirProtocoloTests
             new FakeEquipeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
+            new FakeProtocoloRepository([]),
+            new FakeUnitOfWork(),
             new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
-        Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal(StatusProtocolo.Excecao, protocolo.Status);
+        Assert.Equal(excecao.Motivo, protocolo.MotivoExcecao);
     }
 }

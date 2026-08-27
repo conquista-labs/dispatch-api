@@ -229,9 +229,24 @@ estado, e quem decide gravar de fato é o caso de uso, chamando `unitOfWork.Salv
 uma vez no final. Equivalente ao `prisma.$transaction([...])`, só que explícito por injeção
 em vez de um wrapper de array.
 
-Pendência conhecida (RF-27): marcar ausente ou remover deveria devolver ao pool os protocolos
-já atribuídos àquela pessoa — não dá pra implementar ainda porque `Protocolo` não é persistido
-(mesma pendência já registrada na seção de endpoints). Fica pra quando isso existir.
+## Persistência de Protocolo
+
+`/protocolos/distribuir` deixou de ser só prévia — agora grava de verdade. `Protocolo` ganhou
+`Status` (`StatusProtocolo`: Pool/Atribuido/Conferindo/Aprovado/Reprovado/Excecao — seção 8;
+só os 3 primeiros têm transição implementada, os outros nascem junto com "Minha fila", RF-19
+a RF-24), `DonoId` e `MotivoExcecao`, com comportamento (`AtribuirA`, `EnviarParaPool`,
+`MarcarExcecao`) em vez de setter público solto. `DistribuirProtocolo` aplica o resultado do
+motor no protocolo e grava via nova porta `IProtocoloRepository` + `IUnitOfWork`.
+
+Isso destrava o RF-27 que ficou pendente: `MarcarPresenca` (ao marcar ausente) e
+`RemoverConferente` agora buscam os protocolos atribuídos à pessoa
+(`IProtocoloRepository.ObterAtribuidosAAsync`) e devolvem pro pool
+(`protocolo.EnviarParaPool()`) antes de gravar. Testado ponta a ponta contra o Postgres local:
+atribuiu um protocolo, marcou o conferente ausente, confirmou via `psql` que o protocolo
+voltou pra `Pool` com `dono_id` nulo.
+
+Resposta de `POST /protocolos/distribuir` ganhou `ProtocoloId`, já que agora existe um
+registro de verdade pra referenciar depois.
 
 ## Decisões adiadas conscientemente
 

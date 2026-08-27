@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRegraAlcadaRepository, RegraAlcadaRepository>();
         services.AddScoped<ITipoAtoRepository, TipoAtoRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+        services.AddScoped<IProtocoloRepository, ProtocoloRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWorkEfCore>();
         services.AddSingleton<IRelogio, RelogioDoSistema>();
         services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
