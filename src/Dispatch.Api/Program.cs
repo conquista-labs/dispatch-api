@@ -70,5 +70,6 @@ app.MapDistribuicaoEndpoints();
 app.MapRegraAlcadaEndpoints();
 app.MapEquipeEndpoints();
 app.MapMinhaFilaEndpoints();
+app.MapSugestaoEndpoints();
 
 app.Run();

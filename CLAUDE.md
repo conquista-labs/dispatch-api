@@ -459,6 +459,71 @@ simultâneos barrando um segundo `iniciar` com 409, e conclusão gravando `Durac
 em `GET /minha-fila/concluidos-hoje`. 103 testes automatizados no total (28 Domain + 75
 Application).
 
+## Aprendizado sem IA (RF-39 a RF-41)
+
+Seção 7: "o sistema que aprende é contagem, não modelo". Decisão de arquitetura tomada com o
+dono antes de codificar: **não existe tabela `evento_decisao`** como o documento sugere na
+seção 8. Das quatro propostas da tabela, três são puras funções de dados que já existem
+(protocolo, escrevente, conferente, equipe) — só "Tipo desconhecido" precisava de um dado
+novo: `Protocolo.TipoAtoNomeOriginal` (preenchido só quando `TipoAtoId` é nulo — o texto bruto
+do relatório, que antes se perdia). Um log de eventos genérico seria infraestrutura para um
+caso de uso que não existe ainda; se aparecer uma proposta futura que dependa mesmo de
+"previsto vs. realizado" solto, a tabela nasce ali.
+
+- **`Dispatch.Domain/Aprendizado/`** — `PayloadSugestao` (hierarquia fechada, 4 variantes:
+  `TipoDesconhecido`, `PrazoIrreal`, `EscreventeOrfao`, `RiscoQualidade`), `Sugestao`
+  (`Pendente`/`Aplicada`/`Descartada`, com `Chave` pro dedup e `DescartarAte` pro descarte com
+  memória — os dois mecanismos da seção 7, junto com o limiar mínimo de casos), e
+  `GeradorDeSugestoes` — quatro funções puras, uma por proposta, com os limiares do documento
+  como parâmetro (default), a mesma lógica de "configuração ainda hardcoded" das faixas do
+  semáforo. `PrazoIrreal` mapeia a duração real (percentil 80) pra faixa mais próxima usando
+  durações "típicas" de referência (1h/12h/36h/60h) — é uma aproximação consciente, a seção 11
+  do próprio documento já assume que "vence no fim do dia" é fuzzy.
+- **`GerarSugestoes`** — o "job diário" da seção 7, sob demanda (`POST /sugestoes/gerar`, só
+  Distribuidora) — não existe scheduler/`IHostedService` no projeto ainda, decisão adiada
+  igual versionamento de API. Roda as 4 funções do gerador e decide, por chave: nova (não
+  achou, ou achou descartada com a janela vencida) / atualiza ocorrências (achou pendente) /
+  ignora (achou descartada dentro da janela, ou já aplicada).
+- **`AplicarSugestao`** (RF-40) — cada variante do payload mapeia num verbo do requisito:
+  `TipoDesconhecido` → adiciona ao catálogo (`ITipoAtoRepository.Adicionar`, primeira escrita
+  nesse repositório); `PrazoIrreal` → `Equipe.DefinirPrazos` + recalcula vencimentos abertos
+  (`RecalculoDeVencimentos`, extraído de `EditarEquipe` pra ser reaproveitado aqui; RF-38);
+  `EscreventeOrfao` → `Escrevente.MoverParaEquipe`; `RiscoQualidade` → cria `RegraAlcada` nova
+  com `Origem.Aprendida` negando o nível pro tipo (primeira regra criada fora do fluxo manual
+  de `CriarRegraAlcada`).
+- **`DescartarSugestao`** (RF-40) — "silencia com memória": 30 dias hardcoded, mesma pendência
+  de configuração das outras constantes do sistema.
+- **`ListarSugestoesPendentes`** (RF-39) e **`ListarHistoricoSugestoes`** (RF-41).
+
+**Bug real encontrado testando ponta a ponta, não pego pelos testes com fake**: `Sugestao`
+passa pelo mesmo problema que `RegraAlcada` já tinha resolvido — o payload (sum type) é
+"achatado" pra persistência (`SugestaoRegistro`, mesmo padrão de `RegraAlcadaRegistro`), então
+o objeto de Domain que `ObterPorIdAsync`/`ObterPorChaveAtivaAsync` devolvem é uma tradução
+nova a cada chamada, **não** a instância que o EF Core rastreia. Chamar `sugestao.Aplicar(...)`
+nesse objeto mutava só a cópia em memória — o `SaveChanges` não via nenhuma mudança, e a
+sugestão continuava `Pendente` no banco pra sempre (confirmado com `psql`: `status` nunca saía
+de `Pendente`, aplicar duas vezes devolvia 204 as duas vezes). `RegraAlcadaRepository` já
+evitava essa armadilha (`AtivarAsync`/`DesativarAsync` mexem direto no registro rastreado, não
+chamam `RegraAlcada.Ativar()`) — só que eu não tinha reparado no padrão até esbarrar no mesmo
+bug aqui. Corrigido com o mesmo approach: `ISugestaoRepository` ganhou
+`AtualizarEvidenciaAsync`/`AplicarAsync`/`DescartarAsync`, que buscam o registro de novo e
+mutam ele direto; os métodos `Sugestao.Aplicar`/`Descartar`/`AtualizarEvidencia` do Domain
+continuam existindo (documentam a regra, são exercitados pelas fakes nos testes), só não são
+mais o caminho que o repositório real usa pra persistir. Lição reforçada: **fakes com lista
+em memória não têm esse tipo de "desconexão do change tracker" pra revelar** — o mesmo
+princípio do bug de FK do módulo de Distribuição (fakes não têm FK pra violar), agora também
+vale pra "fakes não têm change tracker pra perder a referência".
+
+Testado ponta a ponta contra o Postgres local, os quatro caminhos: importar 5 linhas de um
+tipo desconhecido → resolver na mão (RF-17) → gerar → aparece com a moda do nível certa →
+aplicar → tipo entra no catálogo, sugestão vira `Aplicada`, aplicar de novo dá 409; distribuir
+6 protocolos de um tipo conhecido pra um conferente Júnior, reprovar 4 → gerar → risco de
+qualidade aparece (67% reprovação) → aplicar → `RegraAlcada` nova com `Origem.Aprendida`
+aparece em `/regras-alcada` e já reflete em `/conferentes/alcance` (Júnior perde o tipo);
+segundo ciclo de tipo desconhecido → descartar → `descartarAte` gravado 30 dias à frente →
+gerar de novo não traz de volta (janela de memória) → descartar de novo dá 404 (já não está
+pendente). 128 testes automatizados no total (40 Domain + 88 Application).
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

@@ -16,6 +16,7 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<LoteImportacao> LotesImportacao => Set<LoteImportacao>();
     internal DbSet<RegraAlcadaRegistro> RegrasDeAlcada => Set<RegraAlcadaRegistro>();
+    internal DbSet<SugestaoRegistro> Sugestoes => Set<SugestaoRegistro>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -86,10 +86,18 @@ internal sealed class FakeRegraAlcadaRepository : IRegraAlcadaRepository
     public int Quantidade => _regras.Count;
 }
 
-internal sealed class FakeTipoAtoRepository(IReadOnlyCollection<TipoAto> tipos) : ITipoAtoRepository
+internal sealed class FakeTipoAtoRepository : ITipoAtoRepository
 {
+    private readonly List<TipoAto> _tipos;
+
+    public FakeTipoAtoRepository(IReadOnlyCollection<TipoAto> tipos) => _tipos = tipos.ToList();
+
     public Task<IReadOnlyCollection<TipoAto>> ObterTodosAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(tipos);
+        Task.FromResult<IReadOnlyCollection<TipoAto>>(_tipos.ToList());
+
+    public void Adicionar(TipoAto tipoAto) => _tipos.Add(tipoAto);
+
+    public int Quantidade => _tipos.Count;
 }
 
 internal sealed class FakeUsuarioRepository : IUsuarioRepository
@@ -194,4 +202,47 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
 internal sealed class FakeRelogio(DateTimeOffset agora) : IRelogio
 {
     public DateTimeOffset Agora { get; } = agora;
+}
+
+internal sealed class FakeSugestaoRepository : ISugestaoRepository
+{
+    private readonly List<Sugestao> _sugestoes;
+
+    public FakeSugestaoRepository(IReadOnlyCollection<Sugestao> sugestoes) => _sugestoes = sugestoes.ToList();
+
+    public Task<IReadOnlyCollection<Sugestao>> ObterPendentesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Sugestao>>(_sugestoes.Where(s => s.Status == StatusSugestao.Pendente).ToList());
+
+    public Task<IReadOnlyCollection<Sugestao>> ObterHistoricoAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Sugestao>>(_sugestoes.Where(s => s.Status != StatusSugestao.Pendente).ToList());
+
+    public Task<Sugestao?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_sugestoes.SingleOrDefault(s => s.Id == id));
+
+    public Task<Sugestao?> ObterPorChaveAtivaAsync(string chave, CancellationToken cancellationToken) =>
+        Task.FromResult(_sugestoes.Where(s => s.Chave == chave).OrderByDescending(s => s.CriadaEm).FirstOrDefault());
+
+    public void Adicionar(Sugestao sugestao) => _sugestoes.Add(sugestao);
+
+    public Task AtualizarEvidenciaAsync(Guid id, int ocorrencias, string evidencia, DateTimeOffset agora, CancellationToken cancellationToken)
+    {
+        _sugestoes.Single(s => s.Id == id).AtualizarEvidencia(ocorrencias, evidencia, agora);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> AplicarAsync(Guid id, DateTimeOffset agora, CancellationToken cancellationToken)
+    {
+        var sugestao = _sugestoes.SingleOrDefault(s => s.Id == id);
+        sugestao?.Aplicar(agora);
+        return Task.FromResult(sugestao is not null);
+    }
+
+    public Task<bool> DescartarAsync(Guid id, DateTimeOffset agora, DateTimeOffset descartarAte, CancellationToken cancellationToken)
+    {
+        var sugestao = _sugestoes.SingleOrDefault(s => s.Id == id);
+        sugestao?.Descartar(agora, descartarAte);
+        return Task.FromResult(sugestao is not null);
+    }
+
+    public int Quantidade => _sugestoes.Count;
 }

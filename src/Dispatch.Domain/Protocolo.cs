@@ -7,6 +7,10 @@ public sealed class Protocolo
     // Nulo = tipo de ato desconhecido (RF-09) — sinalizado, não inventado na hora. O motor de
     // distribuição já trata isso como "tipo desconhecido" (exceção) sem precisar de FK válida.
     public Guid? TipoAtoId { get; }
+    // Preenchido só quando TipoAtoId é nulo — o texto bruto que veio do relatório (RF-09/
+    // seção 7 "Tipo desconhecido"). Sem isso não dá pra agrupar "quantas vezes 'X' apareceu
+    // fora do catálogo" pra gerar a sugestão de aprendizado.
+    public string? TipoAtoNomeOriginal { get; }
     // Quem produziu o ato (glossário, seção 2) — RF-14 (o card mostra escrevente/equipe) e
     // RF-38 (recalcular vencimento quando o prazo da equipe do escrevente muda) dependem disso.
     public Guid EscreventeId { get; }
@@ -33,11 +37,12 @@ public sealed class Protocolo
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
-        Prioridade prioridade = Prioridade.Normal, Guid? loteImportacaoId = null)
+        Prioridade prioridade = Prioridade.Normal, Guid? loteImportacaoId = null, string? tipoAtoNomeOriginal = null)
     {
         Id = id;
         Numero = numero;
         TipoAtoId = tipoAtoId;
+        TipoAtoNomeOriginal = tipoAtoId is null ? tipoAtoNomeOriginal : null;
         EscreventeId = escreventeId;
         Etapa = etapa;
         AndamentoEm = andamentoEm;

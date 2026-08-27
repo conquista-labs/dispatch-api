@@ -8,4 +8,6 @@ public sealed class TipoAtoRepository(DispatchDbContext dbContext) : ITipoAtoRep
 {
     public async Task<IReadOnlyCollection<TipoAto>> ObterTodosAsync(CancellationToken cancellationToken) =>
         await dbContext.TiposAto.ToListAsync(cancellationToken);
+
+    public void Adicionar(TipoAto tipoAto) => dbContext.TiposAto.Add(tipoAto);
 }

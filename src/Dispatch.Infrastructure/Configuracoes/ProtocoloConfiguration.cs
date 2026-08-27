@@ -16,6 +16,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.AndamentoEm);
         builder.Property(p => p.EscreventeId);
         builder.Property(p => p.LoteImportacaoId);
+        builder.Property(p => p.TipoAtoNomeOriginal).HasMaxLength(200);
 
         // Prazo aqui é opcional (só existe depois de DistribuirProtocolo rodar).
         builder.Property(p => p.Prazo)

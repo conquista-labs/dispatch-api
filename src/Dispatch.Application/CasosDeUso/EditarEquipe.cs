@@ -24,20 +24,7 @@ public sealed class EditarEquipe(
         // RF-38: todo protocolo aberto de quem está nessa equipe recalcula o vencimento com
         // o prazo novo — o momentoDeReferencia continua sendo o AndamentoEm original de cada
         // protocolo, não "agora" (a regra de negócio não mudou, só o prazo que ela usa).
-        var idsDosEscreventes = (await escreventes.ObterTodosAsync(cancellationToken))
-            .Where(e => e.EquipeId == equipeId)
-            .Select(e => e.Id)
-            .ToList();
-
-        if (idsDosEscreventes.Count > 0)
-        {
-            var abertos = await protocolos.ObterAbertosPorEscreventesAsync(idsDosEscreventes, cancellationToken);
-            foreach (var protocolo in abertos)
-            {
-                var prazoNovo = equipe.PrazoPara(protocolo.Etapa);
-                protocolo.DefinirPrazo(prazoNovo, protocolo.AndamentoEm);
-            }
-        }
+        await RecalculoDeVencimentos.AplicarAsync(equipe, escreventes, protocolos, cancellationToken);
 
         await unitOfWork.SalvarAsync(cancellationToken);
         return true;
