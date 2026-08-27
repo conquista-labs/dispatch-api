@@ -1,3 +1,4 @@
+using Dispatch.Api.OpenApi;
 using Dispatch.Application;
 using Dispatch.Domain;
 
@@ -8,7 +9,8 @@ public static class ConferenteEndpoints
     public static void MapConferenteEndpoints(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/conferentes")
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
+            .WithTags(OpenApiTags.Conferentes);
 
         grupo.MapPost("/", async (
                 CadastrarConferenteRequest request,

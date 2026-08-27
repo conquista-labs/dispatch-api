@@ -13,6 +13,7 @@ builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
     options.AddOperationTransformer<BearerSecuritySchemeTransformer>();
     options.AddSchemaTransformer<EnumSchemaTransformer>();
+    options.AddDocumentTransformer<TagDescriptionsDocumentTransformer>();
 });
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -58,7 +59,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .WithTags(OpenApiTags.Sistema)
+    .AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapProtocoloEndpoints();
 app.MapConferenteEndpoints();

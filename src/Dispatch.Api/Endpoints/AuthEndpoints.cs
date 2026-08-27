@@ -1,3 +1,4 @@
+using Dispatch.Api.OpenApi;
 using Dispatch.Application;
 
 namespace Dispatch.Api.Endpoints;
@@ -21,6 +22,7 @@ public static class AuthEndpoints
             })
             .WithName("Login")
             .WithSummary("Autentica por e-mail e senha (RF-01/RF-02) e devolve um token JWT.")
+            .WithTags(OpenApiTags.Autenticacao)
             .Produces<LoginResponse>()
             .Produces(StatusCodes.Status401Unauthorized)
             .AllowAnonymous();
