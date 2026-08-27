@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DescartarSugestao>();
         services.AddScoped<ListarSugestoesPendentes>();
         services.AddScoped<ListarHistoricoSugestoes>();
+        services.AddScoped<ListarConferentes>();
 
         return services;
     }

@@ -112,6 +112,9 @@ internal sealed class FakeUsuarioRepository : IUsuarioRepository
     public Task<Usuario?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_usuarios.SingleOrDefault(u => u.Id == id));
 
+    public Task<IReadOnlyCollection<Usuario>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Usuario>>(_usuarios.Where(u => ids.Contains(u.Id)).ToList());
+
     public Task<bool> ExisteComEmailAsync(string email, CancellationToken cancellationToken) =>
         Task.FromResult(_usuarios.Any(u => u.Email == email));
 

@@ -524,6 +524,25 @@ segundo ciclo de tipo desconhecido → descartar → `descartarAte` gravado 30 d
 gerar de novo não traz de volta (janela de memória) → descartar de novo dá 404 (já não está
 pendente). 128 testes automatizados no total (40 Domain + 88 Application).
 
+## GET /conferentes — fecha o gap encontrado planejando o front
+
+Levantamento rápido de tela × endpoint pro `dispatch-web` (RF-25) achou um buraco real: não
+existia **nenhuma** leitura que juntasse `Conferente` (Domain) com `Usuario.Nome`/`Email` —
+`Conferente` não guarda nome, isso é dado de `Usuario`, e toda leitura existente até aqui
+(`ObterAlcancePorConferente`, a visão "por conferente" da Distribuição, `Minha fila`) só
+devolvia `conferenteId` puro. Não dava pra montar nenhuma tela que mostra "quem é" um
+conferente.
+
+`ListarConferentes` (novo caso de uso) resolve isso buscando os dois lados e juntando em
+memória — `IUsuarioRepository` ganhou `ObterVariosPorIdsAsync` (busca em lote pelos
+`UsuarioId`s dos conferentes, evita N+1 de `ObterPorIdAsync` um de cada vez). Devolve
+`ConferenteComUsuario` (record de leitura só com primitivos — não é entidade de Domain
+vazando, mesmo padrão de `AlcanceDoConferente`/`ResumoImportacao`), exposto em
+`GET /conferentes` (Distribuidora, mesmo grupo dos outros endpoints de conferente). Testado
+ponta a ponta: nome e e-mail batendo com o que foi cadastrado, inclusive pra conferentes
+antigos já existentes no banco. 130 testes automatizados no total (40 Domain + 90
+Application).
+
 ## Decisões adiadas conscientemente
 
 - **Versionamento de endpoints** (`/v1/...` ou por header): não faz sentido ainda — não há

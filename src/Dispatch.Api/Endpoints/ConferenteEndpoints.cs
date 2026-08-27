@@ -12,6 +12,12 @@ public static class ConferenteEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.Conferentes);
 
+        grupo.MapGet("/", async (ListarConferentes casoDeUso, CancellationToken cancellationToken) =>
+                Results.Ok(await casoDeUso.ExecutarAsync(cancellationToken)))
+            .WithName("ListarConferentes")
+            .WithSummary("Lista todos os conferentes com nome/e-mail — front usa pra resolver identidade em qualquer tela que só tem conferenteId (RF-25).")
+            .Produces<IReadOnlyList<ConferenteComUsuario>>();
+
         grupo.MapPost("/", async (
                 CadastrarConferenteRequest request,
                 CadastrarConferente casoDeUso,
