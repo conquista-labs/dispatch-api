@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ListarRegrasAlcada>();
         services.AddScoped<ListarEquipes>();
         services.AddScoped<ListarTiposAto>();
+        services.AddScoped<CriarTipoAto>();
         services.AddScoped<ObterMinhaFila>();
         services.AddScoped<PegarProtocolo>();
         services.AddScoped<IniciarConferencia>();

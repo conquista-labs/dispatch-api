@@ -54,9 +54,10 @@ public sealed class ImportarLote(
         var equipesTodas = await equipes.ObterTodasAsync(cancellationToken);
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
-        var catalogoTipos = await tiposAto.ObterTodosAsync(cancellationToken);
+        var catalogoTipos = (await tiposAto.ObterTodosAsync(cancellationToken)).ToList();
 
         var novosEscreventes = new List<Escrevente>();
+        var novosTipos = new List<TipoAto>();
         var atribuicoes = new Dictionary<Guid, int>();
         var enviadosParaPool = 0;
         var excecoes = 0;
@@ -83,21 +84,34 @@ public sealed class ImportarLote(
             if (escrevente is null)
             {
                 // RF-09: escrevente desconhecido nasce sem equipe — vira alocação manual
-                // depois, na Central de regras.
-                escrevente = new Escrevente(Guid.NewGuid(), linha.Escrevente, equipeId: null);
+                // depois, na Central de regras. Nome vem do relatório em caixa alta — normaliza
+                // antes de gravar (ninguém trata nome de gente assim na prática).
+                escrevente = new Escrevente(Guid.NewGuid(), NormalizadorDeTexto.ParaNomeProprio(linha.Escrevente), equipeId: null);
                 escreventesConhecidos.Add(escrevente);
                 novosEscreventes.Add(escrevente);
             }
 
             var tipoAto = catalogoTipos.FirstOrDefault(
                 t => string.Equals(t.Nome, linha.TipoAto, StringComparison.OrdinalIgnoreCase));
+            var tipoJaExistia = tipoAto is not null;
             if (tipoAto is null)
             {
-                tiposDesconhecidos.Add(linha.TipoAto);
+                // Tipo de ato novo entra direto no catálogo (nome normalizado) — não fica
+                // esperando revisão humana como uma sugestão de aprendizado (RF-39/RF-40): sem
+                // isso, todo protocolo desse tipo cai em exceção "tipo desconhecido" até alguém
+                // aplicar uma sugestão que só existe depois de ≥5 ocorrências, travando um
+                // cartório novo logo na primeira importação. A alçada (quem pode conferir esse
+                // tipo) continua exigindo regra explícita quando negada — só o cadastro do tipo
+                // em si deixou de travar. `tiposDesconhecidos` continua sinalizando (RF-09),
+                // agora como "isso é novo, acabou de entrar no catálogo".
+                tipoAto = new TipoAto(Guid.NewGuid(), NormalizadorDeTexto.ParaNomeProprio(linha.TipoAto));
+                catalogoTipos.Add(tipoAto);
+                novosTipos.Add(tipoAto);
+                tiposDesconhecidos.Add(tipoAto.Nome);
             }
 
             var protocolo = new Protocolo(
-                Guid.NewGuid(), linha.Protocolo, tipoAto?.Id, escrevente.Id, etapa, linha.DataHoraAndamento,
+                Guid.NewGuid(), linha.Protocolo, tipoAto.Id, escrevente.Id, etapa, linha.DataHoraAndamento,
                 loteImportacaoId: lote?.Id, tipoAtoNomeOriginal: linha.TipoAto);
 
             var resultado = AplicadorDeDistribuicao.Executar(
@@ -118,7 +132,7 @@ public sealed class ImportarLote(
             };
 
             linhasPreview?.Add(new LinhaPreviaImportacao(
-                linha.Protocolo, linha.TipoAto, TipoConhecido: tipoAto is not null, linha.Escrevente,
+                linha.Protocolo, linha.TipoAto, TipoConhecido: tipoJaExistia, linha.Escrevente,
                 resolucaoPrazo.Equipe?.Nome, resolucaoPrazo.Prazo.Tipo, protocolo.VencimentoEm,
                 protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
                 JaExiste: false, comAlcada));
@@ -149,6 +163,11 @@ public sealed class ImportarLote(
             foreach (var escrevente in novosEscreventes)
             {
                 escreventes.Adicionar(escrevente);
+            }
+
+            foreach (var tipo in novosTipos)
+            {
+                tiposAto.Adicionar(tipo);
             }
 
             await unitOfWork.SalvarAsync(cancellationToken);

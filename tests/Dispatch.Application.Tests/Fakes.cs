@@ -169,6 +169,7 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
                 && p.ConcluidoEm >= desde).ToList());
 
     public int Quantidade => _protocolos.Count;
+    public IReadOnlyList<Protocolo> Todos => _protocolos;
 }
 
 internal sealed class FakeEscreventeRepository : IEscreventeRepository

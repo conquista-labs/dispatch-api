@@ -12,18 +12,20 @@ public class ImportarLoteTests
     private static ImportarLote NovoCasoDeUso(
         out FakeEscreventeRepository escreventes,
         out FakeProtocoloRepository protocolos,
+        out FakeTipoAtoRepository tiposAto,
         IReadOnlyCollection<Conferente>? conferentes = null,
         IReadOnlyCollection<Escrevente>? escreventesIniciais = null,
         IReadOnlyCollection<Equipe>? equipes = null)
     {
         escreventes = new FakeEscreventeRepository(escreventesIniciais ?? []);
         protocolos = new FakeProtocoloRepository([]);
+        tiposAto = new FakeTipoAtoRepository([Inventario]);
         return new ImportarLote(
             escreventes,
             new FakeEquipeRepository(equipes ?? []),
             new FakeConferenteRepository(conferentes ?? []),
             new FakeRegraAlcadaRepository([]),
-            new FakeTipoAtoRepository([Inventario]),
+            tiposAto,
             protocolos,
             new FakeLoteImportacaoRepository(),
             new FakeUnitOfWork(),
@@ -38,7 +40,7 @@ public class ImportarLoteTests
             new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(-1)),
             new LinhaImportacao("262204", "Inventário", "Fulano", LinhaDeCorte.AddHours(1))
         };
-        var casoDeUso = NovoCasoDeUso(out _, out _);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -51,7 +53,7 @@ public class ImportarLoteTests
     public async Task EscreventeDesconhecido_EhCriadoSemEquipeESinalizado()
     {
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano Novo", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out var escreventes, out _);
+        var casoDeUso = NovoCasoDeUso(out var escreventes, out _, out _);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -60,23 +62,61 @@ public class ImportarLoteTests
         Assert.Equal(0, escreventes.Quantidade);
     }
 
+    // Tipo de ato novo entra direto no catálogo (nome normalizado) em vez de travar esperando
+    // uma sugestão de aprendizado (RF-39/RF-40) — sem conferente na escala, ainda vira exceção,
+    // mas por "ninguém com alçada", não mais "tipo desconhecido" (o tipo já existe).
     [Fact]
-    public async Task TipoDeAtoDesconhecido_EhSinalizadoEViraExcecao()
+    public async Task TipoDeAtoNovo_EhSinalizadoECadastradoNoCatalogo()
     {
-        var linhas = new[] { new LinhaImportacao("262203", "Ato Que Não Existe", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _);
+        var linhas = new[] { new LinhaImportacao("262203", "ATO QUE NÃO EXISTE", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out _, out var tiposAto);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
         Assert.Contains("Ato Que Não Existe", resumo.TiposDesconhecidos);
         Assert.Equal(1, resumo.Excecoes);
+        // Prévia não persiste (RF-11) — o tipo novo não pode ter ido pro repositório ainda.
+        Assert.Equal(1, tiposAto.Quantidade);
+    }
+
+    // Sem regra de alçada nenhuma, "ausência de regra = permitido" (RF-31) — um tipo novo com
+    // pelo menos um conferente na escala já flui pro pool na hora, sem exceção nenhuma. É
+    // exatamente o cenário de um cartório novo, sem nenhuma alçada configurada ainda.
+    [Fact]
+    public async Task TipoDeAtoNovo_ComConferenteNaEscala_VaiParaOPoolSemExcecao()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var linhas = new[] { new LinhaImportacao("262203", "VENDA E COMPRA", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _, [conferente]);
+
+        var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+
+        Assert.Equal(0, resumo.Excecoes);
+        Assert.Equal(1, resumo.EnviadosParaPool);
+        Assert.Contains("Venda e Compra", resumo.TiposDesconhecidos);
+    }
+
+    // RF confirmado nesta sessão: relatório vem em CAIXA ALTA, mas o cadastro precisa sair
+    // normalizado — tanto no tipo de ato (aqui) quanto no escrevente (teste acima).
+    [Fact]
+    public async Task Confirmar_CadastraTipoDeAtoNovoNormalizado()
+    {
+        var linhas = new[] { new LinhaImportacao("262203", "VENDA E COMPRA", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out var tiposAto);
+
+        await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        // Catálogo já nasce com "Inventário" (fixture) — "Venda e Compra" é o segundo.
+        Assert.Equal(2, tiposAto.Quantidade);
+        var protocolo = Assert.Single(protocolos.Todos);
+        Assert.NotNull(protocolo.TipoAtoId);
     }
 
     [Fact]
     public async Task PreVisualizar_NaoPersisteNada()
     {
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out var escreventes, out var protocolos);
+        var casoDeUso = NovoCasoDeUso(out var escreventes, out var protocolos, out _);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -94,7 +134,7 @@ public class ImportarLoteTests
             new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)),
             new LinhaImportacao("262204", "Inventário", "Fulano", LinhaDeCorte.AddHours(2))
         };
-        var casoDeUso = NovoCasoDeUso(out var escreventes, out var protocolos, conferentes: [conferente]);
+        var casoDeUso = NovoCasoDeUso(out var escreventes, out var protocolos, out _, conferentes: [conferente]);
 
         var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
 
@@ -116,7 +156,7 @@ public class ImportarLoteTests
         var equipe = new Equipe(equipeId, "5º andar", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D0));
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId);
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _, conferentes: [conferente], escreventesIniciais: [escrevente], equipes: [equipe]);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _, conferentes: [conferente], escreventesIniciais: [escrevente], equipes: [equipe]);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -129,7 +169,7 @@ public class ImportarLoteTests
     public async Task PreVisualizar_LinhaAntesDaLinhaDeCorte_VemComoJaExisteSemPrazoResolvido()
     {
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(-1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -150,7 +190,7 @@ public class ImportarLoteTests
         var equipe = new Equipe(equipeId, "5º andar", new Prazo(TipoPrazo.D1), new Prazo(TipoPrazo.D0));
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId);
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _, conferentes: [conferente], escreventesIniciais: [escrevente], equipes: [equipe]);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _, conferentes: [conferente], escreventesIniciais: [escrevente], equipes: [equipe]);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PosConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -168,7 +208,7 @@ public class ImportarLoteTests
     public async Task PreVisualizar_TipoDesconhecido_TrazTipoConhecidoFalsoEComAlcadaZero()
     {
         var linhas = new[] { new LinhaImportacao("262203", "Ato Que Não Existe", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
 
         var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
 
@@ -181,7 +221,7 @@ public class ImportarLoteTests
     public async Task Confirmar_NaoTrazLinhasDePrevia()
     {
         var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
-        var casoDeUso = NovoCasoDeUso(out _, out _);
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
 
         var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
 
