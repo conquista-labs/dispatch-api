@@ -37,6 +37,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ObterUsuarioAtual>();
         services.AddScoped<CadastrarConferente>();
         services.AddScoped<EditarNivelEJornada>();
+        services.AddScoped<EditarPerfilConferente>();
         services.AddScoped<MarcarPresenca>();
         services.AddScoped<RemoverConferente>();
         services.AddScoped<ImportarLote>();

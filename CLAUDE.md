@@ -624,6 +624,32 @@ um conferente na escala habilitado, `GET /conferentes/cobertura` devolveu esse t
 7 testes novos (`ObterCoberturaDeAlcadaTests` + 2 em `ListarConferentesTests` pra
 `CapacidadeEstimada`) — 103 testes de Application no total (143 com Domain).
 
+## Conferentes, ajustes achados testando a tela de verdade (RF-25)
+
+Três coisas que só apareceram usando a tela no navegador, não em teste isolado:
+
+- **`GET /conferentes` sem `ORDER BY`**: a lista "pulava" de posição a cada ação (qualquer
+  edição invalida a query inteira no front, RF-26/27 disparam refetch). Postgres não garante
+  ordem estável sem `ORDER BY` explícito. `ListarConferentes` agora ordena por nome.
+- **Remover não filtrava quem foi removido**: `GET /conferentes` devolvia todo mundo, ativo ou
+  não — um conferente removido (soft delete, `Usuario.Ativo = false`) continuava aparecendo pra
+  sempre. Cogitei filtrar isso no front, mas não faz sentido: `ativo=false` significa "não é
+  mais conferente" pra qualquer tela que use esse endpoint (a de Conferentes, o seletor de
+  atribuição manual em Exceções, o que mais vier), então o filtro entrou em `ListarConferentes`
+  — uma correção na fonte em vez de confiar que cada consumidor lembra de repetir o filtro.
+- **`EditarPerfilConferente`** (novo caso de uso, RF-25 "editar" — faltava): nome/e-mail são do
+  `Usuario`, separado de `EditarNivelEJornada` (que só mexe em campos do `Conferente`) de
+  propósito — são agregados diferentes, e o front trata como ações diferentes (nível/jornada
+  direto no card; nome/e-mail um fluxo à parte). `Usuario.Nome`/`Email` ganharam setter privado
+  + `AtualizarPerfil(nome, email)`. Unicidade de e-mail checada só quando o e-mail muda de
+  verdade (`ExisteComEmailAsync` sozinho rejeitaria a pessoa contra o próprio e-mail atual, um
+  falso positivo). `PUT /conferentes/{id}/perfil`, `204`/`404`/`409` (e-mail já cadastrado).
+  Testado contra o Postgres local: editar mantendo o mesmo e-mail passa, editar pro e-mail de
+  outro conferente dá 409, editar de verdade persiste e aparece no próximo `GET /conferentes`.
+
+4 testes novos (`EditarPerfilConferenteTests`) — 109 testes de Application no total (149 com
+Domain).
+
 ## Login devolve o usuário + GET /auth/me
 
 Decisão tomada planejando o `dispatch-web`: o front **nunca decodifica o JWT** pra saber quem

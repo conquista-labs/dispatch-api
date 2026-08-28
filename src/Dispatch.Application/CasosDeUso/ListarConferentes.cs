@@ -20,6 +20,11 @@ public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuari
         var todosUsuarios = await usuarios.ObterVariosPorIdsAsync(usuarioIds, cancellationToken);
 
         return todosConferentes
+            // RF-25: "remover" é soft delete (Usuario.Desativar) — ativo=false significa "não é
+            // mais conferente", não é um estado que alguma tela deva mostrar. Filtrar aqui, na
+            // única leitura agregada, poupa cada consumidor (tela de Conferentes, seletor de
+            // atribuição manual em Exceções, o que mais vier) de ter que lembrar disso sozinho.
+            .Where(conferente => todosUsuarios.Single(u => u.Id == conferente.UsuarioId).Ativo)
             .Select(conferente =>
             {
                 var usuario = todosUsuarios.Single(u => u.Id == conferente.UsuarioId);
@@ -28,6 +33,10 @@ public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuari
                     conferente.Id, usuario.Nome, usuario.Email, usuario.Ativo,
                     conferente.Nivel, conferente.JornadaHoras, conferente.NaEscala, conferente.CargaAtual, capacidadeEstimada);
             })
+            // Sem isso a ordem vinha da leitura crua do Postgres, que não é garantida estável
+            // entre uma chamada e outra sem ORDER BY — a lista "pulava" de posição a cada
+            // refetch depois de qualquer ação (RF-25/26/27 invalidam a query inteira).
+            .OrderBy(c => c.Nome, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 }

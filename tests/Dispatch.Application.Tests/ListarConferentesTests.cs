@@ -50,4 +50,36 @@ public class ListarConferentesTests
 
         Assert.Empty(resultado);
     }
+
+    [Fact]
+    public async Task ConferenteRemovido_NaoAparece()
+    {
+        // RF-25: "remover" desativa o Usuario (soft delete) — ativo=false não é mais conferente
+        // pra nenhuma tela, então nem deveria sair daqui.
+        var usuario = new Usuario(Guid.NewGuid(), "Alguém", "alguem@cartorio.com", "hash", Papel.Conferente);
+        usuario.Desativar();
+        var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: false, cargaAtual: 0);
+
+        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]));
+
+        var resultado = await casoDeUso.ExecutarAsync();
+
+        Assert.Empty(resultado);
+    }
+
+    [Fact]
+    public async Task Resultado_VemOrdenadoPorNome()
+    {
+        var usuarioB = new Usuario(Guid.NewGuid(), "Beatriz", "beatriz@cartorio.com", "hash", Papel.Conferente);
+        var usuarioA = new Usuario(Guid.NewGuid(), "Aline", "aline@cartorio.com", "hash", Papel.Conferente);
+        var conferenteB = new Conferente(Guid.NewGuid(), usuarioB.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var conferenteA = new Conferente(Guid.NewGuid(), usuarioA.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferenteB, conferenteA]), new FakeUsuarioRepository([usuarioB, usuarioA]));
+
+        var resultado = await casoDeUso.ExecutarAsync();
+
+        Assert.Equal(["Aline", "Beatriz"], resultado.Select(c => c.Nome));
+    }
 }

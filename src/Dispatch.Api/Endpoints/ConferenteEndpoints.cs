@@ -40,6 +40,27 @@ public static class ConferenteEndpoints
             .Produces<CadastrarConferenteResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict);
 
+        grupo.MapPut("/{id:guid}/perfil", async (
+                Guid id,
+                EditarPerfilConferenteRequest request,
+                EditarPerfilConferente casoDeUso,
+                CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, request.Nome, request.Email, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoEditarPerfilConferente.Sucesso => Results.NoContent(),
+                    ResultadoEditarPerfilConferente.NaoEncontrado => Results.NotFound(),
+                    ResultadoEditarPerfilConferente.EmailJaCadastrado => Results.Conflict(new { motivo = "e-mail já cadastrado" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("EditarPerfilConferente")
+            .WithSummary("Edita nome e e-mail de um conferente (RF-25).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         grupo.MapPut("/{id:guid}/nivel-jornada", async (
                 Guid id,
                 EditarNivelEJornadaRequest request,
@@ -94,5 +115,7 @@ public sealed record CadastrarConferenteRequest(string Nome, string Email, strin
 public sealed record CadastrarConferenteResponse(Guid ConferenteId);
 
 public sealed record EditarNivelEJornadaRequest(Nivel Nivel, double JornadaHoras);
+
+public sealed record EditarPerfilConferenteRequest(string Nome, string Email);
 
 public sealed record MarcarPresencaRequest(bool Presente);
