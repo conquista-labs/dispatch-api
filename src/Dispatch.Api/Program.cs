@@ -65,11 +65,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Dispatch API v1"));
-}
+// Liberado em qualquer ambiente, não só Development — projeto pessoal pequeno, útil pra
+// testar endpoint direto sem abrir o front. Só documenta a forma dos endpoints; usá-los de
+// verdade continua exigindo o mesmo token de autenticação de sempre.
+app.MapOpenApi();
+app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Dispatch API v1"));
 
 app.UseHttpsRedirection();
 
