@@ -90,5 +90,6 @@ app.MapRegraAlcadaEndpoints();
 app.MapEquipeEndpoints();
 app.MapMinhaFilaEndpoints();
 app.MapSugestaoEndpoints();
+app.MapTipoAtoEndpoints();
 
 app.Run();
