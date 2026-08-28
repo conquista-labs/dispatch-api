@@ -8,21 +8,22 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// dispatch-web roda em outra origem (Vite dev server) — sem isso o navegador bloqueia a
-// chamada antes dela sair (CORS é regra de browser, curl/Postman nunca esbarram nisso, por
-// isso não apareceu em nenhum teste ponta a ponta anterior). Só em Development por ora — a
-// origem de produção entra quando o dispatch-web tiver deploy de verdade.
-const string DevCorsPolicy = "DevCors";
-if (builder.Environment.IsDevelopment())
+// dispatch-web roda em outra origem — sem isso o navegador bloqueia a chamada antes dela sair
+// (CORS é regra de browser, curl/Postman nunca esbarram nisso, por isso não apareceu em nenhum
+// teste ponta a ponta antes disso). Origem vem de config: "Cors:AllowedOrigin" no appsettings
+// (Development já fixa localhost:5173); em produção (Fly.io) entra como variável de ambiente
+// Cors__AllowedOrigin apontando pra URL real do dispatch-web (Netlify) — nunca hardcoded aqui,
+// senão trocar de host do front exigiria recompilar a API.
+const string CorsPolicy = "Cors";
+var corsOrigin = builder.Configuration["Cors:AllowedOrigin"]
+    ?? throw new InvalidOperationException("Configuração 'Cors:AllowedOrigin' ausente.");
+builder.Services.AddCors(options =>
 {
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy(DevCorsPolicy, policy =>
-            policy.WithOrigins("http://localhost:5173")
-                .AllowAnyHeader()
-                .AllowAnyMethod());
-    });
-}
+    options.AddPolicy(CorsPolicy, policy =>
+        policy.WithOrigins(corsOrigin)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
 
 builder.Services.AddOpenApi(options =>
 {
@@ -72,10 +73,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseCors(DevCorsPolicy);
-}
+app.UseCors(CorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();

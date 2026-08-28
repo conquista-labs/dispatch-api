@@ -67,6 +67,31 @@ Isso usa o sistema de configuração em camadas do ASP.NET Core (`appsettings.js
 `appsettings.{Environment}.json` → variáveis de ambiente/secrets), que troca a connection
 string sozinho conforme `ASPNETCORE_ENVIRONMENT`, sem `if` de ambiente no código.
 
+## Deploy — no ar
+
+`https://lab-dispatch-api.fly.dev` (app Fly.io `lab-dispatch-api` — `dispatch-api` sozinho já
+estava em uso por outra conta, nomes são globais na plataforma). `fly.toml` na raiz —
+`min_machines_running = 0`, a máquina dorme quando ninguém usa e acorda sozinha na próxima
+chamada (mais barato pro tier grátis, ao custo de um "cold start" na primeira requisição depois
+de um tempo parado).
+
+**CORS não é mais Development-only.** Antes só existia em `Development` (Netlify/produção
+ainda não tinha URL pra liberar). Virou uma policy só, sempre ativa, com a origem vindo de
+config (`Cors:AllowedOrigin` — `appsettings.Development.json` fixa `localhost:5173`; produção
+é secret do Fly `Cors__AllowedOrigin` apontando pra URL do Netlify). Trocar de host do front
+não pede recompilar a API, só atualizar o secret.
+
+**Sem endpoint de registro público** — só existe `POST /auth/login`. A primeira conta
+Distribuidora de cada ambiente entra direto no banco (hash da senha gerado com o mesmo
+`PasswordHasher<object>` do `HashDeSenhaAspNetCore`, senão `Autenticar` não reconhece o hash na
+hora de verificar login). Feito uma vez manualmente pra produção — não é um script reutilizável
+do projeto, só o que foi necessário pra ter a primeira conta real.
+
+Secrets em produção (`fly secrets set`, nunca em arquivo do repo): `ConnectionStrings__DispatchDb`
+(Neon), `Jwt__ChaveDeAssinatura` (gerada nova pra produção, não é a mesma chave de
+`appsettings.Development.json`), `Jwt__Emissor`, `Jwt__Audiencia`, `Jwt__ExpiracaoMinutos`,
+`Cors__AllowedOrigin`.
+
 ## Skills do projeto
 
 Em `.claude/skills/`, pra fluxos recorrentes deste repositório:
