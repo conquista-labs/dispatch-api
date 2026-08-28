@@ -573,6 +573,57 @@ ponta a ponta: nome e e-mail batendo com o que foi cadastrado, inclusive pra con
 antigos já existentes no banco. 130 testes automatizados no total (40 Domain + 90
 Application).
 
+## RF-28 (carga real) e RF-30 (aviso de cobertura) — planejando a tela Conferentes do front
+
+Antes de construir a tela "Conferentes" no `dispatch-web`, levantamento contra RF-25 a RF-30
+achou um bug adormecido e dois gaps reais.
+
+**Bug**: `Conferente.CargaAtual` é coluna persistida desde o início, mas nunca era atualizada
+depois do cadastro (sempre `0`). Isso não é só um problema de exibição — `MotorDistribuicao.cs`
+usa esse campo pra desempatar quem pega um protocolo urgente
+(`elegiveis.OrderBy(a => a.Conferente.CargaAtual).First()`); com todo mundo empatado em 0 pra
+sempre, esse desempate nunca funcionou de verdade (sempre caía no primeiro da ordenação
+estável, por acaso).
+
+**Correção — carga sempre recalculada na leitura, nunca guardada**: em vez de escrever
+`CargaAtual` toda vez que um protocolo é atribuído/devolvido (duplicaria estado e
+dessincronizaria mais cedo ou mais tarde — mesmo raciocínio já aplicado a `Semaforo.Calcular`,
+sempre computado, nunca persistido), `ConferenteRepository.ObterTodosAsync`/`ObterNaEscalaAsync`
+agora projetam `Conferente` com uma subquery correlacionada contando
+`Protocolos` com `DonoId` igual e `Status` em `Atribuido`/`Conferindo`. Testado contra o
+Postgres local (não só unit test com fake): atribuiu um protocolo a um conferente, `GET
+/conferentes` passou a mostrar `cargaAtual: 1` na hora, sem nada escrito na tabela.
+
+**Importante, e é por isso que só essas duas leituras mudaram**: `ObterPorIdAsync` (usado por
+`EditarNivelEJornada`/`MarcarPresenca`/`RemoverConferente` — os três únicos fluxos que *mutam*
+um `Conferente`) continua uma query simples, sem projeção — uma entidade construída dentro de
+um `.Select()` sai desconectada do change tracker do EF, e mutar/salvar ela não gravaria nada
+(mesma armadilha já documentada pra `RegraAlcada`/`Sugestao` — ver seção de Aprendizado/Central
+de regras).
+
+**RF-28, capacidade estimada**: `ListarConferentes` ganhou `CapacidadeEstimada` no
+`ConferenteComUsuario` — `jornadaHoras × 60 ÷ 18min`, arredondado, mínimo 1. 18min não é
+invenção do protótipo: é premissa explícita da seção 11 do documento de requisitos ("tempo
+médio de 18min por ato para cálculo de capacidade") — hardcoded do mesmo jeito que as faixas do
+semáforo (4h/60min), até existir tabela de config.
+
+**RF-30, aviso de cobertura**: `ObterCoberturaDeAlcada` (novo caso de uso) — "tipo em
+circulação" é qualquer `TipoAtoId` presente nos protocolos de hoje (não o catálogo inteiro; um
+tipo sem nenhum protocolo não é um problema de cobertura agora). Reaproveita
+`ObterAlcancePorConferente` em vez de rodar `ResolvedorAlcada` de novo — `TiposPermitidosIds` já
+resolve "esse conferente alcança esse tipo" checando só o eixo tipo, sem cruzar com etapa
+(mesma simplificação do protótipo aprovado, que usa uma etapa fixa como proxy pra essa
+pergunta). Cruza com quem está `NaEscala` (não com todo o cadastro) — alguém de folga não conta
+como cobertura hoje. Devolve duas listas (`SemNinguemHabilitado`/`DependeDeUmaPessoa`), expostas
+em `GET /conferentes/cobertura`. Tipo fora do catálogo (protocolo com `TipoAtoId` nulo, RF-09)
+não entra em nenhuma das duas — já é sinalizado como "tipo desconhecido" na importação, não é
+uma questão de alçada. Testado contra o Postgres local: atribuiu um protocolo de um tipo com só
+um conferente na escala habilitado, `GET /conferentes/cobertura` devolveu esse tipo em
+`dependeDeUmaPessoa` na hora.
+
+7 testes novos (`ObterCoberturaDeAlcadaTests` + 2 em `ListarConferentesTests` pra
+`CapacidadeEstimada`) — 103 testes de Application no total (143 com Domain).
+
 ## Login devolve o usuário + GET /auth/me
 
 Decisão tomada planejando o `dispatch-web`: o front **nunca decodifica o JWT** pra saber quem

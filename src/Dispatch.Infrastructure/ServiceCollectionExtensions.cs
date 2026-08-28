@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DesativarRegraAlcada>();
         services.AddScoped<RemoverRegraAlcada>();
         services.AddScoped<ObterAlcancePorConferente>();
+        services.AddScoped<ObterCoberturaDeAlcada>();
         services.AddScoped<CriarEquipe>();
         services.AddScoped<EditarEquipe>();
         services.AddScoped<MoverEscreventeParaEquipe>();

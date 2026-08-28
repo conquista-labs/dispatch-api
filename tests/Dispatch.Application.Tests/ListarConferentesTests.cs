@@ -23,6 +23,22 @@ public class ListarConferentesTests
         Assert.Equal(8, item.JornadaHoras);
         Assert.True(item.NaEscala);
         Assert.Equal(3, item.CargaAtual);
+        // RF-28: 8h × 60 ÷ 18min por ato = 26,67 → arredonda pra 27 (mesma fórmula do protótipo
+        // aprovado e da premissa da seção 11 do documento de requisitos).
+        Assert.Equal(27, item.CapacidadeEstimada);
+    }
+
+    [Fact]
+    public async Task CapacidadeEstimada_NuncaFicaAbaixoDeUm()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Alguém", "alguem@cartorio.com", "hash", Papel.Conferente);
+        var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Junior, jornadaHoras: 0, naEscala: false, cargaAtual: 0);
+
+        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]));
+
+        var resultado = await casoDeUso.ExecutarAsync();
+
+        Assert.Equal(1, Assert.Single(resultado).CapacidadeEstimada);
     }
 
     [Fact]

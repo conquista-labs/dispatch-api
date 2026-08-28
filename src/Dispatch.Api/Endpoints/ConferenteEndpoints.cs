@@ -80,6 +80,12 @@ public static class ConferenteEndpoints
             .WithSummary("Remove um conferente (RF-25) — desativa o usuário e tira da escala.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
+
+        grupo.MapGet("/cobertura", async (ObterCoberturaDeAlcada casoDeUso, CancellationToken cancellationToken) =>
+                Results.Ok(await casoDeUso.ExecutarAsync(cancellationToken)))
+            .WithName("ObterCoberturaDeAlcada")
+            .WithSummary("Tipos de ato em circulação sem ninguém habilitado, ou dependentes de uma só pessoa (RF-30).")
+            .Produces<CoberturaAlcada>();
     }
 }
 
