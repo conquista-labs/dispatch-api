@@ -12,7 +12,7 @@ public class ConcluirConferenciaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         protocolo.IniciarConferencia(Inicio);
         var casoDeUso = new ConcluirConferencia(
             new FakeProtocoloRepository([protocolo]), new FakeRelogio(Fim), new FakeUnitOfWork());
@@ -29,7 +29,7 @@ public class ConcluirConferenciaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         protocolo.IniciarConferencia(Inicio);
         var casoDeUso = new ConcluirConferencia(
             new FakeProtocoloRepository([protocolo]), new FakeRelogio(Fim), new FakeUnitOfWork());
@@ -57,7 +57,7 @@ public class ConcluirConferenciaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         var casoDeUso = new ConcluirConferencia(
             new FakeProtocoloRepository([protocolo]), new FakeRelogio(Fim), new FakeUnitOfWork());
 
@@ -71,7 +71,7 @@ public class ConcluirConferenciaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(Guid.NewGuid());
+        protocolo.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
         protocolo.IniciarConferencia(Inicio);
         var casoDeUso = new ConcluirConferencia(
             new FakeProtocoloRepository([protocolo]), new FakeRelogio(Fim), new FakeUnitOfWork());

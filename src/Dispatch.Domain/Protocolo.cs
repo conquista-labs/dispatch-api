@@ -31,6 +31,17 @@ public sealed class Protocolo
     public string? Observacao { get; private set; }
     public DateTimeOffset? IniciadoEm { get; private set; }
     public DateTimeOffset? ConcluidoEm { get; private set; }
+    // RF-18a (linha do tempo do painel de detalhe): quando ganhou dono pela última vez — não
+    // limpa ao voltar pro pool (EnviarParaPool), fica como histórico de "a última vez que foi
+    // atribuído", já que o sistema ainda não tem um log de eventos de verdade (ver seção 8 do
+    // documento de requisitos, "evento_decisao" — não construído).
+    public DateTimeOffset? AtribuidoEm { get; private set; }
+    // RNF-02 ("toda decisão automática registra a regra que a originou"): nulo quando a
+    // atribuição não veio de uma regra específica (padrão aberto, ou decisão humana via
+    // "pegar"/"atribuir manualmente"). Quando as decisões de etapa e de tipo vêm de regras
+    // diferentes, guarda a de tipo — é a mais específica das duas (RF-31 fala de "tipos de ato"
+    // como o alvo mais comum).
+    public Guid? RegraAplicadaId { get; private set; }
 
     // RF-24: "duração" do ato — só existe depois de concluído.
     public TimeSpan? Duracao => IniciadoEm is { } inicio && ConcluidoEm is { } fim ? fim - inicio : null;
@@ -64,11 +75,13 @@ public sealed class Protocolo
         Prioridade == Prioridade.Alta ||
         Prazo is { Tipo: TipoPrazo.UmaHora or TipoPrazo.D0 };
 
-    public void AtribuirA(Guid conferenteId)
+    public void AtribuirA(Guid conferenteId, DateTimeOffset agora, Guid? regraAplicadaId = null)
     {
         Status = StatusProtocolo.Atribuido;
         DonoId = conferenteId;
         MotivoExcecao = null;
+        AtribuidoEm = agora;
+        RegraAplicadaId = regraAplicadaId;
     }
 
     // Também usado pelo RF-27: quando o dono fica ausente ou é removido, o protocolo dele

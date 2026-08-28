@@ -14,6 +14,7 @@ internal static class AplicadorDeDistribuicao
         IReadOnlyCollection<Conferente> conferentesNaEscala,
         IReadOnlyCollection<RegraAlcada> regras,
         IReadOnlyCollection<TipoAto> catalogoTipos,
+        DateTimeOffset agora,
         out ResolucaoPrazo resolucaoPrazo)
     {
         resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, protocolo.Etapa, equipes);
@@ -24,7 +25,7 @@ internal static class AplicadorDeDistribuicao
         switch (resultado)
         {
             case ResultadoDistribuicao.Atribuido atribuido:
-                protocolo.AtribuirA(atribuido.Conferente.Id);
+                protocolo.AtribuirA(atribuido.Conferente.Id, agora, RegraAplicadaDe(atribuido.Avaliacao));
                 break;
             case ResultadoDistribuicao.EnviadoParaPool:
                 protocolo.EnviarParaPool();
@@ -36,4 +37,9 @@ internal static class AplicadorDeDistribuicao
 
         return resultado;
     }
+
+    // RNF-02: a regra que decidiu — prioriza a de tipo (mais específica, ver comentário em
+    // Protocolo.RegraAplicadaId) sobre a de etapa; nulo quando os dois vieram do padrão aberto.
+    private static Guid? RegraAplicadaDe(AvaliacaoCandidato avaliacao) =>
+        avaliacao.DecisaoTipo.RegraAplicada?.Id ?? avaliacao.DecisaoEtapa.RegraAplicada?.Id;
 }

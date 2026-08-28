@@ -757,3 +757,50 @@ front, atualizado por polling/tick local, não recalculado a cada request.
   nenhum consumidor de verdade (o `dispatch-web` não existe), então não há contrato pra
   quebrar. Reavaliar quando o front-end começar ou antes do primeiro deploy em produção; nesse
   ponto um prefixo de rota simples provavelmente já resolve, sem precisar de biblioteca.
+
+## Painel de detalhe do protocolo (RF-18a/b) — v2 do protótipo/requisitos
+
+O dono atualizou o protótipo e o documento de requisitos pra "v2", bem mais detalhado. A
+primeira frente construída: o painel de detalhe que abre ao clicar em qualquer card de
+protocolo em Distribuição, com linha do tempo, "quem pode conferir este ato" e duas ações
+novas. Expôs três gaps reais que já existiam, não só coisa nova:
+
+- **`Protocolo` não sabia quando foi atribuído.** Grava `IniciadoEm`/`ConcluidoEm` mas nunca
+  guardou o instante da atribuição — sem isso não dava pra montar a linha do tempo do painel.
+  `AtribuirA` agora recebe `DateTimeOffset agora` (todo call site precisou de `IRelogio`:
+  `DistribuirProtocolo`, `RedistribuirPool`, `PegarProtocolo`, `AtribuirManualmente`).
+  **Não limpa ao voltar pro pool** (`EnviarParaPool`) — fica como "a última vez que foi
+  atribuído", já que o sistema ainda não tem um log de eventos de verdade (o `evento_decisao`
+  do modelo de dados sugerido, seção 8 do documento, não existe ainda).
+- **RNF-02 não era honrado até o fim.** "Toda decisão automática registra a regra que a
+  originou" — verdade só na resposta HTTP do momento da distribuição
+  (`AvaliacaoCandidato.RegraAplicada`), nunca persistida pra consulta depois. `Protocolo` ganhou
+  `RegraAplicadaId` (nullable, **sem FK** — é auditoria, não dependência; remover uma regra de
+  alçada mais tarde não pode travar a leitura de um protocolo antigo que a citou). Quando
+  etapa e tipo decidem por regras diferentes, guarda a de tipo (mais específica). Só
+  preenchido em atribuição automática (`AplicadorDeDistribuicao`) — atribuição humana (`PegarProtocolo`,
+  `AtribuirManualmente`, a nova `AtribuirAoMenosCarregado`) deixa nulo de propósito, não é "a
+  regra que decidiu", foi a pessoa.
+- **Não existia "quem pode conferir este protocolo especificamente"** — só o inverso
+  (`GET /conferentes/alcance`, por conferente). `ObterDetalheProtocolo` resolve isso
+  reaproveitando `ResolvedorAlcada.Resolver` puro pra cada conferente na escala, nas duas
+  dimensões (etapa e tipo do protocolo) — mesma resolução que o motor já faz internamente,
+  zero regra nova.
+
+Duas ações novas, escopadas a um protocolo só (diferente das que já existiam em lote ou só
+pra exceção):
+- **`POST /protocolos/{id}/devolver-ao-pool`** — só válido se `Atribuido`. Ação pontual da
+  distribuidora, não reavaliação de alçada (isso já existe: `RedistribuirPool`, RF-16).
+- **`POST /protocolos/{id}/atribuir-ao-menos-carregado`** — reaproveita `VerificadorDeAlcada`
+  (já usado por `PegarProtocolo`/`ObterMinhaFila`), escolhe o elegível de menor `CargaAtual`.
+  Válido em `Pool` ou `Excecao` — diferente de `AtribuirManualmente` (RF-17), que só resolve
+  exceção e deixa a distribuidora escolher a pessoa; aqui a escolha é automática.
+
+Migration `AdicionaAtribuidoEmERegraAplicadaEmProtocolos` — dois campos nullable em
+`protocolos`, sem backfill (protocolos antigos ficam sem essa informação, aceitável).
+
+**Achado no caminho**: `RedistribuirPool`/`PegarProtocolo`/`AtribuirManualmente`/`DistribuirProtocolo`
+não tinham `IRelogio` injetado — nunca precisaram até `AtribuirA` passar a exigir `agora`.
+Testado ponta a ponta contra o Postgres local: `atribuir-ao-menos-carregado` grava `atribuidoEm`
+corretamente e rejeita com 409 quando ninguém tem alçada; `devolver-ao-pool` volta pro pool e
+**preserva** o `atribuidoEm` antigo como histórico. 172 testes automatizados no total.

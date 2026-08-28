@@ -115,7 +115,7 @@ public sealed class ImportarLote(
                 loteImportacaoId: lote?.Id, tipoAtoNomeOriginal: linha.TipoAto);
 
             var resultado = AplicadorDeDistribuicao.Executar(
-                protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, catalogoTipos,
+                protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, catalogoTipos, agora,
                 out var resolucaoPrazo);
 
             if (resolucaoPrazo.SemEquipeSinalizado)

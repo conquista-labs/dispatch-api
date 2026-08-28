@@ -14,7 +14,7 @@ public class GerarSugestoesTests
             var protocolo = new Protocolo(
                 Guid.NewGuid(), $"{i}", tipoAtoId: null, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow,
                 tipoAtoNomeOriginal: "ARROLAMENTO");
-            protocolo.AtribuirA(dono.Id);
+            protocolo.AtribuirA(dono.Id, DateTimeOffset.UtcNow);
             lista.Add(protocolo);
         }
 
@@ -56,7 +56,7 @@ public class GerarSugestoesTests
         var protocoloNovo = new Protocolo(
             Guid.NewGuid(), "novo", tipoAtoId: null, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow,
             tipoAtoNomeOriginal: "ARROLAMENTO");
-        protocoloNovo.AtribuirA(dono.Id);
+        protocoloNovo.AtribuirA(dono.Id, DateTimeOffset.UtcNow);
         repoProtocolos.Adicionar(protocoloNovo);
 
         var novasSegundaRodada = await casoDeUso.ExecutarAsync();

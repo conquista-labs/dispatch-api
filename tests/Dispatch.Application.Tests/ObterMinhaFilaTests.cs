@@ -30,14 +30,14 @@ public class ObterMinhaFilaTests
         var outroConferenteId = Guid.NewGuid();
 
         var atribuido = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        atribuido.AtribuirA(conferente.Id);
+        atribuido.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
 
         var emConferencia = new Protocolo(Guid.NewGuid(), "2", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        emConferencia.AtribuirA(conferente.Id);
+        emConferencia.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         emConferencia.IniciarConferencia(DateTimeOffset.UtcNow);
 
         var deOutroConferente = new Protocolo(Guid.NewGuid(), "3", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        deOutroConferente.AtribuirA(outroConferenteId);
+        deOutroConferente.AtribuirA(outroConferenteId, DateTimeOffset.UtcNow);
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeRegraAlcadaRepository([]));

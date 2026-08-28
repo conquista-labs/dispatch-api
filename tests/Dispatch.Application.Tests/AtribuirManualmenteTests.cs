@@ -11,7 +11,7 @@ public class AtribuirManualmenteTests
         protocolo.MarcarExcecao("ninguém com alçada");
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new AtribuirManualmente(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente.Id);
 
@@ -26,7 +26,7 @@ public class AtribuirManualmenteTests
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new AtribuirManualmente(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente.Id);
 
@@ -39,7 +39,7 @@ public class AtribuirManualmenteTests
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao("ninguém com alçada");
         var casoDeUso = new AtribuirManualmente(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, Guid.NewGuid());
 
@@ -50,7 +50,7 @@ public class AtribuirManualmenteTests
     public async Task ProtocoloInexistente_Rejeita()
     {
         var casoDeUso = new AtribuirManualmente(
-            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), Guid.NewGuid());
 

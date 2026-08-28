@@ -31,7 +31,7 @@ public class MarcarPresencaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new MarcarPresenca(new FakeConferenteRepository([conferente]), protocolos, new FakeUnitOfWork());
 
@@ -46,7 +46,7 @@ public class MarcarPresencaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: false, cargaAtual: 1);
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new MarcarPresenca(new FakeConferenteRepository([conferente]), protocolos, new FakeUnitOfWork());
 

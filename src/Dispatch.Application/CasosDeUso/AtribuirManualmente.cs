@@ -8,7 +8,8 @@ namespace Dispatch.Application;
 public sealed class AtribuirManualmente(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IRelogio relogio)
 {
     public async Task<ResultadoAtribuirManualmente> ExecutarAsync(
         Guid protocoloId, Guid conferenteId, CancellationToken cancellationToken = default)
@@ -30,7 +31,7 @@ public sealed class AtribuirManualmente(
             return ResultadoAtribuirManualmente.ConferenteNaoEncontrado;
         }
 
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, relogio.Agora);
         await unitOfWork.SalvarAsync(cancellationToken);
         return ResultadoAtribuirManualmente.Sucesso;
     }

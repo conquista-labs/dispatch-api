@@ -10,7 +10,7 @@ public class PegarProtocoloTests
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var casoDeUso = new PegarProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -24,7 +24,7 @@ public class PegarProtocoloTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new PegarProtocolo(
-            new FakeProtocoloRepository([]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), conferente);
 
@@ -36,9 +36,9 @@ public class PegarProtocoloTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(Guid.NewGuid());
+        protocolo.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
         var casoDeUso = new PegarProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -53,7 +53,7 @@ public class PegarProtocoloTests
         var regra = new RegraAlcada(
             Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PreConferencia));
         var casoDeUso = new PegarProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([regra]), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeRegraAlcadaRepository([regra]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 

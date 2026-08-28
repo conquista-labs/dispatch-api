@@ -31,7 +31,7 @@ public class DefinirObservacaoTests
     {
         var dono = Guid.NewGuid();
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(dono);
+        protocolo.AtribuirA(dono, DateTimeOffset.UtcNow);
         var casoDeUso = new DefinirObservacao(new FakeProtocoloRepository([protocolo]), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, "x", conferenteRestritoId: Guid.NewGuid());
@@ -45,7 +45,7 @@ public class DefinirObservacaoTests
     {
         var dono = Guid.NewGuid();
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(dono);
+        protocolo.AtribuirA(dono, DateTimeOffset.UtcNow);
         var casoDeUso = new DefinirObservacao(new FakeProtocoloRepository([protocolo]), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, "concluído com ressalva", conferenteRestritoId: dono);

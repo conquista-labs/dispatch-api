@@ -8,7 +8,8 @@ namespace Dispatch.Application;
 public sealed class PegarProtocolo(
     IProtocoloRepository protocolos,
     IRegraAlcadaRepository regras,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IRelogio relogio)
 {
     public async Task<ResultadoPegarProtocolo> ExecutarAsync(
         Guid protocoloId, Conferente conferente, CancellationToken cancellationToken = default)
@@ -30,7 +31,7 @@ public sealed class PegarProtocolo(
             return ResultadoPegarProtocolo.SemAlcada;
         }
 
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, relogio.Agora);
         await unitOfWork.SalvarAsync(cancellationToken);
         return ResultadoPegarProtocolo.Sucesso;
     }

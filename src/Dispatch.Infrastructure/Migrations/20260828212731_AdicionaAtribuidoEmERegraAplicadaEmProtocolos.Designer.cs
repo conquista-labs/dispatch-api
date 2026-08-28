@@ -3,6 +3,7 @@ using System;
 using Dispatch.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dispatch.Infrastructure.Migrations
 {
     [DbContext(typeof(DispatchDbContext))]
-    partial class DispatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828212731_AdicionaAtribuidoEmERegraAplicadaEmProtocolos")]
+    partial class AdicionaAtribuidoEmERegraAplicadaEmProtocolos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

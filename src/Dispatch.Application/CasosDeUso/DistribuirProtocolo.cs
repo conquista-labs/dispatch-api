@@ -10,7 +10,8 @@ public sealed class DistribuirProtocolo(
     IRegraAlcadaRepository regras,
     ITipoAtoRepository tiposAto,
     IProtocoloRepository protocolos,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IRelogio relogio)
 {
     public async Task<ResultadoDistribuicao> ExecutarAsync(
         Protocolo protocolo,
@@ -24,6 +25,7 @@ public sealed class DistribuirProtocolo(
             await conferentes.ObterNaEscalaAsync(cancellationToken),
             await regras.ObterAtivasAsync(cancellationToken),
             await tiposAto.ObterTodosAsync(cancellationToken),
+            relogio.Agora,
             out _);
 
         protocolos.Adicionar(protocolo);

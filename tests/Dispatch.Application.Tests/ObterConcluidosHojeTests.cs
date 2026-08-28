@@ -12,12 +12,12 @@ public class ObterConcluidosHojeTests
         var inicioDoDia = new DateTimeOffset(2026, 8, 27, 0, 0, 0, TimeSpan.Zero);
 
         var concluidoHoje = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        concluidoHoje.AtribuirA(conferente.Id);
+        concluidoHoje.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         concluidoHoje.IniciarConferencia(inicioDoDia.AddHours(10));
         concluidoHoje.Aprovar(inicioDoDia.AddHours(11));
 
         var concluidoOntem = new Protocolo(Guid.NewGuid(), "2", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        concluidoOntem.AtribuirA(conferente.Id);
+        concluidoOntem.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         concluidoOntem.IniciarConferencia(inicioDoDia.AddDays(-1));
         concluidoOntem.Reprovar(inicioDoDia.AddDays(-1).AddHours(1));
 

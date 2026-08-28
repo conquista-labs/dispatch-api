@@ -23,7 +23,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             protocolos,
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
@@ -50,7 +50,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeProtocoloRepository([]),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
@@ -72,7 +72,7 @@ public class DistribuirProtocoloTests
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeProtocoloRepository([]),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 

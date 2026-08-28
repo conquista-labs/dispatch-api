@@ -18,7 +18,7 @@ public class GeradorDeSugestoesTests
 
         if (donoId is { } dono)
         {
-            protocolo.AtribuirA(dono);
+            protocolo.AtribuirA(dono, DateTimeOffset.UtcNow);
         }
 
         if (prazo is { } tipoPrazo)

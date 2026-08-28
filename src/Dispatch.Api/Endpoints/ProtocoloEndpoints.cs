@@ -137,6 +137,71 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status403Forbidden)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
+
+        app.MapGet("/protocolos/{id:guid}/detalhe", async (Guid id, ObterDetalheProtocolo casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
+                return resultado is null
+                    ? Results.NotFound(new { motivo = "protocolo não encontrado" })
+                    : Results.Ok(ParaDetalheResponse(resultado));
+            })
+            .WithName("ObterDetalheProtocolo")
+            .WithSummary("Painel de detalhe (RF-18a) — todos os campos do protocolo, mais quem pode conferir este ato especificamente.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces<DetalheProtocoloResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/{id:guid}/devolver-ao-pool", async (Guid id, DevolverAoPool casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoDevolverAoPool.Sucesso => Results.NoContent(),
+                    ResultadoDevolverAoPool.ProtocoloNaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoDevolverAoPool.ProtocoloNaoEstaAtribuido => Results.Conflict(new { motivo = "protocolo não está atribuído" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
+            })
+            .WithName("DevolverProtocoloAoPool")
+            .WithSummary("Devolve um protocolo atribuído pro pool (RF-18a) — ação pontual num item só, diferente de redistribuir-pool (RF-16, em lote).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/{id:guid}/atribuir-ao-menos-carregado", async (
+                Guid id, AtribuirAoMenosCarregado casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoAtribuirAoMenosCarregado.Sucesso => Results.NoContent(),
+                    ResultadoAtribuirAoMenosCarregado.ProtocoloNaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoAtribuirAoMenosCarregado.ProtocoloNaoElegivel => Results.Conflict(new { motivo = "protocolo não está no pool nem em exceção" }),
+                    ResultadoAtribuirAoMenosCarregado.NinguemComAlcada => Results.Conflict(new { motivo = "ninguém com alçada na escala" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
+            })
+            .WithName("AtribuirAoMenosCarregado")
+            .WithSummary("Atribui a quem tem alçada e está com menos carga agora (RF-18a) — não exige exceção, diferente de atribuir manualmente (RF-17).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+    }
+
+    private static DetalheProtocoloResponse ParaDetalheResponse(ResultadoDetalheProtocolo resultado)
+    {
+        var p = resultado.Protocolo;
+        return new DetalheProtocoloResponse(
+            p.Id, p.Numero, p.TipoAtoId, p.TipoAtoNomeOriginal, p.EscreventeId, p.Etapa, p.Prioridade, p.AndamentoEm,
+            p.Prazo?.Tipo, p.VencimentoEm, p.Status, p.DonoId, p.MotivoExcecao, p.Observacao,
+            p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId,
+            resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
+                a.Conferente.Id, a.Elegivel, a.DecisaoEtapa.RegraAplicada?.Id, a.DecisaoTipo.RegraAplicada?.Id)).ToList());
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
@@ -176,3 +241,29 @@ public sealed record RedistribuirPoolResponse(int Alterados);
 public sealed record AtribuirManualmenteRequest(Guid ConferenteId);
 
 public sealed record DefinirObservacaoRequest(string? Observacao);
+
+public sealed record DetalheProtocoloResponse(
+    Guid Id,
+    string Numero,
+    Guid? TipoAtoId,
+    string? TipoAtoNomeOriginal,
+    Guid EscreventeId,
+    Etapa Etapa,
+    Prioridade Prioridade,
+    DateTimeOffset AndamentoEm,
+    TipoPrazo? Prazo,
+    DateTimeOffset? VencimentoEm,
+    StatusProtocolo Status,
+    Guid? DonoId,
+    string? MotivoExcecao,
+    string? Observacao,
+    DateTimeOffset? AtribuidoEm,
+    DateTimeOffset? IniciadoEm,
+    DateTimeOffset? ConcluidoEm,
+    Guid? RegraAplicadaId,
+    IReadOnlyList<AlcadaConferenteResponse> Alcada);
+
+// RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto
+// (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
+// servem pra mostrar "por qual regra" quando existir uma.
+public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, Guid? RegraEtapaId, Guid? RegraTipoId);

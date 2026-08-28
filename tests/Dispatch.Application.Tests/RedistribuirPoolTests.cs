@@ -24,7 +24,7 @@ public class RedistribuirPoolTests
             new FakeConferenteRepository([conferente]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var alterados = await casoDeUso.ExecutarAsync();
 
@@ -42,7 +42,7 @@ public class RedistribuirPoolTests
             new FakeConferenteRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var alterados = await casoDeUso.ExecutarAsync();
 
@@ -54,14 +54,14 @@ public class RedistribuirPoolTests
     public async Task ProtocoloAtribuido_NaoEntraNaRedistribuicao()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(Guid.NewGuid());
+        protocolo.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
         var protocolos = new FakeProtocoloRepository([protocolo]);
         var casoDeUso = new RedistribuirPool(
             protocolos,
             new FakeConferenteRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
-            new FakeUnitOfWork());
+            new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var alterados = await casoDeUso.ExecutarAsync();
 

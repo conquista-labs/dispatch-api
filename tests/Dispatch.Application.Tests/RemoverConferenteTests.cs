@@ -42,7 +42,7 @@ public class RemoverConferenteTests
         var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", "hash", Papel.Conferente);
         var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
-        protocolo.AtribuirA(conferente.Id);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         var casoDeUso = new RemoverConferente(
             new FakeConferenteRepository([conferente]),
             new FakeUsuarioRepository([usuario]),

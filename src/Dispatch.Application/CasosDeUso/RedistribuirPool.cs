@@ -11,7 +11,8 @@ public sealed class RedistribuirPool(
     IConferenteRepository conferentes,
     IRegraAlcadaRepository regras,
     ITipoAtoRepository tiposAto,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IRelogio relogio)
 {
     public async Task<int> ExecutarAsync(CancellationToken cancellationToken = default)
     {
@@ -34,7 +35,9 @@ public sealed class RedistribuirPool(
             switch (resultado)
             {
                 case ResultadoDistribuicao.Atribuido atribuido:
-                    protocolo.AtribuirA(atribuido.Conferente.Id);
+                    protocolo.AtribuirA(
+                        atribuido.Conferente.Id, relogio.Agora,
+                        atribuido.Avaliacao.DecisaoTipo.RegraAplicada?.Id ?? atribuido.Avaliacao.DecisaoEtapa.RegraAplicada?.Id);
                     break;
                 case ResultadoDistribuicao.EnviadoParaPool:
                     protocolo.EnviarParaPool();

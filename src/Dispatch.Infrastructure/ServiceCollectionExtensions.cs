@@ -44,6 +44,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ObterVisaoDistribuicao>();
         services.AddScoped<RedistribuirPool>();
         services.AddScoped<AtribuirManualmente>();
+        services.AddScoped<ObterDetalheProtocolo>();
+        services.AddScoped<DevolverAoPool>();
+        services.AddScoped<AtribuirAoMenosCarregado>();
         services.AddScoped<DescartarExcecao>();
         services.AddScoped<DefinirObservacao>();
         services.AddScoped<CriarRegraAlcada>();

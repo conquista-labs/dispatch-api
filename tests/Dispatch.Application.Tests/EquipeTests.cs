@@ -61,7 +61,7 @@ public class EditarEquipeTests
 
         var concluido = new Protocolo(Guid.NewGuid(), "2", Guid.NewGuid(), escrevente.Id, Etapa.PreConferencia, referencia);
         concluido.DefinirPrazo(new Prazo(TipoPrazo.D1), referencia);
-        concluido.AtribuirA(Guid.NewGuid());
+        concluido.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
         concluido.Descartar();
         var vencimentoOriginalDoConcluido = concluido.VencimentoEm;
 

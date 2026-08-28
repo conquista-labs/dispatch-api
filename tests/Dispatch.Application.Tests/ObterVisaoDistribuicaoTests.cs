@@ -12,7 +12,7 @@ public class ObterVisaoDistribuicaoTests
         switch (status)
         {
             case StatusProtocolo.Atribuido:
-                protocolo.AtribuirA(donoId ?? Guid.NewGuid());
+                protocolo.AtribuirA(donoId ?? Guid.NewGuid(), DateTimeOffset.UtcNow);
                 break;
             case StatusProtocolo.Excecao:
                 protocolo.MarcarExcecao("tipo desconhecido");
