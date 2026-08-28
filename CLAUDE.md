@@ -650,6 +650,37 @@ Três coisas que só apareceram usando a tela no navegador, não em teste isolad
 4 testes novos (`EditarPerfilConferenteTests`) — 109 testes de Application no total (149 com
 Domain).
 
+**Ordenação estável, segunda rodada**: `OrderBy(Nome)` sozinho não bastava — dois conferentes de
+teste têm o mesmo nome (só o e-mail muda), e nomes empatados continuavam sujeitos à ordem
+"crua" instável do Postgres entre uma leitura e outra (achado pelo dono clicando nos steppers
+de jornada e vendo a lista trocar de ordem de novo). `ThenBy(Id)` fecha o desempate de vez —
+`Guid` é sempre único, differente de nome.
+
+## GET /conferentes/{id}/fila e /concluidos-hoje — Distribuidora vendo a fila de alguém (RF-19)
+
+O protótipo aprovado tem "Minha fila" no menu de quem é gestão também (não só Conferente) —
+achado revendo o protótipo depois que o dono mandou print perguntando por isso; a varredura
+inicial (só a tela isolada) não pegou porque o nav do protótipo é construído com um filtro
+(`soGestao || !d[3]`) que libera todos os itens pra gestão, não só os marcados como "só
+gestão" — "Minha fila" tem essa flag em `false`, então aparece pros dois papéis, só que pra
+Conferente é a própria fila e pra Distribuidora é a fila de quem ela escolher (o protótipo
+cicla entre conferentes com um botão "Ver como outro conferente").
+
+Nada de caso de uso novo — `ObterMinhaFila`/`ObterConcluidosHoje` (Application) já recebiam um
+`Conferente` qualquer como parâmetro, nunca dependeram de "quem está logado" (isso sempre foi
+responsabilidade do endpoint, via `ResolverConferenteAsync` a partir do JWT em
+`MinhaFilaEndpoints.cs`). Só precisou de dois endpoints novos em `ConferenteEndpoints.cs`
+resolvendo o `Conferente` pelo `id` da URL em vez do token — `GET /conferentes/{id}/fila` e
+`GET /conferentes/{id}/concluidos-hoje`, `RequireRole(Distribuidora)` (o grupo `/conferentes`
+já exige isso). `ParaResumo`/`ParaResumoConcluido` (mapeamento `Protocolo` → DTO) viraram
+`internal` em vez de `private` em `MinhaFilaEndpoints` pra reaproveitar sem duplicar — isso é
+mapeamento de verdade, diferente das faixas do semáforo (que ficam duplicadas de propósito por
+serem config, não lógica).
+
+Testado contra o Postgres local: `404` pra id de conferente inexistente, `403` quando um
+Conferente tenta chamar (o grupo já barra por papel, nem chega a resolver o id), resposta
+válida (vazia, sem protocolo nenhum atribuído no momento do teste) pro conferente de verdade.
+
 ## Login devolve o usuário + GET /auth/me
 
 Decisão tomada planejando o `dispatch-web`: o front **nunca decodifica o JWT** pra saber quem

@@ -167,7 +167,11 @@ public static class MinhaFilaEndpoints
         return await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
     }
 
-    private static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
+    // internal, não private: ConferenteEndpoints reaproveita (GET /conferentes/{id}/fila —
+    // Distribuidora vendo a fila de um conferente específico, em leitura) — é mapeamento de
+    // verdade (Protocolo → DTO), diferente das faixas hardcoded acima, que são config e por
+    // isso ficam duplicadas de propósito.
+    internal static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
@@ -181,7 +185,7 @@ public static class MinhaFilaEndpoints
         protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
         protocolo.IniciadoEm);
 
-    private static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo) => new(
+    internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,

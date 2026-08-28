@@ -107,6 +107,57 @@ public static class ConferenteEndpoints
             .WithName("ObterCoberturaDeAlcada")
             .WithSummary("Tipos de ato em circulação sem ninguém habilitado, ou dependentes de uma só pessoa (RF-30).")
             .Produces<CoberturaAlcada>();
+
+        // A Distribuidora vendo a fila de um conferente específico, em leitura (protótipo
+        // aprovado: "Minha fila" também aparece no menu de quem é gestão, com um jeito de
+        // trocar de conferente). Reaproveita ObterMinhaFila/ObterConcluidosHoje tal qual —
+        // os dois já recebem um Conferente qualquer, nunca dependeram de "quem está logado";
+        // só o /minha-fila (MinhaFilaEndpoints) resolve isso do token, porque lá é sempre "eu
+        // mesmo". Aqui o id vem da URL de propósito — é a Distribuidora escolhendo de fora.
+        grupo.MapGet("/{id:guid}/fila", async (
+                Guid id,
+                ObterMinhaFila casoDeUso,
+                IConferenteRepository conferentes,
+                IRelogio relogio,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await conferentes.ObterPorIdAsync(id, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var fila = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
+                var agora = relogio.Agora;
+                return Results.Ok(new MinhaFilaResponse(
+                    fila.PoolDisponivel.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    fila.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList()));
+            })
+            .WithName("ObterFilaDoConferente")
+            .WithSummary("Mesma leitura de Minha fila (RF-19), só que de um conferente específico — pra Distribuidora acompanhar, nunca agir.")
+            .Produces<MinhaFilaResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        grupo.MapGet("/{id:guid}/concluidos-hoje", async (
+                Guid id,
+                ObterConcluidosHoje casoDeUso,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await conferentes.ObterPorIdAsync(id, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var concluidos = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
+                return Results.Ok(concluidos.Select(MinhaFilaEndpoints.ParaResumoConcluido).ToList());
+            })
+            .WithName("ObterConcluidosHojeDoConferente")
+            .WithSummary("Concluídos hoje de um conferente específico, pra Distribuidora (RF-24, leitura).")
+            .Produces<IReadOnlyList<ProtocoloConcluidoResumo>>()
+            .Produces(StatusCodes.Status404NotFound);
     }
 }
 
