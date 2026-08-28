@@ -134,9 +134,15 @@ constante do domínio). `Protocolo` ganhou `Prazo`/`VencimentoEm` (definidos via
 `DefinirPrazo`, não no construtor — só existem depois da resolução) e `Urgente` agora
 considera prazo curto (1h/D+0) além de prioridade alta. 28 testes, `dotnet test` verde.
 
-Suposição assumida (não confirmada com a operação — ver seção 11 do documento): "vence no
-fim do dia D" foi modelado como "vence no início do dia seguinte" (mesmo instante, cálculo
-mais simples). Ajustar se a operação confirmar outra fronteira (ex.: 23:59:59 exatas).
+**Regra confirmada com a operação** (fechava o ponto em aberto da seção 11 do documento — "os
+nomes e prazos reais de cada equipe"): D+0 vence no fim do dia atual (segue modelado como
+"início do dia seguinte", mesmo instante, cálculo mais simples); **D+1 são 24 horas corridas a
+partir da referência, D+2 são 48 horas** — não "fim do dia seguinte"/"fim de dois dias depois"
+como a primeira versão assumia. Além disso, **os três (D+0/D+1/D+2) agora consideram dia útil**:
+se o vencimento calculado cai num sábado ou domingo, empurra pro próximo dia útil (segunda), no
+mesmo horário — sem calendário de feriado, só fim de semana. "1 hora" fica de fora desse ajuste
+de propósito: é o prazo mais urgente do sistema (RF-13), empurrar isso pra depois de um fim de
+semana contradiz o motivo dele existir.
 
 Primeiro caso de uso em `Dispatch.Application`: `DistribuirProtocolo` (`CasosDeUso/`), que
 orquestra `ResolvedorDePrazo` + `MotorDistribuicao` sem reimplementar nenhuma regra. As
