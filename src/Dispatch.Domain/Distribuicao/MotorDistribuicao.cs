@@ -9,10 +9,18 @@ public static class MotorDistribuicao
         IReadOnlyCollection<RegraAlcada> regras,
         IReadOnlyCollection<TipoAto> catalogoTipos)
     {
-        var tipoConhecido = catalogoTipos.Any(t => t.Id == protocolo.TipoAtoId);
-        if (!tipoConhecido)
+        var tipo = catalogoTipos.FirstOrDefault(t => t.Id == protocolo.TipoAtoId);
+        if (tipo is null)
         {
             return new ResultadoDistribuicao.Excecao("tipo desconhecido", []);
+        }
+
+        // RF-34d: tipo desativado não apaga histórico, mas os próximos protocolos que
+        // chegarem com ele vão para exceção — motivo distinto de "tipo desconhecido" porque a
+        // causa (e a resolução: reativar ou mesclar) é diferente.
+        if (!tipo.Ativo)
+        {
+            return new ResultadoDistribuicao.Excecao("tipo desativado", []);
         }
 
         var candidatosNaEscala = conferentes.Where(c => c.NaEscala).ToList();

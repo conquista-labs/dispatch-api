@@ -31,4 +31,8 @@ public interface IProtocoloRepository
     // RF-24: concluídos (aprovado ou reprovado) do dia, só de quem pediu.
     Task<IReadOnlyCollection<Protocolo>> ObterConcluidosPorConferenteAsync(
         Guid conferenteId, DateTimeOffset desde, CancellationToken cancellationToken);
+
+    // RF-34e: "em uso" pra bloquear exclusão de tipo de ato — existence check em vez de
+    // carregar a coleção inteira e contar em memória (só a pergunta importa, não a lista).
+    Task<bool> ExisteComTipoAtoAsync(Guid tipoAtoId, CancellationToken cancellationToken);
 }

@@ -16,6 +16,21 @@ public class MotorDistribuicaoTests
     }
 
     [Fact]
+    public void TipoDeAtoDesativado_RetornaExcecaoComMotivoDistinto()
+    {
+        // RF-34d: desativar um tipo não apaga histórico, mas o próximo protocolo desse tipo
+        // vai para exceção com um motivo diferente de "tipo desconhecido" — a causa (e a
+        // resolução: reativar ou mesclar) é outra.
+        var inventarioDesativado = new TipoAto(Guid.NewGuid(), "Inventário", ativo: false);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", inventarioDesativado.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+
+        var resultado = MotorDistribuicao.Distribuir(protocolo, [], [], [inventarioDesativado]);
+
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal("tipo desativado", excecao.Motivo);
+    }
+
+    [Fact]
     public void NenhumConferenteComAlcada_RetornaExcecaoComMotivoPorPessoa()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);

@@ -63,7 +63,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ListarRegrasAlcada>();
         services.AddScoped<ListarEquipes>();
         services.AddScoped<ListarTiposAto>();
+        services.AddScoped<ListarTiposAtoComUso>();
         services.AddScoped<CriarTipoAto>();
+        services.AddScoped<RenomearTipoAto>();
+        services.AddScoped<AtivarTipoAto>();
+        services.AddScoped<DesativarTipoAto>();
+        services.AddScoped<DefinirPesoDeComplexidadeDoTipoAto>();
+        services.AddScoped<RemoverTipoAto>();
         services.AddScoped<ObterMinhaFila>();
         services.AddScoped<PegarProtocolo>();
         services.AddScoped<IniciarConferencia>();

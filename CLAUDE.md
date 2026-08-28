@@ -804,3 +804,48 @@ não tinham `IRelogio` injetado — nunca precisaram até `AtribuirA` passar a e
 Testado ponta a ponta contra o Postgres local: `atribuir-ao-menos-carregado` grava `atribuidoEm`
 corretamente e rejeita com 409 quando ninguém tem alçada; `devolver-ao-pool` volta pro pool e
 **preserva** o `atribuidoEm` antigo como histórico. 172 testes automatizados no total.
+
+## Tipos de ato — CRUD completo (RF-34a, b, d, e, f) — segunda frente do "v2"
+
+`TipoAto` deixou de ser `record` e virou `class` (mesmo motivo de `RegraAlcada` antes:
+RF-34b/d/f pedem mudança de estado ao longo do tempo) — ganhou `PesoComplexidade` (RF-34f,
+mínimo 1, alimenta o score do conferente do RF-46/Dashboard, que ainda não existe) e
+comportamento (`Renomear`, `Ativar`, `Desativar`, `DefinirPesoDeComplexidade`). Mapeamento
+continua **direto** (como `Protocolo`), não indireto como `RegraAlcada` — `TipoAtoConfiguration`
+já mapeava a entidade real sem precisar de um "Registro" achatado à parte, então
+`TipoAtoRepository.ObterPorIdAsync` devolve um objeto já rastreado pelo change tracker do EF;
+mutar e chamar `SaveChanges` basta, sem o `AtivarAsync`/`DesativarAsync` que `RegraAlcadaRepository`
+precisa.
+
+- **RF-34d (ativar/desativar)**: `MotorDistribuicao` ganhou um segundo motivo de exceção,
+  `"tipo desativado"`, distinto de `"tipo desconhecido"` — a causa (e a resolução: reativar ou
+  mesclar) é diferente, então o front precisa poder diferenciar os dois. Desativar não apaga
+  histórico nenhum, só barra protocolos futuros desse tipo.
+- **RF-34e (remover)**: **exclusão de verdade**, diferente do soft delete de `RemoverConferente`
+  — mas só quando "sem nenhum uso". `TipoAtoId` não tem FK em lugar nenhum (é referenciado por
+  Guid solto tanto em `Protocolo.TipoAtoId` quanto em `AlvoAlcada.PorTipoAto`, dentro de
+  `RegraAlcada`), então o banco não bloqueia sozinho — `RemoverTipoAto` checa as duas coisas
+  antes de excluir (`IProtocoloRepository.ExisteComTipoAtoAsync`, novo — existence check, não
+  carrega a coleção inteira; e `IRegraAlcadaRepository.ObterTodasAsync().Any(...)`). **RF-34c
+  (mesclar dois tipos) ficou de fora desta rodada** — é uma operação maior, que migraria as
+  duas referências pra um Id só em vez de só bloquear a exclusão; fica documentado aqui como
+  próximo passo, não foi esquecido.
+- **RF-34a (leitura agregada pra tabela)**: `ListarTiposAtoComUso` — reaproveita
+  `ObterAlcancePorConferente` (mesmo padrão de `ObterCoberturaDeAlcada`, RF-30) pra contar
+  quantos conferentes na escala têm alçada pra cada tipo, cruzado com uma contagem de
+  protocolos por `TipoAtoId` (via `ObterParaDistribuicaoAsync(null, ...)`, já existente).
+  Nenhuma tabela/coluna nova só pra isso — é leitura derivada, igual `CargaAtual`/`Semaforo`.
+
+Endpoints novos, todos `RequireRole(Distribuidora)`: `GET /tipos-ato/com-uso`,
+`PUT /tipos-ato/{id}` (renomear, 409 se o nome já existir em outro tipo),
+`PUT /tipos-ato/{id}/peso`, `POST /tipos-ato/{id}/ativar`, `POST /tipos-ato/{id}/desativar`,
+`DELETE /tipos-ato/{id}` (409 com motivo `"tipo de ato em uso..."` se protocolo ou regra
+referenciar). Migration `AdicionaPesoDeComplexidadeEmTiposAto` — `peso_complexidade integer
+NOT NULL DEFAULT 1` (não `DEFAULT 0`: violaria o próprio invariante de "peso mínimo 1" pros
+tipos já cadastrados).
+
+Testado ponta a ponta contra o Postgres local: criar, renomear (com normalização e conflito de
+nome), redefinir peso, desativar (reflete em `/tipos-ato/com-uso`), reativar, remover um tipo
+sem uso (204) e confirmar que removê-lo de novo dá 404; tentar remover um tipo com protocolo
+associado devolve 409 com o motivo certo. 191 testes automatizados no total (50 Domain + 141
+Application).

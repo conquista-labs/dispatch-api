@@ -7,6 +7,12 @@ namespace Dispatch.Api.Endpoints;
 
 public static class ProtocoloEndpoints
 {
+    // Mesmos limiares hardcoded de DistribuicaoEndpoints (RF-14) — ainda não é configuração de
+    // sistema de verdade (RF-30c fala nisso), só constante duplicada até existir uma tabela
+    // de configuração.
+    private static readonly TimeSpan FaixaAtencao = TimeSpan.FromHours(4);
+    private static readonly TimeSpan FaixaUrgente = TimeSpan.FromMinutes(60);
+
     public static void MapProtocoloEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/protocolos/distribuir", async (
@@ -138,12 +144,12 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
 
-        app.MapGet("/protocolos/{id:guid}/detalhe", async (Guid id, ObterDetalheProtocolo casoDeUso, CancellationToken cancellationToken) =>
+        app.MapGet("/protocolos/{id:guid}/detalhe", async (Guid id, ObterDetalheProtocolo casoDeUso, IRelogio relogio, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
                 return resultado is null
                     ? Results.NotFound(new { motivo = "protocolo não encontrado" })
-                    : Results.Ok(ParaDetalheResponse(resultado));
+                    : Results.Ok(ParaDetalheResponse(resultado, relogio.Agora));
             })
             .WithName("ObterDetalheProtocolo")
             .WithSummary("Painel de detalhe (RF-18a) — todos os campos do protocolo, mais quem pode conferir este ato especificamente.")
@@ -193,13 +199,14 @@ public static class ProtocoloEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
-    private static DetalheProtocoloResponse ParaDetalheResponse(ResultadoDetalheProtocolo resultado)
+    private static DetalheProtocoloResponse ParaDetalheResponse(ResultadoDetalheProtocolo resultado, DateTimeOffset agora)
     {
         var p = resultado.Protocolo;
         return new DetalheProtocoloResponse(
             p.Id, p.Numero, p.TipoAtoId, p.TipoAtoNomeOriginal, p.EscreventeId, p.Etapa, p.Prioridade, p.AndamentoEm,
             p.Prazo?.Tipo, p.VencimentoEm, p.Status, p.DonoId, p.MotivoExcecao, p.Observacao,
             p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId,
+            p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
             resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
                 a.Conferente.Id, a.Elegivel, a.DecisaoEtapa.RegraAplicada?.Id, a.DecisaoTipo.RegraAplicada?.Id)).ToList());
     }
@@ -261,6 +268,7 @@ public sealed record DetalheProtocoloResponse(
     DateTimeOffset? IniciadoEm,
     DateTimeOffset? ConcluidoEm,
     Guid? RegraAplicadaId,
+    FaixaSemaforo? Semaforo,
     IReadOnlyList<AlcadaConferenteResponse> Alcada);
 
 // RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto

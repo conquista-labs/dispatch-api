@@ -95,7 +95,12 @@ internal sealed class FakeTipoAtoRepository : ITipoAtoRepository
     public Task<IReadOnlyCollection<TipoAto>> ObterTodosAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<TipoAto>>(_tipos.ToList());
 
+    public Task<TipoAto?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_tipos.SingleOrDefault(t => t.Id == id));
+
     public void Adicionar(TipoAto tipoAto) => _tipos.Add(tipoAto);
+
+    public void Remover(TipoAto tipoAto) => _tipos.Remove(tipoAto);
 
     public int Quantidade => _tipos.Count;
 }
@@ -167,6 +172,9 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
             _protocolos.Where(p => p.DonoId == conferenteId
                 && p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
                 && p.ConcluidoEm >= desde).ToList());
+
+    public Task<bool> ExisteComTipoAtoAsync(Guid tipoAtoId, CancellationToken cancellationToken) =>
+        Task.FromResult(_protocolos.Any(p => p.TipoAtoId == tipoAtoId));
 
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;
