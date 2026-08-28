@@ -36,7 +36,11 @@ public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuari
             // Sem isso a ordem vinha da leitura crua do Postgres, que não é garantida estável
             // entre uma chamada e outra sem ORDER BY — a lista "pulava" de posição a cada
             // refetch depois de qualquer ação (RF-25/26/27 invalidam a query inteira).
+            // `ThenBy(Id)`: nome sozinho não é único (dois conferentes de teste têm o mesmo
+            // nome só com e-mail diferente) — sem um desempate de verdade, quem empata no nome
+            // continua sujeito à mesma ordem instável do Postgres entre as duas leituras.
             .OrderBy(c => c.Nome, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(c => c.Id)
             .ToList();
     }
 }

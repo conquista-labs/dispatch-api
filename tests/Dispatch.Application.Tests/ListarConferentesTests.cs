@@ -82,4 +82,25 @@ public class ListarConferentesTests
 
         Assert.Equal(["Aline", "Beatriz"], resultado.Select(c => c.Nome));
     }
+
+    [Fact]
+    public async Task NomesEmpatados_DesempataPorIdEmVezDeDependerDaOrdemDeEntrada()
+    {
+        // Reproduz o bug real: dois conferentes com o mesmo nome (só o e-mail difere) — sem um
+        // desempate de verdade, a ordem de quem empata no nome fica à mercê da ordem "crua" que
+        // o repositório devolveu, que não é garantida estável entre uma chamada e outra.
+        var usuario1 = new Usuario(Guid.Parse("00000000-0000-0000-0000-000000000001"), "Fulano", "fulano1@cartorio.com", "hash", Papel.Conferente);
+        var usuario2 = new Usuario(Guid.Parse("00000000-0000-0000-0000-000000000002"), "Fulano", "fulano2@cartorio.com", "hash", Papel.Conferente);
+        var conferente1 = new Conferente(Guid.Parse("00000000-0000-0000-0000-0000000000a1"), usuario1.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var conferente2 = new Conferente(Guid.Parse("00000000-0000-0000-0000-0000000000a2"), usuario2.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+
+        // Entrada "fora de ordem" de propósito — o resultado precisa vir por Id (a2 antes de
+        // a1 não é o esperado; a ordem certa é a1 antes de a2, pela comparação de Guid).
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferente2, conferente1]), new FakeUsuarioRepository([usuario2, usuario1]));
+
+        var resultado = await casoDeUso.ExecutarAsync();
+
+        Assert.Equal([conferente1.Id, conferente2.Id], resultado.Select(c => c.Id));
+    }
 }
