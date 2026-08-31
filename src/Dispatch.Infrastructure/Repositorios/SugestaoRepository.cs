@@ -37,11 +37,12 @@ public sealed class SugestaoRepository(DispatchDbContext dbContext) : ISugestaoR
     public void Adicionar(Sugestao sugestao) => dbContext.Sugestoes.Add(ParaRegistro(sugestao));
 
     public async Task AtualizarEvidenciaAsync(
-        Guid id, int ocorrencias, string evidencia, DateTimeOffset agora, CancellationToken cancellationToken)
+        Guid id, int ocorrencias, string evidencia, double indiceConfianca, DateTimeOffset agora, CancellationToken cancellationToken)
     {
         var registro = await dbContext.Sugestoes.SingleAsync(s => s.Id == id, cancellationToken);
         registro.Ocorrencias = ocorrencias;
         registro.Evidencia = evidencia;
+        registro.IndiceConfianca = indiceConfianca;
         registro.AtualizadaEm = agora;
     }
 
@@ -92,7 +93,7 @@ public sealed class SugestaoRepository(DispatchDbContext dbContext) : ISugestaoR
         };
 
         return new Sugestao(
-            registro.Id, registro.Chave, payload, registro.Evidencia, registro.Ocorrencias, registro.CriadaEm,
+            registro.Id, registro.Chave, payload, registro.Evidencia, registro.Ocorrencias, registro.IndiceConfianca, registro.CriadaEm,
             registro.AtualizadaEm, registro.Status, registro.DecididaEm, registro.DescartarAte);
     }
 
@@ -104,6 +105,7 @@ public sealed class SugestaoRepository(DispatchDbContext dbContext) : ISugestaoR
             Chave = sugestao.Chave,
             Evidencia = sugestao.Evidencia,
             Ocorrencias = sugestao.Ocorrencias,
+            IndiceConfianca = sugestao.IndiceConfianca,
             Status = sugestao.Status,
             CriadaEm = sugestao.CriadaEm,
             AtualizadaEm = sugestao.AtualizadaEm,

@@ -12,6 +12,7 @@ public sealed class Sugestao
     public PayloadSugestao Payload { get; }
     public string Evidencia { get; private set; }
     public int Ocorrencias { get; private set; }
+    public double IndiceConfianca { get; private set; }
     public StatusSugestao Status { get; private set; }
     public DateTimeOffset CriadaEm { get; }
     public DateTimeOffset AtualizadaEm { get; private set; }
@@ -22,7 +23,7 @@ public sealed class Sugestao
     // padrão de RegraAlcada com `origem`/`ativa`) — criar uma sugestão nova nunca os informa,
     // ela sempre nasce Pendente.
     public Sugestao(
-        Guid id, string chave, PayloadSugestao payload, string evidencia, int ocorrencias, DateTimeOffset criadaEm,
+        Guid id, string chave, PayloadSugestao payload, string evidencia, int ocorrencias, double indiceConfianca, DateTimeOffset criadaEm,
         DateTimeOffset? atualizadaEm = null, StatusSugestao status = StatusSugestao.Pendente,
         DateTimeOffset? decididaEm = null, DateTimeOffset? descartarAte = null)
     {
@@ -31,6 +32,7 @@ public sealed class Sugestao
         Payload = payload;
         Evidencia = evidencia;
         Ocorrencias = ocorrencias;
+        IndiceConfianca = indiceConfianca;
         Status = status;
         CriadaEm = criadaEm;
         AtualizadaEm = atualizadaEm ?? criadaEm;
@@ -38,11 +40,13 @@ public sealed class Sugestao
         DescartarAte = descartarAte;
     }
 
-    // Rodada nova do gerador achou a mesma chave de novo — atualiza em vez de duplicar.
-    public void AtualizarEvidencia(int ocorrencias, string evidencia, DateTimeOffset agora)
+    // Rodada nova do gerador achou a mesma chave de novo — atualiza em vez de duplicar (o
+    // índice de confiança é recalculado junto, mesma cadência de ocorrências/evidência).
+    public void AtualizarEvidencia(int ocorrencias, string evidencia, double indiceConfianca, DateTimeOffset agora)
     {
         Ocorrencias = ocorrencias;
         Evidencia = evidencia;
+        IndiceConfianca = indiceConfianca;
         AtualizadaEm = agora;
     }
 

@@ -267,9 +267,10 @@ internal sealed class FakeSugestaoRepository : ISugestaoRepository
 
     public void Adicionar(Sugestao sugestao) => _sugestoes.Add(sugestao);
 
-    public Task AtualizarEvidenciaAsync(Guid id, int ocorrencias, string evidencia, DateTimeOffset agora, CancellationToken cancellationToken)
+    public Task AtualizarEvidenciaAsync(
+        Guid id, int ocorrencias, string evidencia, double indiceConfianca, DateTimeOffset agora, CancellationToken cancellationToken)
     {
-        _sugestoes.Single(s => s.Id == id).AtualizarEvidencia(ocorrencias, evidencia, agora);
+        _sugestoes.Single(s => s.Id == id).AtualizarEvidencia(ocorrencias, evidencia, indiceConfianca, agora);
         return Task.CompletedTask;
     }
 

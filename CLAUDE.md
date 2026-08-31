@@ -994,3 +994,39 @@ nome), redefinir peso, desativar (reflete em `/tipos-ato/com-uso`), reativar, re
 sem uso (204) e confirmar que removê-lo de novo dá 404; tentar remover um tipo com protocolo
 associado devolve 409 com o motivo certo. 191 testes automatizados no total (50 Domain + 141
 Application).
+
+## Índice de confiança real da sugestão (RF-39-41) — fecha a simplificação consciente do módulo de Aprendizado
+
+Nem o documento de requisitos (seção 7) nem o protótipo aprovado definem uma fórmula de
+confiança — o protótipo mostra um número mockado, hardcoded por item de exemplo, sem relação
+calculável com os outros campos do mesmo objeto (diferente do score do Dashboard/RF-46, aqui
+nem o protótipo dá uma pista). Fórmula decidida e documentada em código
+(`CandidatoSugestao.cs`): cada uma das 4 funções de `GeradorDeSugestoes` já calculava, por
+dentro, uma proporção só pra comparar com o próprio limiar — nunca sobrevivia até o candidato
+final. Essa proporção **é** o sinal de confiança natural (quanto mais concentrado o padrão,
+mais forte a sugestão), e as 4 já nascem na mesma escala [0,1], comparável entre si sem inventar
+peso novo:
+
+- `TipoDesconhecido` — força da moda do nível (contagem do nível majoritário / total resolvido
+  na mão). `Moda`/`ModaGuid` viraram `ModaComForca`/`ModaGuidComForca`, devolvendo o valor E a
+  proporção do grupo majoritário numa tacada só.
+- `PrazoIrreal` — `percentualEstouro` (já calculado pra comparar com o limiar de 60%).
+- `EscreventeOrfao` — dominância da equipe sugerida (contagem da equipe majoritária / total de
+  ocorrências nos mesmos lotes).
+- `RiscoQualidade` — `percentualReprovacao` (já calculado pra comparar com o limiar de 50%).
+
+`Sugestao.IndiceConfianca` é recalculado na mesma cadência de `Ocorrencias`/`Evidencia` —
+`AtualizarEvidencia` (Domain) e `AtualizarEvidenciaAsync` (`ISugestaoRepository`) ganharam o
+parâmetro junto, mesmo ponto onde os outros dois já eram atualizados a cada rodada do gerador.
+`SugestaoRegistro`/`SugestaoRegistroConfiguration` seguem o mesmo padrão de sempre (coluna
+simples, `builder.Property` explícito). Migration `AdicionaIndiceConfiancaEmSugestoes` —
+`indice_confianca double precision NOT NULL DEFAULT 0` (sugestões antigas ficam com 0 até a
+próxima rodada do gerador regenerar a mesma chave — não há histórico real que dependa de um
+valor retroativo). `SugestaoResponse` ganhou `IndiceConfianca` (0.0–1.0; o front multiplica por
+100 e mostra como "N% de confiança" + barra, igual ao protótipo).
+
+225 testes automatizados no total (54 Domain + 171 Application) — a cobertura do índice de
+confiança entrou como asserções novas em testes já existentes (`GeradorDeSugestoesTests`,
+`GerarSugestoesTests`), não testes novos: a fórmula é derivada do mesmo cenário que cada teste
+já montava pra cobrir o limiar, então também já dava pra conferir o índice sem nenhum arranjo
+adicional.

@@ -40,12 +40,14 @@ public sealed class GerarSugestoes(
             if (existente is null || (existente.Status == StatusSugestao.Descartada && existente.DescartarAte <= agora))
             {
                 sugestoes.Adicionar(new Sugestao(
-                    Guid.NewGuid(), candidato.Chave, candidato.Payload, candidato.Evidencia, candidato.Ocorrencias, agora));
+                    Guid.NewGuid(), candidato.Chave, candidato.Payload, candidato.Evidencia, candidato.Ocorrencias,
+                    candidato.IndiceConfianca, agora));
                 novas++;
             }
             else if (existente.Status == StatusSugestao.Pendente)
             {
-                await sugestoes.AtualizarEvidenciaAsync(existente.Id, candidato.Ocorrencias, candidato.Evidencia, agora, cancellationToken);
+                await sugestoes.AtualizarEvidenciaAsync(
+                    existente.Id, candidato.Ocorrencias, candidato.Evidencia, candidato.IndiceConfianca, agora, cancellationToken);
             }
         }
 

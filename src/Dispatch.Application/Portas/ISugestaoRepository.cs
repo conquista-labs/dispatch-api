@@ -24,7 +24,8 @@ public interface ISugestaoRepository
     // o payload (sum type) é "achatado" pra persistência, então o objeto de Domain que
     // ObterPorIdAsync devolve é uma tradução nova a cada chamada, não a instância que o EF
     // rastreia — mutar ele não seria salvo.
-    Task AtualizarEvidenciaAsync(Guid id, int ocorrencias, string evidencia, DateTimeOffset agora, CancellationToken cancellationToken);
+    Task AtualizarEvidenciaAsync(
+        Guid id, int ocorrencias, string evidencia, double indiceConfianca, DateTimeOffset agora, CancellationToken cancellationToken);
 
     Task<bool> AplicarAsync(Guid id, DateTimeOffset agora, CancellationToken cancellationToken);
 

@@ -79,6 +79,8 @@ public class GeradorDeSugestoesTests
             var payload = Assert.IsType<PayloadSugestao.TipoDesconhecido>(candidato.Payload);
             Assert.Equal(Nivel.Pleno, payload.NivelSugerido);
             Assert.Equal(5, candidato.Ocorrencias);
+            // Confiança = força da moda do nível: 4 Pleno de 5 resolvidos na mão.
+            Assert.Equal(0.8, candidato.IndiceConfianca, precision: 10);
         }
 
         [Fact]
@@ -127,6 +129,8 @@ public class GeradorDeSugestoesTests
             Assert.Equal(equipeId, payload.EquipeId);
             Assert.Equal(Etapa.PreConferencia, payload.Etapa);
             Assert.Equal(TipoPrazo.D2, payload.PrazoSugerido);
+            // Confiança = percentual de estouro: os 8 casos estouram o prazo (100%).
+            Assert.Equal(1.0, candidato.IndiceConfianca, precision: 10);
         }
 
         [Fact]
@@ -208,6 +212,8 @@ public class GeradorDeSugestoesTests
             var payload = Assert.IsType<PayloadSugestao.EscreventeOrfao>(candidato.Payload);
             Assert.Equal(orfao.Id, payload.EscreventeId);
             Assert.Equal(equipeDominante, payload.EquipeSugeridaId);
+            // Confiança = dominância da equipe sugerida: colegaA e colegaB (equipeDominante) de 3 colegas no mesmo lote.
+            Assert.Equal(2.0 / 3, candidato.IndiceConfianca, precision: 10);
         }
 
         [Fact]
@@ -253,6 +259,8 @@ public class GeradorDeSugestoesTests
             var payload = Assert.IsType<PayloadSugestao.RiscoQualidade>(candidato.Payload);
             Assert.Equal(tipoAtoId, payload.TipoAtoId);
             Assert.Equal(Nivel.Junior, payload.NivelRestrito);
+            // Confiança = percentual de reprovação: 4 de 6 casos (66.7%).
+            Assert.Equal(4.0 / 6, candidato.IndiceConfianca, precision: 10);
         }
 
         [Fact]

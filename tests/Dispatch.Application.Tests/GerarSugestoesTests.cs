@@ -36,6 +36,9 @@ public class GerarSugestoesTests
 
         Assert.Equal(1, novas);
         Assert.Equal(1, sugestaoRepo.Quantidade);
+        var pendente = Assert.Single(await sugestaoRepo.ObterPendentesAsync(CancellationToken.None));
+        // Todos os 5 protocolos são do mesmo dono (Pleno) — força da moda = 100%.
+        Assert.Equal(1.0, pendente.IndiceConfianca, precision: 10);
     }
 
     [Fact]
@@ -65,6 +68,8 @@ public class GerarSugestoesTests
         Assert.Equal(1, sugestaoRepo.Quantidade);
         var pendente = Assert.Single(await sugestaoRepo.ObterPendentesAsync(CancellationToken.None));
         Assert.Equal(6, pendente.Ocorrencias);
+        // AtualizarEvidenciaAsync recalcula o índice junto — continua 100% (mesmo dono Pleno).
+        Assert.Equal(1.0, pendente.IndiceConfianca, precision: 10);
     }
 
     [Fact]
@@ -74,7 +79,7 @@ public class GerarSugestoesTests
         var protocolos = CincoProtocolosTipoDesconhecido(dono);
         var sugestaoExistente = new Sugestao(
             Guid.NewGuid(), "tipo-desconhecido:ARROLAMENTO",
-            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência antiga", 5, Agora.AddDays(-1));
+            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência antiga", 5, 0.8, Agora.AddDays(-1));
         sugestaoExistente.Descartar(Agora.AddDays(-1), Agora.AddDays(10));
 
         var sugestaoRepo = new FakeSugestaoRepository([sugestaoExistente]);
@@ -95,7 +100,7 @@ public class GerarSugestoesTests
         var protocolos = CincoProtocolosTipoDesconhecido(dono);
         var sugestaoExistente = new Sugestao(
             Guid.NewGuid(), "tipo-desconhecido:ARROLAMENTO",
-            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência antiga", 5, Agora.AddDays(-40));
+            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência antiga", 5, 0.8, Agora.AddDays(-40));
         sugestaoExistente.Descartar(Agora.AddDays(-40), Agora.AddDays(-10));
 
         var sugestaoRepo = new FakeSugestaoRepository([sugestaoExistente]);

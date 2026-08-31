@@ -33,7 +33,7 @@ public class AplicarSugestaoTests
     public async Task SugestaoJaDecidida_RetornaNaoEstaPendente()
     {
         var sugestao = new Sugestao(
-            Guid.NewGuid(), "chave", new PayloadSugestao.TipoDesconhecido("X", Nivel.Pleno), "evidência", 5, Agora);
+            Guid.NewGuid(), "chave", new PayloadSugestao.TipoDesconhecido("X", Nivel.Pleno), "evidência", 5, 0.8, Agora);
         sugestao.Aplicar(Agora);
         var casoDeUso = NovoCasoDeUso(new FakeSugestaoRepository([sugestao]));
 
@@ -47,7 +47,7 @@ public class AplicarSugestaoTests
     {
         var sugestao = new Sugestao(
             Guid.NewGuid(), "tipo-desconhecido:ARROLAMENTO",
-            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência", 5, Agora);
+            new PayloadSugestao.TipoDesconhecido("ARROLAMENTO", Nivel.Pleno), "evidência", 5, 0.8, Agora);
         var tiposAto = new FakeTipoAtoRepository([]);
         var casoDeUso = NovoCasoDeUso(new FakeSugestaoRepository([sugestao]), tiposAto: tiposAto);
 
@@ -70,7 +70,7 @@ public class AplicarSugestaoTests
 
         var sugestao = new Sugestao(
             Guid.NewGuid(), "prazo-irreal:x", new PayloadSugestao.PrazoIrreal(equipe.Id, Etapa.PreConferencia, TipoPrazo.D2),
-            "evidência", 8, Agora);
+            "evidência", 8, 0.8, Agora);
 
         var casoDeUso = NovoCasoDeUso(
             new FakeSugestaoRepository([sugestao]),
@@ -93,7 +93,7 @@ public class AplicarSugestaoTests
         var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipeId: null);
         var sugestao = new Sugestao(
             Guid.NewGuid(), "escrevente-orfao:x", new PayloadSugestao.EscreventeOrfao(escrevente.Id, equipeSugerida.Id),
-            "evidência", 3, Agora);
+            "evidência", 3, 0.8, Agora);
 
         var casoDeUso = NovoCasoDeUso(
             new FakeSugestaoRepository([sugestao]), escreventes: new FakeEscreventeRepository([escrevente]));
@@ -109,7 +109,7 @@ public class AplicarSugestaoTests
     {
         var tipoAtoId = Guid.NewGuid();
         var sugestao = new Sugestao(
-            Guid.NewGuid(), "risco-qualidade:x", new PayloadSugestao.RiscoQualidade(tipoAtoId, Nivel.Junior), "evidência", 6, Agora);
+            Guid.NewGuid(), "risco-qualidade:x", new PayloadSugestao.RiscoQualidade(tipoAtoId, Nivel.Junior), "evidência", 6, 0.8, Agora);
         var regras = new FakeRegraAlcadaRepository([]);
         var casoDeUso = NovoCasoDeUso(new FakeSugestaoRepository([sugestao]), regras: regras);
 

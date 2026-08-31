@@ -35,13 +35,14 @@ public static class GeradorDeSugestoes
                     .Where(n => n is not null)
                     .Select(n => n!.Value)
                     .ToList();
-                var nivelSugerido = Moda(niveis);
+                var (nivelSugerido, forcaDaModa) = ModaComForca(niveis);
 
                 return new CandidatoSugestao(
                     $"tipo-desconhecido:{nomeTipo.Trim().ToUpperInvariant()}",
                     new PayloadSugestao.TipoDesconhecido(nomeTipo, nivelSugerido),
                     $"{grupo.Count()} ocorrências de \"{nomeTipo}\" fora do catálogo, resolvidas na mão — nível mais comum: {nivelSugerido}.",
-                    grupo.Count());
+                    grupo.Count(),
+                    forcaDaModa);
             })
             .ToList();
     }
@@ -79,7 +80,8 @@ public static class GeradorDeSugestoes
                     new PayloadSugestao.PrazoIrreal(t.Key.EquipeId, t.Key.Etapa, prazoSugerido),
                     $"{t.casos} casos, {t.percentualEstouro:P0} estourando o prazo em {t.Key.Etapa} — " +
                     $"percentil 80 da duração real: {percentil80.TotalHours:F1}h, faixa sugerida: {prazoSugerido}.",
-                    t.casos);
+                    t.casos,
+                    t.percentualEstouro);
             })
             .ToList();
     }
@@ -113,12 +115,13 @@ public static class GeradorDeSugestoes
                 continue;
             }
 
-            var equipeSugerida = ModaGuid(equipesNoMesmoLote);
+            var (equipeSugerida, dominanciaDaEquipe) = ModaGuidComForca(equipesNoMesmoLote);
             candidatos.Add(new CandidatoSugestao(
                 $"escrevente-orfao:{orfao.Id}",
                 new PayloadSugestao.EscreventeOrfao(orfao.Id, equipeSugerida),
                 $"{protocolosDoOrfao.Count} protocolos de \"{orfao.Nome}\" sem equipe — equipe dominante no(s) mesmo(s) lote(s).",
-                protocolosDoOrfao.Count));
+                protocolosDoOrfao.Count,
+                dominanciaDaEquipe));
         }
 
         return candidatos;
@@ -151,15 +154,25 @@ public static class GeradorDeSugestoes
                 $"risco-qualidade:{t.Key.TipoAtoId}:{t.Key.Nivel}",
                 new PayloadSugestao.RiscoQualidade(t.Key.TipoAtoId, t.Key.Nivel),
                 $"{t.casos} casos de nível {t.Key.Nivel}, {t.percentualReprovacao:P0} reprovados — sugerido restringir ao nível acima.",
-                t.casos))
+                t.casos,
+                t.percentualReprovacao))
             .ToList();
     }
 
-    private static Nivel Moda(IReadOnlyCollection<Nivel> valores) =>
-        valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
+    // Além do valor mais comum, devolve a força dele (contagem do grupo majoritário / total) —
+    // é o sinal de confiança das sugestões TipoDesconhecido/EscreventeOrfao (ver
+    // CandidatoSugestao.IndiceConfianca).
+    private static (Nivel Valor, double Forca) ModaComForca(IReadOnlyCollection<Nivel> valores)
+    {
+        var grupo = valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
+        return (grupo.Key, (double)grupo.Count() / valores.Count);
+    }
 
-    private static Guid ModaGuid(IReadOnlyCollection<Guid> valores) =>
-        valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First().Key;
+    private static (Guid Valor, double Forca) ModaGuidComForca(IReadOnlyCollection<Guid> valores)
+    {
+        var grupo = valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
+        return (grupo.Key, (double)grupo.Count() / valores.Count);
+    }
 
     private static TimeSpan Percentil80(IReadOnlyList<TimeSpan> duracoes)
     {

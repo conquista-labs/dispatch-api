@@ -29,6 +29,7 @@ internal sealed class SugestaoRegistro
 
     public string Evidencia { get; set; } = "";
     public int Ocorrencias { get; set; }
+    public double IndiceConfianca { get; set; }
     public StatusSugestao Status { get; set; }
     public DateTimeOffset CriadaEm { get; set; }
     public DateTimeOffset AtualizadaEm { get; set; }

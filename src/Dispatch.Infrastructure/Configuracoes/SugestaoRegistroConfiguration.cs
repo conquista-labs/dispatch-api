@@ -40,6 +40,7 @@ internal sealed class SugestaoRegistroConfiguration : IEntityTypeConfiguration<S
 
         builder.Property(s => s.Evidencia).IsRequired();
         builder.Property(s => s.Ocorrencias);
+        builder.Property(s => s.IndiceConfianca);
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.CriadaEm);
         builder.Property(s => s.AtualizadaEm);
