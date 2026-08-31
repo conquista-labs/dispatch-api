@@ -54,4 +54,11 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
 
     public async Task<bool> ExisteComTipoAtoAsync(Guid tipoAtoId, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.AnyAsync(p => p.TipoAtoId == tipoAtoId, cancellationToken);
+
+    public async Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
+        DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => (p.Status == StatusProtocolo.Aprovado || p.Status == StatusProtocolo.Reprovado)
+                && p.ConcluidoEm >= desde && p.ConcluidoEm < ate)
+            .ToListAsync(cancellationToken);
 }

@@ -867,6 +867,68 @@ mesmo dono, `ConcluidoEm` limpo) → concluir de novo → reabrir direto pelo pa
 → reabrir de novo dá 409 (não está mais concluído) → concluir → pedir → negar (protocolo
 continua `Aprovado`, intacto). 219 testes automatizados no total (54 Domain + 165 Application).
 
+## Dashboard (RF-42-46) — quarta frente do "v2"
+
+**RF-46 (fórmula do score) não está definida matematicamente no documento de requisitos** —
+só nomeia os 4 fatores e os pesos (40% volume + 30% prazo + 20% qualidade + 10%
+complexidade). A fórmula concreta veio do protótipo aprovado (fonte operacional, não o
+requisito): `40*(volume/volumeMáximoDoGrupo) + 30*%noPrazo + 20*%aprovado +
+10*(complexidadeMédia/complexidadeMáximaDoGrupo)` — volume e complexidade normalizados pelo
+melhor do grupo no período; prazo e qualidade já são frações diretas. Faixa de bonificação:
+`score >= 85` Integral, `>= 70` Parcial, abaixo Fora (limiares do protótipo).
+
+Duas simplificações conscientes, documentadas no código (`ObterDashboard.cs`):
+- **"Aprovado" usa o resultado ATUAL** (`Status == Aprovado`), não "aprovado na 1ª vez" — não
+  existe histórico do resultado original antes de uma correção (RF-24a) salvo à parte; seria
+  preciso inferir via `CorrigidoEm == null`, e essa não é uma leitura confiável o bastante pra
+  virar métrica de bonificação sem confirmar com a operação.
+- **Sem "cumprimento de prazo por equipe/etapa" nem KPI de "custo por ato"** (RF-43 pede os
+  dois) — o primeiro precisaria juntar Equipe+Escrevente+Protocolo+Etapa numa tabela agregada
+  nova, maior que o núcleo pedido; o segundo exigiria um dado de custo/salário que não existe
+  em lugar nenhum do sistema — inventar um valor violaria a regra de não inventar dado que o
+  back não calcula. Documentado como próximo passo, não esquecido.
+
+**`ObterDashboard`** (novo caso de uso) — `ExecutarAsync(PeriodoDashboard periodo, Guid?
+conferenteRestritoId, ...)`. Período é janela móvel a partir de `IRelogio.Agora` (7/30/90
+dias — RF-42 só pede "semana/mês/trimestre", não mês calendário, então essa é a leitura mais
+simples que ainda cobre o requisito). `IProtocoloRepository` ganhou
+`ObterConcluidosNoPeriodoAsync(desde, ate, ct)` — de TODOS os donos, diferente do
+`ObterConcluidosPorConferenteAsync` que já existia pra RF-24 (só um conferente). Calcula, por
+conferente: volume, %no-prazo, %aprovado, complexidade média (peso médio do `TipoAto` dos
+protocolos concluídos), score e as 4 parcelas já ponderadas (não percentuais crus — o front
+mostra "32.4 / 40" direto). Também KPIs agregados do período e desempenho por tipo de ato
+(volume/tempo médio/%reprovação).
+
+**RF-45 (visão do conferente) — "sem faixa de bônus" interpretado como nem a própria faixa**:
+quando `conferenteRestritoId` é informado, a resposta tem só a linha do próprio conferente
+(nome preenchido — é ele mesmo, não um colega) + uma linha "média da casa" com `Nome`/`Nivel`
+nulos (RF-45: "sem identificar ninguém"), e **`Faixa` nula em ambas** (a leitura mais
+conservadora do texto — "sem faixa de bônus" leu-se como a tela do conferente não ter esse
+elemento, faixa é decisão de gestão sobre bonificação, não informação pessoal). `Parcelas`
+continua preenchida pro próprio conferente (RF-45 pede explicitamente "o detalhamento das
+parcelas"), só nula na linha "média da casa" (não faz sentido detalhar parcela de uma média).
+`PorTipoAto` vem vazio na visão restrita — RF-45 não pede isso pro conferente.
+
+Endpoint único `GET /dashboard?periodo=Semana|Mes|Trimestre`, `RequireRole(Distribuidora,
+Conferente)` — resolve a restrição por dentro conforme o papel do token, mesmo padrão de
+`PUT /protocolos/{id}/observacao`.
+
+Testado ponta a ponta contra o Postgres local (dado real acumulado de sessões de teste
+anteriores): visão Distribuidora com 2 conferentes, score/faixa/parcelas calculados
+corretamente para ambos; visão Conferente só com a própria linha + média da casa sem nome,
+`faixa: null`, `porTipoAto: []`; os 3 períodos respondendo 200.
+
+**Achado escrevendo o teste, não no código de produção**: o helper de teste que simulava
+"protocolo fora do prazo" usava `Prazo(TipoPrazo.D2)` — só que D2 passa pelo ajuste de
+"próximo dia útil" (`Prazo.cs`), então o vencimento calculado saía num dia diferente do
+esperado quando a data de referência caía perto de um fim de semana, fazendo o teste esperar
+"fora do prazo" quando na verdade o vencimento real (pós-ajuste) ainda cobria a data de
+conclusão. Corrigido usando `TipoPrazo.UmaHora` no helper (o único tipo que não sofre esse
+ajuste — RF-13, é o prazo mais urgente do sistema, empurrar pra depois de um fim de semana
+contradiria o motivo dele existir), garantindo um vencimento exato e prevísivel no teste.
+
+225 testes automatizados no total (54 Domain + 171 Application).
+
 ## Tipos de ato — CRUD completo (RF-34a, b, d, e, f) — segunda frente do "v2"
 
 `TipoAto` deixou de ser `record` e virou `class` (mesmo motivo de `RegraAlcada` antes:

@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DecidirPedidoReabertura>();
         services.AddScoped<ReabrirConferencia>();
         services.AddScoped<ListarPedidosReaberturaPendentes>();
+        services.AddScoped<ObterDashboard>();
 
         return services;
     }

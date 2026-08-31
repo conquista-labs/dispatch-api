@@ -35,4 +35,9 @@ public interface IProtocoloRepository
     // RF-34e: "em uso" pra bloquear exclusão de tipo de ato — existence check em vez de
     // carregar a coleção inteira e contar em memória (só a pergunta importa, não a lista).
     Task<bool> ExisteComTipoAtoAsync(Guid tipoAtoId, CancellationToken cancellationToken);
+
+    // RF-46 (Dashboard): concluídos de TODOS os donos no período, não só de um conferente —
+    // diferente de ObterConcluidosPorConferenteAsync, que já existia pra RF-24.
+    Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
+        DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken);
 }

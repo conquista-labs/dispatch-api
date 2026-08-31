@@ -176,6 +176,12 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
     public Task<bool> ExisteComTipoAtoAsync(Guid tipoAtoId, CancellationToken cancellationToken) =>
         Task.FromResult(_protocolos.Any(p => p.TipoAtoId == tipoAtoId));
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
+        DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
+                && p.ConcluidoEm >= desde && p.ConcluidoEm < ate).ToList());
+
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;
 }
