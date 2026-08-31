@@ -1,0 +1,34 @@
+# Blueprint do Render — descreve o serviço pra criação automática via dashboard ("New +" >
+# "Blueprint", conectando este repositório). Substitui o fly.toml como alvo de deploy (Fly.io
+# saiu do free tier sem cartão — ver CLAUDE.md).
+#
+# Variáveis marcadas com `sync: false` não têm valor aqui de propósito — são segredos, e o
+# Render pede pra preencher manualmente no dashboard na hora de criar o serviço a partir deste
+# Blueprint (nunca versionar segredo em arquivo de repo).
+services:
+  - type: web
+    name: lab-dispatch-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # Sem isso o Render tentaria rotear pra porta 10000 por padrão — a imagem já escuta em
+      # 8080 (ASPNETCORE_URLS fixado no Dockerfile, mesmo valor que o fly.toml usava).
+      - key: PORT
+        value: "8080"
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DispatchDb
+        sync: false
+      - key: Jwt__ChaveDeAssinatura
+        sync: false
+      - key: Jwt__Emissor
+        value: dispatch-api
+      - key: Jwt__Audiencia
+        value: dispatch-clientes
+      - key: Jwt__ExpiracaoMinutos
+        value: "60"
+      - key: Cors__AllowedOrigin
+        value: https://lab-dispatch-web.netlify.app
