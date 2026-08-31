@@ -69,28 +69,49 @@ string sozinho conforme `ASPNETCORE_ENVIRONMENT`, sem `if` de ambiente no códig
 
 ## Deploy — no ar
 
-`https://lab-dispatch-api.fly.dev` (app Fly.io `lab-dispatch-api` — `dispatch-api` sozinho já
-estava em uso por outra conta, nomes são globais na plataforma). `fly.toml` na raiz —
-`min_machines_running = 0`, a máquina dorme quando ninguém usa e acorda sozinha na próxima
-chamada (mais barato pro tier grátis, ao custo de um "cold start" na primeira requisição depois
-de um tempo parado).
+`https://lab-dispatch-api.onrender.com` (Web Service Docker no **Render**, plano free). Migrou
+do Fly.io porque o free trial da Fly acabou e passou a exigir cartão — o dono recusou colocar
+cartão, e o Render tem um free tier sem cartão (mesma decisão já usada em outro projeto dele).
+Nada de código mudou na migração: mesmo `Dockerfile` (build multi-stage, porta 8080), mesmo
+Neon, mesmo Netlify — só a plataforma que builda/roda o container.
 
-**CORS não é mais Development-only.** Antes só existia em `Development` (Netlify/produção
-ainda não tinha URL pra liberar). Virou uma policy só, sempre ativa, com a origem vindo de
-config (`Cors:AllowedOrigin` — `appsettings.Development.json` fixa `localhost:5173`; produção
-é secret do Fly `Cors__AllowedOrigin` apontando pra URL do Netlify). Trocar de host do front
-não pede recompilar a API, só atualizar o secret.
+**`render.yaml`** (raiz, Blueprint) descreve o serviço — nome, Dockerfile, região, plano,
+`healthCheckPath: /health`, e as env vars não-secretas. As duas secretas
+(`ConnectionStrings__DispatchDb`, `Jwt__ChaveDeAssinatura`) ficam de fora do arquivo
+(`sync: false`) e são preenchidas manualmente uma vez, na criação do serviço via dashboard
+("New +" → "Blueprint" → conectar o repo) — nunca versionadas.
+
+**Gotcha da migração**: serviços Docker no Render não usam só o `EXPOSE` do Dockerfile pra
+saber a porta — precisa também de uma env var `PORT` explícita (aqui, `PORT=8080`, batendo com
+o `ASPNETCORE_URLS=http://+:8080` fixado no Dockerfile) ou o roteamento do Render nunca acha o
+container (`x-render-routing: no-server` no proxy, mesmo com a app rodando e logando "Your
+service is live" normalmente — o sintoma engana, parece que a app caiu, mas é só um mismatch de
+porta entre app e proxy). Também vale notar: logo depois do primeiro deploy, o roteamento pode
+levar alguns minutos a mais pra propagar (primeiras chamadas deram 404/no-server, resolveu
+sozinho pouco depois) — não é preciso re-deployar se isso acontecer, só esperar um pouco.
+
+Sem `min_machines_running`/equivalente configurado — o plano free do Render também hiberna o
+serviço por inatividade e acorda com cold start na próxima chamada, mesmo trade-off que o Fly
+já tinha.
+
+**CORS não é Development-only.** Uma policy só, sempre ativa, com a origem vindo de config
+(`Cors:AllowedOrigin` — `appsettings.Development.json` fixa `localhost:5173`; produção é env
+var do Render `Cors__AllowedOrigin` apontando pra URL do Netlify). Trocar de host do front não
+pede recompilar a API, só atualizar essa variável no dashboard do Render.
 
 **Sem endpoint de registro público** — só existe `POST /auth/login`. A primeira conta
 Distribuidora de cada ambiente entra direto no banco (hash da senha gerado com o mesmo
 `PasswordHasher<object>` do `HashDeSenhaAspNetCore`, senão `Autenticar` não reconhece o hash na
-hora de verificar login). Feito uma vez manualmente pra produção — não é um script reutilizável
-do projeto, só o que foi necessário pra ter a primeira conta real.
+hora de verificar login). Feito uma vez manualmente pra produção, antes da migração — a conta e
+o banco (Neon) não mudaram, só quem hospeda a API.
 
-Secrets em produção (`fly secrets set`, nunca em arquivo do repo): `ConnectionStrings__DispatchDb`
-(Neon), `Jwt__ChaveDeAssinatura` (gerada nova pra produção, não é a mesma chave de
-`appsettings.Development.json`), `Jwt__Emissor`, `Jwt__Audiencia`, `Jwt__ExpiracaoMinutos`,
-`Cors__AllowedOrigin`.
+Variáveis de ambiente em produção (dashboard do Render, nunca em arquivo do repo):
+`ASPNETCORE_ENVIRONMENT=Production`, `PORT=8080`, `ConnectionStrings__DispatchDb` (Neon),
+`Jwt__ChaveDeAssinatura` (gerada nova na migração — invalida sessões JWT antigas, esperado),
+`Jwt__Emissor`, `Jwt__Audiencia`, `Jwt__ExpiracaoMinutos`, `Cors__AllowedOrigin`.
+
+O app antigo no Fly (`lab-dispatch-api.fly.dev`) ficou parado (trial expirado) — não foi
+excluído, só abandonado; não custa nada enquanto não reativar.
 
 ## Skills do projeto
 
