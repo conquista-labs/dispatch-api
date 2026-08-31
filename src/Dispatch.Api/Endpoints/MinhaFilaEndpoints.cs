@@ -142,6 +142,7 @@ public static class MinhaFilaEndpoints
                 ObterConcluidosHoje casoDeUso,
                 ClaimsPrincipal usuario,
                 IConferenteRepository conferentes,
+                IPedidoReaberturaRepository pedidos,
                 CancellationToken cancellationToken) =>
             {
                 var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
@@ -151,11 +152,109 @@ public static class MinhaFilaEndpoints
                 }
 
                 var concluidos = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
-                return Results.Ok(concluidos.Select(ParaResumoConcluido).ToList());
+                // ToDictionary<Guid, Guid?> de propósito — com Dictionary<Guid, Guid> puro,
+                // GetValueOrDefault devolveria Guid.Empty (não null) pra quem não tem pedido,
+                // e o front receberia um "00000000-..." em vez de null.
+                var pendentesPorProtocolo = (await pedidos.ObterPendentesPorProtocolosAsync(
+                        concluidos.Select(p => p.Id).ToList(), cancellationToken))
+                    .ToDictionary(p => p.ProtocoloId, Guid? (p) => p.Id);
+                return Results.Ok(concluidos.Select(p => ParaResumoConcluido(p, pendentesPorProtocolo.GetValueOrDefault(p.Id))).ToList());
             })
             .WithName("ObterConcluidosHoje")
             .WithSummary("Indicadores do dia: protocolos aprovados/reprovados hoje pelo próprio conferente, com duração (RF-24).")
             .Produces<IReadOnlyList<ProtocoloConcluidoResumo>>();
+
+        grupo.MapPost("/{id:guid}/corrigir-resultado", async (
+                Guid id,
+                CorrigirResultado casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoCorrigirResultado.Sucesso => Results.NoContent(),
+                    ResultadoCorrigirResultado.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoCorrigirResultado.NaoEhSeu => Results.Forbid(),
+                    ResultadoCorrigirResultado.StatusInvalido => Results.Conflict(new { motivo = "protocolo não está concluído" }),
+                    ResultadoCorrigirResultado.ForaDaJanela => Results.Conflict(new { motivo = "janela de correção encerrada" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("CorrigirResultado")
+            .WithSummary($"Troca aprovado↔reprovado dentro de {CorrigirResultado.JanelaDeCorrecao.TotalMinutes:0} min depois de concluído (RF-24a).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status409Conflict);
+
+        grupo.MapPost("/{id:guid}/pedir-reabertura", async (
+                Guid id,
+                PedirReabertura casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoPedirReabertura.Sucesso sucesso => Results.Created($"/minha-fila/pedidos-reabertura/{sucesso.PedidoId}", new PedirReaberturaResponse(sucesso.PedidoId)),
+                    ResultadoPedirReabertura.ProtocoloNaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoPedirReabertura.NaoEhSeu => Results.Forbid(),
+                    ResultadoPedirReabertura.StatusInvalido => Results.Conflict(new { motivo = "protocolo não está concluído" }),
+                    ResultadoPedirReabertura.JaExistePedidoPendente => Results.Conflict(new { motivo = "já existe um pedido pendente para este protocolo" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("PedirReabertura")
+            .WithSummary("Abre pedido de reabertura pra distribuidora decidir — fora da janela de correção (RF-24b).")
+            .Produces<PedirReaberturaResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status409Conflict);
+
+        grupo.MapPost("/pedidos-reabertura/{id:guid}/cancelar", async (
+                Guid id,
+                CancelarPedidoReabertura casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoCancelarPedidoReabertura.Sucesso => Results.NoContent(),
+                    ResultadoCancelarPedidoReabertura.NaoEncontrado => Results.NotFound(new { motivo = "pedido não encontrado" }),
+                    ResultadoCancelarPedidoReabertura.NaoEhSeu => Results.Forbid(),
+                    ResultadoCancelarPedidoReabertura.NaoEstaPendente => Results.Conflict(new { motivo = "pedido não está pendente" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("CancelarPedidoReabertura")
+            .WithSummary("Cancela um pedido de reabertura — só enquanto pendente (RF-24b).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status409Conflict);
     }
 
     // JWT carrega Usuario.Id (NameIdentifier), não Conferente.Id — toda ação de "Minha fila"
@@ -185,14 +284,16 @@ public static class MinhaFilaEndpoints
         protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
         protocolo.IniciadoEm);
 
-    internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo) => new(
+    internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo, Guid? pedidoReaberturaPendenteId) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
         protocolo.Etapa,
         protocolo.Status,
         protocolo.ConcluidoEm,
-        protocolo.Duracao);
+        protocolo.Duracao,
+        protocolo.CorrigidoEm,
+        pedidoReaberturaPendenteId);
 }
 
 public sealed record MinhaFilaResponse(
@@ -202,6 +303,8 @@ public sealed record MinhaFilaResponse(
 
 public sealed record ConcluirConferenciaRequest(bool Aprovado);
 
+public sealed record PedirReaberturaResponse(Guid PedidoId);
+
 public sealed record ProtocoloConcluidoResumo(
     Guid Id,
     string Numero,
@@ -209,4 +312,6 @@ public sealed record ProtocoloConcluidoResumo(
     Etapa Etapa,
     StatusProtocolo Status,
     DateTimeOffset? ConcluidoEm,
-    TimeSpan? Duracao);
+    TimeSpan? Duracao,
+    DateTimeOffset? CorrigidoEm,
+    Guid? PedidoReaberturaPendenteId);

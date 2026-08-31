@@ -143,6 +143,7 @@ public static class ConferenteEndpoints
                 Guid id,
                 ObterConcluidosHoje casoDeUso,
                 IConferenteRepository conferentes,
+                IPedidoReaberturaRepository pedidos,
                 CancellationToken cancellationToken) =>
             {
                 var conferente = await conferentes.ObterPorIdAsync(id, cancellationToken);
@@ -152,7 +153,15 @@ public static class ConferenteEndpoints
                 }
 
                 var concluidos = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
-                return Results.Ok(concluidos.Select(MinhaFilaEndpoints.ParaResumoConcluido).ToList());
+                // Guid? explícito no seletor de valor — ver comentário equivalente em
+                // MinhaFilaEndpoints (GetValueOrDefault de Dictionary<Guid,Guid> devolveria
+                // Guid.Empty, não null, pra quem não tem pedido pendente).
+                var pendentesPorProtocolo = (await pedidos.ObterPendentesPorProtocolosAsync(
+                        concluidos.Select(p => p.Id).ToList(), cancellationToken))
+                    .ToDictionary(p => p.ProtocoloId, Guid? (p) => p.Id);
+                return Results.Ok(concluidos
+                    .Select(p => MinhaFilaEndpoints.ParaResumoConcluido(p, pendentesPorProtocolo.GetValueOrDefault(p.Id)))
+                    .ToList());
             })
             .WithName("ObterConcluidosHojeDoConferente")
             .WithSummary("Concluídos hoje de um conferente específico, pra Distribuidora (RF-24, leitura).")

@@ -197,7 +197,73 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/{id:guid}/reabrir-conferencia", async (Guid id, ReabrirConferencia casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoReabrirConferencia.Sucesso => Results.NoContent(),
+                    ResultadoReabrirConferencia.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoReabrirConferencia.StatusInvalido => Results.Conflict(new { motivo = "protocolo não está concluído" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("ReabrirConferenciaDoProtocolo")
+            .WithSummary("Ação direta do painel de detalhe (RF-18a/RF-24c) — reabre sem exigir pedido explícito do conferente.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapGet("/protocolos/pedidos-reabertura", async (ListarPedidosReaberturaPendentes casoDeUso, CancellationToken cancellationToken) =>
+                Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaPedidoReaberturaResponse).ToList()))
+            .WithName("ListarPedidosReaberturaPendentes")
+            .WithSummary("Pedidos de reabertura pendentes, pra seção própria da aba de Exceções (RF-24c).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces<IReadOnlyList<PedidoReaberturaResponse>>()
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/pedidos-reabertura/{id:guid}/aprovar", async (
+                Guid id, DecidirPedidoReabertura casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken) =>
+                await ExecutarDecisaoAsync(id, aprovar: true, casoDeUso, usuario, cancellationToken))
+            .WithName("AprovarPedidoReabertura")
+            .WithSummary("Reabre o protocolo (mesmo dono, cronômetro do zero) e marca o pedido como aprovado (RF-24c).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/pedidos-reabertura/{id:guid}/negar", async (
+                Guid id, DecidirPedidoReabertura casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken) =>
+                await ExecutarDecisaoAsync(id, aprovar: false, casoDeUso, usuario, cancellationToken))
+            .WithName("NegarPedidoReabertura")
+            .WithSummary("Nega o pedido — o protocolo não muda (RF-24c).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
+
+    private static async Task<IResult> ExecutarDecisaoAsync(
+        Guid pedidoId, bool aprovar, DecidirPedidoReabertura casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken)
+    {
+        var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var resultado = await casoDeUso.ExecutarAsync(pedidoId, aprovar, usuarioId, cancellationToken);
+        return resultado switch
+        {
+            ResultadoDecidirPedidoReabertura.Sucesso => Results.NoContent(),
+            ResultadoDecidirPedidoReabertura.NaoEncontrado => Results.NotFound(new { motivo = "pedido não encontrado" }),
+            ResultadoDecidirPedidoReabertura.NaoEstaPendente => Results.Conflict(new { motivo = "pedido não está pendente" }),
+            _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+        };
+    }
+
+    private static PedidoReaberturaResponse ParaPedidoReaberturaResponse(PedidoReaberturaResumo r) => new(
+        r.PedidoId, r.ProtocoloId, r.ProtocoloNumero, r.TipoAtoId, r.Etapa, r.StatusAtual, r.SolicitanteId, r.NomeSolicitante, r.CriadoEm);
 
     private static DetalheProtocoloResponse ParaDetalheResponse(ResultadoDetalheProtocolo resultado, DateTimeOffset agora)
     {
@@ -205,7 +271,7 @@ public static class ProtocoloEndpoints
         return new DetalheProtocoloResponse(
             p.Id, p.Numero, p.TipoAtoId, p.TipoAtoNomeOriginal, p.EscreventeId, p.Etapa, p.Prioridade, p.AndamentoEm,
             p.Prazo?.Tipo, p.VencimentoEm, p.Status, p.DonoId, p.MotivoExcecao, p.Observacao,
-            p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId,
+            p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId, p.CorrigidoEm, p.ReabertoEm,
             p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
             resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
                 a.Conferente.Id, a.Elegivel, a.DecisaoEtapa.RegraAplicada?.Id, a.DecisaoTipo.RegraAplicada?.Id)).ToList());
@@ -268,6 +334,8 @@ public sealed record DetalheProtocoloResponse(
     DateTimeOffset? IniciadoEm,
     DateTimeOffset? ConcluidoEm,
     Guid? RegraAplicadaId,
+    DateTimeOffset? CorrigidoEm,
+    DateTimeOffset? ReabertoEm,
     FaixaSemaforo? Semaforo,
     IReadOnlyList<AlcadaConferenteResponse> Alcada);
 
@@ -275,3 +343,14 @@ public sealed record DetalheProtocoloResponse(
 // (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
 // servem pra mostrar "por qual regra" quando existir uma.
 public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, Guid? RegraEtapaId, Guid? RegraTipoId);
+
+public sealed record PedidoReaberturaResponse(
+    Guid PedidoId,
+    Guid ProtocoloId,
+    string ProtocoloNumero,
+    Guid? TipoAtoId,
+    Etapa Etapa,
+    StatusProtocolo StatusAtual,
+    Guid SolicitanteId,
+    string NomeSolicitante,
+    DateTimeOffset CriadoEm);

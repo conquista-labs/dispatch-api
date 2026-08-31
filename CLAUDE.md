@@ -805,6 +805,68 @@ Testado ponta a ponta contra o Postgres local: `atribuir-ao-menos-carregado` gra
 corretamente e rejeita com 409 quando ninguém tem alçada; `devolver-ao-pool` volta pro pool e
 **preserva** o `atribuidoEm` antigo como histórico. 172 testes automatizados no total.
 
+## Correção de resultado + pedido de reabertura (RF-24a-d) — terceira frente do "v2"
+
+`Protocolo` ganhou `CorrigidoEm`/`ReabertoEm` (nullable) e dois métodos:
+`CorrigirResultado(agora)` (inverte Aprovado↔Reprovado, exige estar num dos dois; permite
+corrigir mais de uma vez dentro da janela — nem o protótipo aprovado nem o requisito proíbem)
+e `ReabrirConferencia(agora)` (`Status = Conferindo`, `IniciadoEm = agora`, **`ConcluidoEm`
+volta a nulo** — o ato deixou de estar concluído, `Duracao` volta a não existir até uma nova
+conclusão — `DonoId` não muda).
+
+**`PedidoReabertura` (entidade nova, mapeamento direto)** — primeiro registro de auditoria de
+verdade do sistema (`Id`, `ProtocoloId`, `SolicitanteId`, `CriadoEm`, `Status`
+[`Pendente`/`Aprovado`/`Negado`/`Cancelado`], `DecididoPorId`, `DecididoEm`). RNF da seção 8
+("toda transição gera registro de auditoria com autor e horário") não tem infraestrutura
+genérica no projeto (decisão deliberada da fase de Aprendizado — sem `evento_decisao`) — aqui
+não precisou de tabela genérica porque o próprio pedido já é a linha de auditoria da decisão.
+
+Cinco casos de uso novos, todos com `abstract record ResultadoX` fechado (padrão de
+`RemoverTipoAto`/`CriarRegraAlcada`):
+- **`CorrigirResultado`** — só o dono, só `Aprovado`/`Reprovado`, só dentro de
+  `JanelaDeCorrecao = 15min` (constante pública no próprio caso de uso, mesma decisão de
+  manter hardcoded que as faixas do semáforo — sem tabela `config` ainda).
+- **`PedirReabertura`** — só o dono, só um pedido `Pendente` por protocolo por vez. Não checa
+  a janela de correção de propósito: o requisito não proíbe pedir reabertura mesmo dentro da
+  janela.
+- **`CancelarPedidoReabertura`** — só o solicitante, só se `Pendente`.
+- **`DecidirPedidoReabertura`** — aprovar chama `Protocolo.ReabrirConferencia` + marca o
+  pedido `Aprovado`; negar só marca o pedido `Negado`, protocolo intacto.
+- **`ReabrirConferencia`** (ação direta, sem pedido) — mesma transição, disponível pra
+  qualquer protocolo `Aprovado`/`Reprovado`, usada tanto pela decisão de um pedido quanto pelo
+  painel de detalhe (RF-18a).
+- **`ListarPedidosReaberturaPendentes`** — join em memória (protocolo + nome do solicitante,
+  via `Usuario`), mesmo padrão de `ListarConferentes`/`ObterCoberturaDeAlcada`.
+
+Endpoints: `POST /minha-fila/{id}/corrigir-resultado`, `POST /minha-fila/{id}/pedir-reabertura`
+(201 com `pedidoId`), `POST /minha-fila/pedidos-reabertura/{id}/cancelar` (Conferente);
+`GET /protocolos/pedidos-reabertura`, `POST /protocolos/pedidos-reabertura/{id}/aprovar` |
+`/negar`, `POST /protocolos/{id}/reabrir-conferencia` (Distribuidora).
+`ProtocoloConcluidoResumo` (`/minha-fila/concluidos-hoje` e `/conferentes/{id}/concluidos-hoje`,
+que reaproveita o mesmo mapeamento) ganhou `CorrigidoEm`/`PedidoReaberturaPendenteId` — o
+segundo resolvido em lote (`ObterPendentesPorProtocolosAsync`, evita N+1). `DetalheProtocoloResponse`
+ganhou `CorrigidoEm`/`ReabertoEm` pra a linha do tempo do painel.
+
+**Bug real achado testando de verdade, não pego pelos testes com fake**:
+`Dictionary<Guid, Guid>.GetValueOrDefault(chaveInexistente)` devolve `Guid.Empty`
+(`00000000-0000-0000-0000-000000000000`), não `null` — mesmo o parâmetro de destino sendo
+`Guid?`. O JSON de resposta saía com um Guid zerado em vez de `pedidoReaberturaPendenteId:
+null` pra quem não tinha pedido nenhum. Corrigido tipando o `ToDictionary` explicitamente como
+`Dictionary<Guid, Guid?>` (`Guid? (p) => p.Id` no seletor de valor) — sem isso o `GetValueOrDefault`
+nunca alcança o `default` de `Guid?` (`null`), porque o dicionário em si já não é nullable.
+
+Migration `AdicionaCorrecaoEReaberturaDeProtocolos` — duas colunas nullable em `protocolos` +
+tabela nova `pedidos_reabertura` (FK `Restrict` pra `conferentes.solicitante_id`, `Cascade`
+pra `protocolos.protocolo_id` — apagar um protocolo, se algum dia isso existir, não deveria
+deixar pedido órfão).
+
+Testado ponta a ponta contra o Postgres local, o ciclo completo: concluir → corrigir dentro da
+janela (Aprovado→Reprovado) → pedir reabertura → pedir de novo dá 409 (já pendente) → cancelar
+→ pedir de novo funciona (cancelado não bloqueia) → aprovar (protocolo volta a `Conferindo`,
+mesmo dono, `ConcluidoEm` limpo) → concluir de novo → reabrir direto pelo painel (sem pedido)
+→ reabrir de novo dá 409 (não está mais concluído) → concluir → pedir → negar (protocolo
+continua `Aprovado`, intacto). 219 testes automatizados no total (54 Domain + 165 Application).
+
 ## Tipos de ato — CRUD completo (RF-34a, b, d, e, f) — segunda frente do "v2"
 
 `TipoAto` deixou de ser `record` e virou `class` (mesmo motivo de `RegraAlcada` antes:

@@ -57,4 +57,61 @@ public class ProtocoloTests
 
         Assert.Equal(referencia.AddHours(1), protocolo.VencimentoEm);
     }
+
+    [Fact]
+    public void CorrigirResultado_Aprovado_ViraReprovado()
+    {
+        var protocolo = NovoProtocolo();
+        protocolo.IniciarConferencia(DateTimeOffset.UtcNow);
+        protocolo.Aprovar(DateTimeOffset.UtcNow);
+
+        var agora = DateTimeOffset.UtcNow.AddMinutes(5);
+        protocolo.CorrigirResultado(agora);
+
+        Assert.Equal(StatusProtocolo.Reprovado, protocolo.Status);
+        Assert.Equal(agora, protocolo.CorrigidoEm);
+    }
+
+    [Fact]
+    public void CorrigirResultado_Reprovado_ViraAprovado()
+    {
+        var protocolo = NovoProtocolo();
+        protocolo.IniciarConferencia(DateTimeOffset.UtcNow);
+        protocolo.Reprovar(DateTimeOffset.UtcNow);
+
+        protocolo.CorrigirResultado(DateTimeOffset.UtcNow);
+
+        Assert.Equal(StatusProtocolo.Aprovado, protocolo.Status);
+    }
+
+    [Fact]
+    public void CorrigirResultado_PermiteCorrigirMaisDeUmaVez()
+    {
+        var protocolo = NovoProtocolo();
+        protocolo.IniciarConferencia(DateTimeOffset.UtcNow);
+        protocolo.Aprovar(DateTimeOffset.UtcNow);
+
+        protocolo.CorrigirResultado(DateTimeOffset.UtcNow);
+        protocolo.CorrigirResultado(DateTimeOffset.UtcNow);
+
+        Assert.Equal(StatusProtocolo.Aprovado, protocolo.Status);
+    }
+
+    [Fact]
+    public void ReabrirConferencia_VoltaPraConferindoComCronometroDoZero()
+    {
+        var protocolo = NovoProtocolo();
+        var inicioOriginal = DateTimeOffset.UtcNow;
+        protocolo.IniciarConferencia(inicioOriginal);
+        protocolo.Aprovar(inicioOriginal.AddMinutes(10));
+
+        var agora = inicioOriginal.AddHours(2);
+        protocolo.ReabrirConferencia(agora);
+
+        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+        Assert.Equal(agora, protocolo.IniciadoEm);
+        Assert.Null(protocolo.ConcluidoEm);
+        Assert.Null(protocolo.Duracao);
+        Assert.Equal(agora, protocolo.ReabertoEm);
+    }
 }

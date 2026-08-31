@@ -43,6 +43,14 @@ public sealed class Protocolo
     // como o alvo mais comum).
     public Guid? RegraAplicadaId { get; private set; }
 
+    // RF-24a: quando o resultado foi trocado (Aprovado↔Reprovado) pelo próprio dono, dentro
+    // da janela de correção. Não limpa em reabertura — é histórico de "já foi corrigido uma
+    // vez", igual AtribuidoEm não limpa ao voltar pro pool.
+    public DateTimeOffset? CorrigidoEm { get; private set; }
+    // RF-24c: quando a distribuidora reabriu a conferência (via pedido aprovado ou ação
+    // direta no painel de detalhe).
+    public DateTimeOffset? ReabertoEm { get; private set; }
+
     // RF-24: "duração" do ato — só existe depois de concluído.
     public TimeSpan? Duracao => IniciadoEm is { } inicio && ConcluidoEm is { } fim ? fim - inicio : null;
 
@@ -130,5 +138,27 @@ public sealed class Protocolo
     {
         Status = StatusProtocolo.Reprovado;
         ConcluidoEm = agora;
+    }
+
+    // RF-24a: troca o resultado — quem decide se está dentro da janela de 15 min e se é o
+    // dono é o caso de uso (CorrigirResultado), aqui só a transição em si. Permite corrigir
+    // mais de uma vez dentro da janela (o protótipo aprovado não impede, e o requisito não
+    // proíbe) — CorrigidoEm sempre reflete a correção mais recente.
+    public void CorrigirResultado(DateTimeOffset agora)
+    {
+        Status = Status == StatusProtocolo.Aprovado ? StatusProtocolo.Reprovado : StatusProtocolo.Aprovado;
+        CorrigidoEm = agora;
+    }
+
+    // RF-24c: reabertura — mesmo dono (DonoId não muda), cronômetro reiniciado do zero.
+    // ConcluidoEm volta a nulo porque o ato deixou de estar concluído (Duracao volta a não
+    // existir até uma nova conclusão) — usada tanto pelo pedido aprovado quanto pela ação
+    // direta "reabrir conferência" no painel de detalhe.
+    public void ReabrirConferencia(DateTimeOffset agora)
+    {
+        Status = StatusProtocolo.Conferindo;
+        IniciadoEm = agora;
+        ConcluidoEm = null;
+        ReabertoEm = agora;
     }
 }

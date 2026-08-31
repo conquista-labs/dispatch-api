@@ -211,6 +211,31 @@ internal sealed class FakeUnitOfWork : IUnitOfWork
     public Task SalvarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
+internal sealed class FakePedidoReaberturaRepository : IPedidoReaberturaRepository
+{
+    private readonly List<PedidoReabertura> _pedidos;
+
+    public FakePedidoReaberturaRepository(IReadOnlyCollection<PedidoReabertura> pedidos) => _pedidos = pedidos.ToList();
+
+    public Task<PedidoReabertura?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(_pedidos.SingleOrDefault(p => p.Id == id));
+
+    public Task<PedidoReabertura?> ObterPendentePorProtocoloAsync(Guid protocoloId, CancellationToken cancellationToken) =>
+        Task.FromResult(_pedidos.SingleOrDefault(p => p.ProtocoloId == protocoloId && p.Status == StatusPedidoReabertura.Pendente));
+
+    public Task<IReadOnlyCollection<PedidoReabertura>> ObterPendentesAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<PedidoReabertura>>(_pedidos.Where(p => p.Status == StatusPedidoReabertura.Pendente).ToList());
+
+    public Task<IReadOnlyCollection<PedidoReabertura>> ObterPendentesPorProtocolosAsync(
+        IReadOnlyCollection<Guid> protocoloIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<PedidoReabertura>>(
+            _pedidos.Where(p => p.Status == StatusPedidoReabertura.Pendente && protocoloIds.Contains(p.ProtocoloId)).ToList());
+
+    public void Adicionar(PedidoReabertura pedido) => _pedidos.Add(pedido);
+
+    public int Quantidade => _pedidos.Count;
+}
+
 internal sealed class FakeRelogio(DateTimeOffset agora) : IRelogio
 {
     public DateTimeOffset Agora { get; } = agora;

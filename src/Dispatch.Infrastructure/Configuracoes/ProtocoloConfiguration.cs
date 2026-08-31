@@ -28,6 +28,8 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.MotivoExcecao);
         builder.Property(p => p.Observacao);
         builder.Property(p => p.AtribuidoEm);
+        builder.Property(p => p.CorrigidoEm);
+        builder.Property(p => p.ReabertoEm);
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
         // travar via Restrict) a leitura de um protocolo antigo que a citou.
