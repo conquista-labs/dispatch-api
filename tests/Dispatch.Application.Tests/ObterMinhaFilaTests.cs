@@ -25,6 +25,29 @@ public class ObterMinhaFilaTests
     }
 
     [Fact]
+    public async Task PoolDisponivel_OrdenaPorVencimentoAscendente()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+
+        var vencePrimeiro = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+        vencePrimeiro.DefinirPrazo(new Prazo(TipoPrazo.UmaHora), DateTimeOffset.UtcNow);
+
+        var venceDepois = new Protocolo(Guid.NewGuid(), "2", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+        venceDepois.DefinirPrazo(new Prazo(TipoPrazo.UmaHora), DateTimeOffset.UtcNow.AddHours(2));
+
+        var semVencimento = new Protocolo(Guid.NewGuid(), "3", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+
+        var casoDeUso = new ObterMinhaFila(
+            new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([tipo]));
+
+        var fila = await casoDeUso.ExecutarAsync(conferente);
+
+        Assert.Equal([vencePrimeiro.Id, venceDepois.Id, semVencimento.Id], fila.PoolDisponivel.Select(p => p.Id));
+    }
+
+    [Fact]
     public async Task AtribuidosEEmConferencia_SoDoProprioConferente()
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);

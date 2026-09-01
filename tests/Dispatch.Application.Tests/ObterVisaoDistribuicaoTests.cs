@@ -58,6 +58,26 @@ public class ObterVisaoDistribuicaoTests
     }
 
     [Fact]
+    public async Task PoolOrdenaPorVencimentoAscendente()
+    {
+        // Quem vence primeiro fica no topo — protocolo sem prazo definido (VencimentoEm nulo)
+        // vai pro fim, não pro início.
+        var vencePrimeiro = NovoProtocolo(StatusProtocolo.Pool);
+        vencePrimeiro.DefinirPrazo(new Prazo(TipoPrazo.UmaHora), DateTimeOffset.UtcNow);
+
+        var venceDepois = NovoProtocolo(StatusProtocolo.Pool);
+        venceDepois.DefinirPrazo(new Prazo(TipoPrazo.UmaHora), DateTimeOffset.UtcNow.AddHours(2));
+
+        var semVencimento = NovoProtocolo(StatusProtocolo.Pool);
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Equal([vencePrimeiro, venceDepois, semVencimento], visao.Pool);
+    }
+
+    [Fact]
     public async Task FiltraPorLoteQuandoInformado()
     {
         var loteId = Guid.NewGuid();

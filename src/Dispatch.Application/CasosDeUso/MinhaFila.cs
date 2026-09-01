@@ -29,6 +29,9 @@ public sealed class ObterMinhaFila(
             // de distribuição já usa).
             .Where(p => p.TipoAtoId is { } tipoAtoId && tipoPorId.TryGetValue(tipoAtoId, out var tipo)
                 && VerificadorDeAlcada.TemAlcada(conferente, p, tipo, equipePorEscreventeId.GetValueOrDefault(p.EscreventeId), regrasAtivas))
+            // Quem tá vencendo primeiro fica no topo — sem isso a ordem é a do banco, que não é
+            // garantida sem ORDER BY (mesma armadilha já documentada em ListarConferentes).
+            .OrderBy(p => p.VencimentoEm ?? DateTimeOffset.MaxValue)
             .ToList();
 
         var atribuidos = await protocolos.ObterAtribuidosAAsync(conferente.Id, cancellationToken);

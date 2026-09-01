@@ -1274,3 +1274,16 @@ persistindo e voltando corretas no `GET`; XOR rejeitando dois alvos ao mesmo tem
 
 **Escopo desta rodada**: só o motor (Domain/Application/Infrastructure/Api). A reformulação
 visual da aba Alçada (Camadas/Matriz/Testar no front) é a próxima frente, consumindo este back.
+
+## Pool ordenado por vencimento (Distribuição e Minha fila)
+
+Pedido do dono: quem vence primeiro no pool aparece primeiro na tela, tanto na coluna "Pool
+aberto" de Distribuição quanto em "Pool disponível" de Minha fila. Nenhuma das duas queries
+(`ObterPoolAsync`/`ObterParaDistribuicaoAsync`) tinha `ORDER BY` — Postgres não garante ordem
+estável sem isso, mesma armadilha já documentada em `ListarConferentes` (seção Conferentes,
+acima). `ObterVisaoDistribuicao.ExecutarAsync` ordena o bucket `pool` por
+`VencimentoEm ?? DateTimeOffset.MaxValue` (nulo — sem prazo definido — vai pro fim, não pro
+início); `ObterMinhaFila.ExecutarAsync` ordena `poolDisponivel` do mesmo jeito. Escopo
+deliberadamente restrito ao pool (não estendido a atribuídos/em conferência/concluídos/exceções
+— o pedido foi específico). 2 testes novos (ordem ascendente, nulo por último) — 246 testes
+automatizados no total (64 Domain + 182 Application).

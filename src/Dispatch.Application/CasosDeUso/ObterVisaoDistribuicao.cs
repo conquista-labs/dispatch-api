@@ -8,7 +8,9 @@ public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos)
     {
         var todos = await protocolos.ObterParaDistribuicaoAsync(loteImportacaoId, cancellationToken);
 
-        var pool = todos.Where(p => p.Status == StatusProtocolo.Pool).ToList();
+        // Quem tá vencendo primeiro fica no topo — sem isso a ordem é a do banco, que não é
+        // garantida sem ORDER BY (mesma armadilha já documentada em ListarConferentes).
+        var pool = todos.Where(p => p.Status == StatusProtocolo.Pool).OrderBy(p => p.VencimentoEm ?? DateTimeOffset.MaxValue).ToList();
         var atribuidos = todos.Where(p => p.Status == StatusProtocolo.Atribuido).ToList();
         var emConferencia = todos.Where(p => p.Status == StatusProtocolo.Conferindo).ToList();
         var concluidos = todos.Where(p => p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado).ToList();
