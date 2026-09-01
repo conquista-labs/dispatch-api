@@ -13,5 +13,9 @@ public enum StatusProtocolo
     Aprovado,
     Reprovado,
     Excecao,
-    Descartado
+    Descartado,
+    // RF-18i/RF-18j: soft-delete — mesma filosofia de RemoverConferente (preserva histórico,
+    // nunca apaga linha). Restaurar() devolve pro status anterior, guardado em
+    // Protocolo.StatusAntesDeExcluir.
+    Excluido
 }

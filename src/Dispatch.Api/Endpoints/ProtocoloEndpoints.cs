@@ -29,16 +29,11 @@ public static class ProtocoloEndpoints
                 var tipoConhecido = (await tiposAto.ObterTodosAsync(cancellationToken)).Any(t => t.Id == request.TipoAtoId);
                 var tipoAtoId = tipoConhecido ? request.TipoAtoId : (Guid?)null;
 
-                // Mesma resolução por nome do ImportarLote — cria sem equipe se for a primeira
-                // vez que esse escrevente aparece. Sem isso, EscreventeId apontaria pra uma
-                // linha que não existe (FK quebrada na hora de gravar o protocolo).
-                var escrevente = (await escreventes.ObterTodosAsync(cancellationToken))
-                    .FirstOrDefault(e => string.Equals(e.Nome, request.EscreventeNome, StringComparison.OrdinalIgnoreCase));
-                if (escrevente is null)
-                {
-                    escrevente = new Escrevente(Guid.NewGuid(), request.EscreventeNome, equipeId: null);
-                    escreventes.Adicionar(escrevente);
-                }
+                // Cria sem equipe se for a primeira vez que esse escrevente aparece. Sem isso,
+                // EscreventeId apontaria pra uma linha que não existe (FK quebrada na hora de
+                // gravar o protocolo).
+                var escrevente = await ResolvedorDeEscreventePorNome.ResolverAsync(
+                    request.EscreventeNome, escreventes, adicionarSeNovo: true, cancellationToken);
 
                 // Endpoint avulso, sem relatório por trás — usa "agora" como o instante do
                 // andamento, já que não existe um de verdade vindo de importação nenhuma.
@@ -47,7 +42,7 @@ public static class ProtocoloEndpoints
 
                 var resultado = await casoDeUso.ExecutarAsync(protocolo, escrevente, cancellationToken);
 
-                return Results.Ok(ParaResponse(protocolo, resultado));
+                return Results.Ok(ParaResponse(protocolo.Id, protocolo.VencimentoEm, resultado));
             })
             .WithName("DistribuirProtocolo")
             .WithSummary("Resolve o prazo do protocolo e decide o destino: atribuído, pool ou exceção.")
@@ -256,6 +251,79 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/manual/simular", async (
+                SimularProtocoloManualRequest request, SimularProtocoloManual casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(
+                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, cancellationToken);
+                return Results.Ok(new SimulacaoProtocoloManualResponse(
+                    resultado.NumeroDisponivel, resultado.Grupo, resultado.EquipeNome, resultado.SemEquipeSinalizado,
+                    resultado.Prazo, resultado.VencimentoEm, resultado.Destino, resultado.ConferenteId, resultado.Motivo));
+            })
+            .WithName("SimularProtocoloManual")
+            .WithSummary("Prévia sem persistir (RF-18f) — equipe, prazo, grupo do ato e destino previsto antes de confirmar.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces<SimulacaoProtocoloManualResponse>()
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/manual", async (
+                CriarProtocoloManualRequest request, CriarProtocoloManual casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(
+                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, request.Observacao, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoCriarProtocoloManual.Sucesso sucesso => Results.Created(
+                        $"/protocolos/{sucesso.ProtocoloId}/detalhe",
+                        ParaResponse(sucesso.ProtocoloId, sucesso.VencimentoEm, sucesso.Distribuicao)),
+                    ResultadoCriarProtocoloManual.NumeroJaExiste => Results.Conflict(new { motivo = "este protocolo já existe no sistema" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("CriarProtocoloManual")
+            .WithSummary("Cadastro de ato que chega fora do relatório (RF-18f) — mesmas regras de prazo e alçada da importação.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces<DistribuirProtocoloResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPut("/protocolos/{id:guid}", async (
+                Guid id, EditarProtocoloManualRequest request, EditarProtocoloManual casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(
+                    id, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, request.Observacao, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoEditarProtocoloManual.Sucesso => Results.NoContent(),
+                    ResultadoEditarProtocoloManual.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("EditarProtocoloManual")
+            .WithSummary("RF-18g: trocar tipo/escrevente/etapa recalcula prazo; RF-18h: dono que perde alçada volta ao pool.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapDelete("/protocolos/{id:guid}", async (Guid id, ExcluirProtocolo casoDeUso, CancellationToken cancellationToken) =>
+                await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound(new { motivo = "protocolo não encontrado" }))
+            .WithName("ExcluirProtocolo")
+            .WithSummary("RF-18i: soft-delete — some de toda tela, mas fica restaurável (RF-18j).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/{id:guid}/restaurar", async (Guid id, RestaurarProtocolo casoDeUso, CancellationToken cancellationToken) =>
+                await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound(new { motivo = "protocolo não encontrado ou não está excluído" }))
+            .WithName("RestaurarProtocolo")
+            .WithSummary("RF-18j: desfazer a exclusão — mesmo vencimento, dono e histórico de antes.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
     private static async Task<IResult> ExecutarDecisaoAsync(
@@ -290,17 +358,19 @@ public static class ProtocoloEndpoints
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
     // resposta próprio da Api, achatado, fácil de serializar e estável independente de como
-    // o Domain organiza o resultado internamente.
-    private static DistribuirProtocoloResponse ParaResponse(Protocolo protocolo, ResultadoDistribuicao resultado) => resultado switch
+    // o Domain organiza o resultado internamente. Recebe id/vencimento soltos (não o
+    // Protocolo inteiro) pra servir tanto o endpoint avulso quanto CriarProtocoloManual, que
+    // só devolve o resultado do caso de uso, não a entidade.
+    private static DistribuirProtocoloResponse ParaResponse(Guid protocoloId, DateTimeOffset? vencimentoEm, ResultadoDistribuicao resultado) => resultado switch
     {
         ResultadoDistribuicao.Atribuido atribuido => new DistribuirProtocoloResponse(
-            protocolo.Id, "Atribuido", atribuido.Conferente.Id, Motivo: null, protocolo.VencimentoEm),
+            protocoloId, "Atribuido", atribuido.Conferente.Id, Motivo: null, vencimentoEm),
 
         ResultadoDistribuicao.EnviadoParaPool => new DistribuirProtocoloResponse(
-            protocolo.Id, "EnviadoParaPool", ConferenteId: null, Motivo: null, protocolo.VencimentoEm),
+            protocoloId, "EnviadoParaPool", ConferenteId: null, Motivo: null, vencimentoEm),
 
         ResultadoDistribuicao.Excecao excecao => new DistribuirProtocoloResponse(
-            protocolo.Id, "Excecao", ConferenteId: null, excecao.Motivo, protocolo.VencimentoEm),
+            protocoloId, "Excecao", ConferenteId: null, excecao.Motivo, vencimentoEm),
 
         _ => throw new InvalidOperationException($"Resultado de distribuição não mapeado: {resultado.GetType().Name}")
     };
@@ -321,6 +391,23 @@ public sealed record DistribuirProtocoloResponse(
     DateTimeOffset? VencimentoEm);
 
 public sealed record RedistribuirPoolResponse(int Alterados);
+
+public sealed record SimularProtocoloManualRequest(string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade);
+
+public sealed record SimulacaoProtocoloManualResponse(
+    bool NumeroDisponivel,
+    GrupoTipoAto? Grupo,
+    string? EquipeNome,
+    bool SemEquipeSinalizado,
+    TipoPrazo Prazo,
+    DateTimeOffset VencimentoEm,
+    string Destino,
+    Guid? ConferenteId,
+    string? Motivo);
+
+public sealed record CriarProtocoloManualRequest(string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, string? Observacao);
+
+public sealed record EditarProtocoloManualRequest(Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, string? Observacao);
 
 public sealed record AtribuirManualmenteRequest(Guid ConferenteId);
 

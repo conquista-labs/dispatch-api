@@ -143,7 +143,7 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
 
     public Task<IReadOnlyCollection<Protocolo>> ObterParaDistribuicaoAsync(Guid? loteImportacaoId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
-            _protocolos.Where(p => loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId).ToList());
+            _protocolos.Where(p => p.Status != StatusProtocolo.Excluido && (loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId)).ToList());
 
     public Task<IReadOnlyCollection<Protocolo>> ObterSemDonoAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
@@ -154,7 +154,7 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos
                 .Where(p => escreventeIds.Contains(p.EscreventeId) && p.Status is not (
-                    StatusProtocolo.Aprovado or StatusProtocolo.Reprovado or StatusProtocolo.Descartado))
+                    StatusProtocolo.Aprovado or StatusProtocolo.Reprovado or StatusProtocolo.Descartado or StatusProtocolo.Excluido))
                 .ToList());
 
     public Task<IReadOnlyCollection<Protocolo>> ObterPoolAsync(CancellationToken cancellationToken) =>
@@ -184,6 +184,9 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
 
     public Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
         Task.FromResult(_protocolos.Count(p => p.RegraAplicadaId == regraAlcadaId));
+
+    public Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken) =>
+        Task.FromResult(_protocolos.Any(p => p.Numero == numero));
 
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;

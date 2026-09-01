@@ -92,6 +92,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ReabrirConferencia>();
         services.AddScoped<ListarPedidosReaberturaPendentes>();
         services.AddScoped<ObterDashboard>();
+        services.AddScoped<SimularProtocoloManual>();
+        services.AddScoped<CriarProtocoloManual>();
+        services.AddScoped<EditarProtocoloManual>();
+        services.AddScoped<ExcluirProtocolo>();
+        services.AddScoped<RestaurarProtocolo>();
 
         return services;
     }

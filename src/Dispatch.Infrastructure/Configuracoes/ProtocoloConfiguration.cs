@@ -25,6 +25,10 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
             .HasMaxLength(20);
 
         builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        // RF-18i/j — explícito de propósito (mesma armadilha já documentada no CLAUDE.md:
+        // propriedade só-com-getter sem declaração aqui falha o constructor binding do EF Core
+        // em tempo de design, mesmo existindo de verdade).
+        builder.Property(p => p.StatusAntesDeExcluir).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.MotivoExcecao);
         builder.Property(p => p.Observacao);
         builder.Property(p => p.AtribuidoEm);

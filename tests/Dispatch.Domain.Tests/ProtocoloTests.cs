@@ -114,4 +114,47 @@ public class ProtocoloTests
         Assert.Null(protocolo.Duracao);
         Assert.Equal(agora, protocolo.ReabertoEm);
     }
+
+    [Fact]
+    public void Excluir_GuardaOStatusAnteriorEViraExcluido()
+    {
+        var protocolo = NovoProtocolo();
+        protocolo.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        protocolo.Excluir();
+
+        Assert.Equal(StatusProtocolo.Excluido, protocolo.Status);
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.StatusAntesDeExcluir);
+    }
+
+    [Fact]
+    public void Restaurar_DevolveOStatusAnteriorELimpaOCampo()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        protocolo.AtribuirA(donoId, DateTimeOffset.UtcNow);
+        var vencimentoOriginal = protocolo.VencimentoEm;
+        protocolo.Excluir();
+
+        protocolo.Restaurar();
+
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
+        Assert.Null(protocolo.StatusAntesDeExcluir);
+        Assert.Equal(donoId, protocolo.DonoId);
+        Assert.Equal(vencimentoOriginal, protocolo.VencimentoEm);
+    }
+
+    [Fact]
+    public void EditarDadosBasicos_TrocaTipoEscreventeEEtapa()
+    {
+        var protocolo = NovoProtocolo();
+        var novoTipoAtoId = Guid.NewGuid();
+        var novoEscreventeId = Guid.NewGuid();
+
+        protocolo.EditarDadosBasicos(novoTipoAtoId, novoEscreventeId, Etapa.PosConferencia);
+
+        Assert.Equal(novoTipoAtoId, protocolo.TipoAtoId);
+        Assert.Equal(novoEscreventeId, protocolo.EscreventeId);
+        Assert.Equal(Etapa.PosConferencia, protocolo.Etapa);
+    }
 }

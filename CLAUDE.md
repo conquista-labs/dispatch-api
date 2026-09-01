@@ -1322,3 +1322,91 @@ local sem protocolo concluído nesse período — resposta vazia e coerente, nã
 1 teste novo (`CumprimentoPrazoEquipe_AgrupaPorEquipeEEtapa_PiorPercentualPrimeiro` — 2 equipes
 + 1 grupo "sem equipe", 3 combinações de etapa/percentual, confirma agrupamento e ordenação) —
 247 testes automatizados no total (64 Domain + 183 Application).
+
+## Protocolo manual — criar, editar, excluir com desfazer (RF-18f a RF-18j)
+
+O dono notou o botão "Novo protocolo" do protótipo, que nunca existiu no app. Investigação
+prévia (documentada no plano de implementação) achou que a maior parte de "criar" já existia —
+`POST /protocolos/distribuir` já resolve prazo, roda o motor e persiste, exatamente o que
+RF-18f pede. Faltava mesmo: bloquear número duplicado, um modo de **simular sem persistir**
+pra prévia do modal, editar (campos imutáveis até aqui), e excluir com desfazer.
+
+**`TipoAtoId`/`EscreventeId`/`Etapa` de `Protocolo` viraram `private set`** — só isso já exigia
+migration nenhuma (são as mesmas colunas), só destravava `EditarDadosBasicos(tipoAtoId,
+escreventeId, etapa)` novo.
+
+**Exclusão é soft-delete permanente, não hard-delete + snapshot pro desfazer.** Mesma filosofia
+de `RemoverConferente` (preserva histórico, nunca apaga linha). `StatusProtocolo` ganhou
+`Excluido`; `Protocolo.Excluir()` guarda o status atual em `StatusAntesDeExcluir` (campo novo,
+migration `AdicionaProtocoloManualEExclusao` — 1 coluna nullable, sem backfill) e
+`Restaurar()` só devolve esse valor. Como nada além de `Status` é tocado, "restaura com o mesmo
+vencimento, dono e histórico" (RF-18j) fica **trivialmente verdadeiro** — não tem lógica de
+reconstrução nenhuma pra escrever ou testar. "Desfazer por alguns segundos" é só um timer no
+front (toast) — o back permite restaurar a qualquer momento, sem job de limpeza (o projeto não
+tem scheduler, e não precisa: registro soft-deletado só não aparece em tela nenhuma, igual
+conferente removido).
+
+**Duas queries existentes precisaram de ajuste antes de introduzir `Excluido`** (achado
+audit­ando todo filtro de `Status` do repositório antes de mexer, não depois):
+`ObterParaDistribuicaoAsync` não tinha filtro de status nenhum (alimentava RF-13 sem
+exclusão — um protocolo excluído vazaria pra Distribuição); `ObterAbertosPorEscreventesAsync`
+tinha exclusão por lista (`!= Aprovado && != Reprovado && != Descartado`) que também precisou
+ganhar `!= Excluido`, senão RF-38 recalcularia vencimento de protocolo excluído. Os dois
+cobertos por teste (`ProtocoloExcluido_NaoAparecePraDistribuicao`/
+`ProtocoloExcluido_NaoEntraNoRecalculoDeVencimentosAbertos`).
+
+**`ResolvedorDeEscreventePorNome`** (novo, `CasosDeUso/`) — extraído da lógica que já vivia
+inline no handler de `POST /protocolos/distribuir` (busca por nome case-insensitive, cria sem
+equipe se for a primeira vez), reaproveitado pelos 3 casos de uso novos que também precisam
+disso. **Público, não `internal`** como os outros helpers da pasta (`AplicadorDeDistribuicao`,
+`RecalculoDeVencimentos`, `VerificadorDeAlcada`) — o endpoint avulso existente chama direto,
+sem passar por um caso de uso, então precisa ser visível fora de `Dispatch.Application`.
+Pequena mudança de comportamento no endpoint avulso, de propósito: escrevente novo agora
+passa por `NormalizadorDeTexto.ParaNomeProprio` (igual `ImportarLote` já fazia) — antes gravava
+o nome cru do request, sem normalizar.
+
+- **`SimularProtocoloManual`** (RF-18f, prévia) — monta um `Protocolo`/`Escrevente` só em
+  memória (`adicionarSeNovo: false` no resolvedor — não persiste nada, nem o escrevente se for
+  novo) e roda `AplicadorDeDistribuicao.Executar` normalmente (ele nunca persistiu sozinho — 
+  quem persiste sempre foi o chamador). Devolve equipe/prazo/grupo/vencimento/destino previsto
+  e se o número já está em uso. `POST /protocolos/manual/simular`.
+- **`CriarProtocoloManual`** (RF-18f, de verdade) — bloqueia número duplicado
+  (`ExisteComNumeroAsync`, novo em `IProtocoloRepository` — número não é único no banco por
+  índice, de propósito, pra reprocessamento de relatório; aqui é regra de aplicação só pro
+  cadastro manual, uma ação humana pontual). Livre, resolve escrevente de verdade e reaproveita
+  `DistribuirProtocolo` (injetado) pra persistir — zero regra nova. `POST /protocolos/manual`,
+  201 ou 409.
+- **`EditarProtocoloManual`** (RF-18g/h) — `identidadeMudou` compara tipo/escrevente/etapa
+  antes/depois; só quando muda de fato chama `ResolvedorDePrazo.Resolver` +
+  `protocolo.DefinirPrazo(prazo, protocolo.AndamentoEm)` — referência é sempre o `AndamentoEm`
+  original, nunca "agora" (mesma regra de `RecalculoDeVencimentos`/RF-38). Prioridade e
+  observação sempre são aplicadas, nunca disparam recálculo. RF-18h: se identidade mudou e o
+  protocolo tem dono, `VerificadorDeAlcada.TemAlcada` decide se ele volta pro pool sozinho —
+  sem tipo conhecido, pula essa checagem (não reabre a discussão de "tipo desconhecido" que
+  esse fluxo de edição não trata). `PUT /protocolos/{id}`.
+- **`ExcluirProtocolo`**/**`RestaurarProtocolo`** — bem finos, só a transição (`protocolo.Excluir()`/
+  `Restaurar()`) mais a validação de existência (e, pra restaurar, de que realmente estava
+  excluído). `DELETE /protocolos/{id}`, `POST /protocolos/{id}/restaurar`.
+
+Testado ponta a ponta contra o Postgres local depois da migration: `POST
+/protocolos/manual/simular` não persiste nada (confirmado por não aparecer em nenhuma lista
+depois); `POST /protocolos/manual` cria (201), repetir o mesmo número dá 409; `PUT
+/protocolos/{id}` trocando etapa recalcula o vencimento a partir do `andamento_em` original
+(não do instante da edição — confirmado comparando os dois valores); `DELETE` some da
+Distribuição, `POST .../restaurar` traz de volta, restaurar de novo (já não excluído) dá 404.
+
+21 testes novos (3 domínio — `Excluir`/`Restaurar`/`EditarDadosBasicos` — e 18 de aplicação
+entre os 5 casos de uso novos) — 268 testes automatizados no total (67 Domain + 201
+Application).
+
+**Escopo desta rodada**: só o back (Domain/Application/Infrastructure/Api). O front (modal
+"Novo protocolo"/"Editar protocolo", wiring no painel de detalhe, toast de desfazer) é a
+próxima frente, consumindo este back.
+
+**Segunda passada, depois de reconferir o markup do protótipo de propósito** (o dono perguntou
+"está fiel ao protótipo 100%?" — releitura de `novoAberto`/linhas ~1739-1808 achou um gap real:
+`CriarProtocoloManual` não aceitava `observacao`, mesmo o protótipo tendo esse campo já na
+criação, não só na edição). `ExecutarAsync` ganhou o parâmetro `observacao` (aplicado via
+`Protocolo.DefinirObservacao`, método que já existia); endpoint/request DTO acompanharam. 1
+teste novo (`ComObservacao_GravaJuntoNaCriacao`) — 269 testes automatizados no total (67 Domain
++ 202 Application).

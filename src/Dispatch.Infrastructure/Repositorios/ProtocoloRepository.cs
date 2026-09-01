@@ -18,7 +18,7 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
 
     public async Task<IReadOnlyCollection<Protocolo>> ObterParaDistribuicaoAsync(Guid? loteImportacaoId, CancellationToken cancellationToken) =>
         await dbContext.Protocolos
-            .Where(p => loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId)
+            .Where(p => p.Status != StatusProtocolo.Excluido && (loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyCollection<Protocolo>> ObterSemDonoAsync(CancellationToken cancellationToken) =>
@@ -30,7 +30,8 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
         IReadOnlyCollection<Guid> escreventeIds, CancellationToken cancellationToken) =>
         await dbContext.Protocolos
             .Where(p => escreventeIds.Contains(p.EscreventeId) && p.Status != StatusProtocolo.Aprovado
-                && p.Status != StatusProtocolo.Reprovado && p.Status != StatusProtocolo.Descartado)
+                && p.Status != StatusProtocolo.Reprovado && p.Status != StatusProtocolo.Descartado
+                && p.Status != StatusProtocolo.Excluido)
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyCollection<Protocolo>> ObterPoolAsync(CancellationToken cancellationToken) =>
@@ -64,4 +65,7 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
 
     public async Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.CountAsync(p => p.RegraAplicadaId == regraAlcadaId, cancellationToken);
+
+    public async Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos.AnyAsync(p => p.Numero == numero, cancellationToken);
 }

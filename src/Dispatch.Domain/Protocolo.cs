@@ -6,15 +6,15 @@ public sealed class Protocolo
     public string Numero { get; }
     // Nulo = tipo de ato desconhecido (RF-09) — sinalizado, não inventado na hora. O motor de
     // distribuição já trata isso como "tipo desconhecido" (exceção) sem precisar de FK válida.
-    public Guid? TipoAtoId { get; }
+    public Guid? TipoAtoId { get; private set; }
     // Preenchido só quando TipoAtoId é nulo — o texto bruto que veio do relatório (RF-09/
     // seção 7 "Tipo desconhecido"). Sem isso não dá pra agrupar "quantas vezes 'X' apareceu
     // fora do catálogo" pra gerar a sugestão de aprendizado.
     public string? TipoAtoNomeOriginal { get; }
     // Quem produziu o ato (glossário, seção 2) — RF-14 (o card mostra escrevente/equipe) e
     // RF-38 (recalcular vencimento quando o prazo da equipe do escrevente muda) dependem disso.
-    public Guid EscreventeId { get; }
-    public Etapa Etapa { get; }
+    public Guid EscreventeId { get; private set; }
+    public Etapa Etapa { get; private set; }
     public Prioridade Prioridade { get; private set; }
     // Instante do "andamento" que originou este registro (vem do relatório importado, não de
     // quando a importação rodou) — é o momentoDeReferencia usado pra calcular o vencimento, e
@@ -50,6 +50,10 @@ public sealed class Protocolo
     // RF-24c: quando a distribuidora reabriu a conferência (via pedido aprovado ou ação
     // direta no painel de detalhe).
     public DateTimeOffset? ReabertoEm { get; private set; }
+
+    // RF-18i/j: só tem valor quando Status == Excluido — guarda o que era antes, pra
+    // Restaurar() devolver exato (mesmo vencimento/dono/histórico, nada mais muda).
+    public StatusProtocolo? StatusAntesDeExcluir { get; private set; }
 
     // A importação de lote (o fluxo real de entrada) nunca define prioridade alta — o
     // relatório do cartório não tem essa coluna. Isso é o único jeito de marcar um protocolo
@@ -124,6 +128,32 @@ public sealed class Protocolo
 
     // RF-15/RF-23: editável em qualquer estado, por isso não tem guarda de status nenhuma aqui.
     public void DefinirObservacao(string? observacao) => Observacao = observacao;
+
+    // RF-18g: troca as 3 identidades que definem prazo/alçada — quem decide se isso muda o
+    // vencimento (recalcular a partir de AndamentoEm) e se o dono perde alçada (RF-18h) é o
+    // caso de uso, não o Domain; aqui é só a mutação dos dados.
+    public void EditarDadosBasicos(Guid? tipoAtoId, Guid escreventeId, Etapa etapa)
+    {
+        TipoAtoId = tipoAtoId;
+        EscreventeId = escreventeId;
+        Etapa = etapa;
+    }
+
+    // RF-18i: soft-delete — guarda o status atual pra Restaurar() devolver exato. Privilégio
+    // da distribuidora, front confirma antes (RF-18i pede diálogo de confirmação).
+    public void Excluir()
+    {
+        StatusAntesDeExcluir = Status;
+        Status = StatusProtocolo.Excluido;
+    }
+
+    // RF-18j: desfazer — mesmo vencimento, dono e histórico, porque nada além de Status foi
+    // tocado por Excluir(). Caller garante que só é chamado quando Status == Excluido.
+    public void Restaurar()
+    {
+        Status = StatusAntesDeExcluir!.Value;
+        StatusAntesDeExcluir = null;
+    }
 
     // RF-21: arranca o cronômetro. Quem decide se pode iniciar (é do conferente certo, tá
     // Atribuido, respeita o limite de simultâneos) é o caso de uso — aqui só a transição.

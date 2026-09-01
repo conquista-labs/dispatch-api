@@ -44,4 +44,11 @@ public interface IProtocoloRepository
     // RF-33: "contador de aplicações" de uma regra de alçada — leitura agregada, igual
     // CargaAtual/Semaforo, nunca persistida na própria regra.
     Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken);
+
+    // RF-18f: bloqueia número duplicado no cadastro manual — Numero não é único no banco (não
+    // tem índice único, de propósito, ver ImportarLote/"linha de corte"), mas o cadastro manual
+    // é uma ação humana pontual, diferente de reprocessar relatório; qualquer status conta,
+    // inclusive Excluido (um número que já existiu, mesmo apagado, não devia ser reusado às
+    // cegas por um cadastro manual novo).
+    Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken);
 }
