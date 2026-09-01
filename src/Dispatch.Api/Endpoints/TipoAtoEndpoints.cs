@@ -11,10 +11,10 @@ public static class TipoAtoEndpoints
         app.MapGet("/tipos-ato", async (ListarTiposAto casoDeUso, CancellationToken cancellationToken) =>
                 Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaResponse).ToList()))
             .WithName("ListarTiposAto")
-            .WithSummary("Catálogo de tipos de ato — usado pra resolver nome no alvo de uma regra de alçada (RF-31).")
+            .WithSummary("Catálogo de tipos de ato — usado pra resolver nome no alvo de uma regra de alçada (RF-31) e no filtro de tipo de ato (RF-18e/RF-24f).")
             .WithTags(OpenApiTags.CentralDeRegras)
             .Produces<IReadOnlyList<TipoAtoResponse>>()
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
 
         app.MapPost("/tipos-ato", async (CriarTipoAtoRequest request, CriarTipoAto casoDeUso, CancellationToken cancellationToken) =>
             {

@@ -276,6 +276,7 @@ public static class MinhaFilaEndpoints
         protocolo.TipoAtoId,
         protocolo.EscreventeId,
         protocolo.Etapa,
+        protocolo.Prioridade,
         protocolo.Status,
         protocolo.DonoId,
         protocolo.VencimentoEm,

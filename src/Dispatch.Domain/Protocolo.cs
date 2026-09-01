@@ -15,7 +15,7 @@ public sealed class Protocolo
     // RF-38 (recalcular vencimento quando o prazo da equipe do escrevente muda) dependem disso.
     public Guid EscreventeId { get; }
     public Etapa Etapa { get; }
-    public Prioridade Prioridade { get; }
+    public Prioridade Prioridade { get; private set; }
     // Instante do "andamento" que originou este registro (vem do relatório importado, não de
     // quando a importação rodou) — é o momentoDeReferencia usado pra calcular o vencimento, e
     // também a base da "linha de corte" que evita reimportar o que já foi processado.
@@ -50,6 +50,12 @@ public sealed class Protocolo
     // RF-24c: quando a distribuidora reabriu a conferência (via pedido aprovado ou ação
     // direta no painel de detalhe).
     public DateTimeOffset? ReabertoEm { get; private set; }
+
+    // A importação de lote (o fluxo real de entrada) nunca define prioridade alta — o
+    // relatório do cartório não tem essa coluna. Isso é o único jeito de marcar um protocolo
+    // como urgente na prática: uma decisão humana explícita da distribuidora, não um dado que
+    // vem de algum lugar automaticamente.
+    public void DefinirPrioridade(Prioridade prioridade) => Prioridade = prioridade;
 
     // RF-24: "duração" do ato — só existe depois de concluído.
     public TimeSpan? Duracao => IniciadoEm is { } inicio && ConcluidoEm is { } fim ? fim - inicio : null;

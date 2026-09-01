@@ -198,6 +198,16 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status409Conflict)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
 
+        app.MapPost("/protocolos/{id:guid}/definir-prioridade", async (
+                Guid id, DefinirPrioridadeRequest request, DefinirPrioridadeDoProtocolo casoDeUso, CancellationToken cancellationToken) =>
+                await casoDeUso.ExecutarAsync(id, request.Prioridade, cancellationToken) ? Results.NoContent() : Results.NotFound())
+            .WithName("DefinirPrioridadeDoProtocolo")
+            .WithSummary("Marca/desmarca um protocolo como urgente — único jeito real de definir prioridade alta hoje (a importação nunca define).")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
         app.MapPost("/protocolos/{id:guid}/reabrir-conferencia", async (Guid id, ReabrirConferencia casoDeUso, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
@@ -314,6 +324,8 @@ public sealed record RedistribuirPoolResponse(int Alterados);
 public sealed record AtribuirManualmenteRequest(Guid ConferenteId);
 
 public sealed record DefinirObservacaoRequest(string? Observacao);
+
+public sealed record DefinirPrioridadeRequest(Prioridade Prioridade);
 
 public sealed record DetalheProtocoloResponse(
     Guid Id,

@@ -1121,3 +1121,58 @@ confiança entrou como asserções novas em testes já existentes (`GeradorDeSug
 `GerarSugestoesTests`), não testes novos: a fórmula é derivada do mesmo cenário que cada teste
 já montava pra cobrir o limiar, então também já dava pra conferir o índice sem nenhum arranjo
 adicional.
+
+## Distribuição/Minha fila v2 (prioridade manual, RF-14/16/18c/18e/24f) — quinta frente do "v2"
+
+Fase escolhida pelo dono entre as opções apresentadas depois do motor de alçada v2. Só o item
+de prioridade manual mexeu em domínio de verdade — o resto (RF-14, RF-16, RF-18c) é leitura já
+suportada pelos DTOs existentes, e RF-18e/RF-24f (barra de filtros) é 100% client-side, sem
+endpoint novo (ver `../dispatch-web/CLAUDE.md`, mesma seção, pra essa parte).
+
+**`Protocolo.Prioridade` não tinha nenhum caminho de produção real que a definisse como
+`Alta`** — só o endpoint avulso `/protocolos/distribuir` aceitava isso no request, nunca
+`ImportarLote` (o fluxo real). Confirmado com o dono: em vez de esperar por uma fonte real
+(relatório do cartório não carrega essa informação), virou ação manual —
+`Protocolo.DefinirPrioridade(prioridade)` (setter público virou `private set` + método) e o
+caso de uso `DefinirPrioridadeDoProtocolo` (`ExecutarAsync(Guid, Prioridade) => Task<bool>`,
+mesmo molde de `DefinirGrupoDoTipoAto`). `POST /protocolos/{id}/definir-prioridade`
+(`RequireRole(Distribuidora)`), corpo `{ prioridade }`, 204/404. `ProtocoloResumo` (duplicado
+em `DistribuicaoEndpoints.cs`/`MinhaFilaEndpoints.cs`, mesmo padrão de sempre) ganhou
+`Prioridade` nos dois.
+
+**Bug real encontrado na verificação com Playwright, não pelos testes automatizados** (a
+lição do "DI composition root" da seção do motor de alçada v2 foi aplicada — `dotnet run`
+depois de registrar `DefinirPrioridadeDoProtocolo`, sem repetir aquele erro; este foi um bug
+diferente, de autorização): `GET /equipes`, `GET /escreventes` e `GET /tipos-ato` eram
+`RequireRole(Distribuidora)` — corretos para as telas de gestão que só a Distribuidora usa
+(Central de Regras), mas a nova barra de filtros de **Minha fila** (RF-24f, papel Conferente)
+também precisa dos três pra cruzar `escreventeId → equipeId → nome` e `tipoAtoId → nome` no
+próprio filtro. Logado como Conferente de teste, as três chamadas voltavam 403 — o front não
+quebrava visualmente (o filtro "funcionava", marcava "1 filtro ativo"), mas como
+`escreventePorId`/`equipePorId` ficavam sempre vazios (a chamada falhou), **todo protocolo
+caía no valor default de "sem equipe"** — filtrar por "sem equipe" não reduzia nada (mostrava
+tudo) e filtrar por uma equipe de verdade zerava a lista inteira. Só apareceu escrevendo uma
+asserção de comportamento real no Playwright (contagem do pool antes/depois do filtro,
+comparadas) — a suíte de TypeScript/build não pega isso, e a suíte de screenshot sozinha
+também não, porque o layout renderiza "certo" (só o resultado do filtro está errado).
+
+**Correção**: `GET /equipes` e `GET /escreventes` (as leituras de listagem geral) e `GET
+/tipos-ato` passaram a aceitar `Distribuidora` OU `Conferente`; as mutações (`POST`/`PUT` de
+equipe, `POST /escreventes/{id}/mover`, `GET /escreventes/sem-equipe`, tudo em
+`TipoAtoEndpoints.cs` além do `GET` raiz) continuam exclusivas de Distribuidora — RF-24f não é
+ação de gestão, mas ainda não dá acesso de escrita a nada de Central de Regras pro Conferente.
+
+**Detalhe de minimal API que não é óbvio**: repetir `.RequireAuthorization(...)` numa rota
+individual **não substitui** a policy já aplicada no `MapGroup(...)` — as duas se combinam com
+E (cada `RequireAuthorization`/`[Authorize]` aplicado a um endpoint é mais um requisito que
+**todos** precisam satisfazer, não uma lista de alternativas que substitui a anterior). Por
+isso `equipesGrupo`/`escreventesGrupo` (`EquipeEndpoints.cs`) deixaram de ter uma policy no
+`MapGroup` em si — cada rota individual declara a sua (`GET /` com os dois papéis, mutações só
+com Distribuidora). `GET /tipos-ato` já não estava dentro de um grupo com policy própria (é
+`app.MapGet` solto, só o `grupo` de `/tipos-ato/{id}/...` tem policy de grupo), então bastou
+alargar o `RequireAuthorization` da própria rota.
+
+Testado ponta a ponta contra o Postgres local: `GET /equipes`/`/escreventes`/`/tipos-ato` como
+Conferente voltando 200 depois da correção (403 antes), `POST /equipes` e `GET
+/escreventes/sem-equipe` continuando 403 pro mesmo token (confirma que a correção não abriu
+mutação nenhuma). 239 testes automatizados no total (60 Domain + 179 Application).

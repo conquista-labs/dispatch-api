@@ -48,6 +48,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ObterDetalheProtocolo>();
         services.AddScoped<DevolverAoPool>();
         services.AddScoped<AtribuirAoMenosCarregado>();
+        services.AddScoped<DefinirPrioridadeDoProtocolo>();
         services.AddScoped<DescartarExcecao>();
         services.AddScoped<DefinirObservacao>();
         services.AddScoped<CriarRegraAlcada>();
