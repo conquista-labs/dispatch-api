@@ -9,6 +9,7 @@ namespace Dispatch.Application;
 public sealed class RedistribuirPool(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
+    IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras,
     ITipoAtoRepository tiposAto,
     IUnitOfWork unitOfWork,
@@ -25,19 +26,28 @@ public sealed class RedistribuirPool(
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var catalogoTipos = await tiposAto.ObterTodosAsync(cancellationToken);
+        var equipePorEscreventeId = (await escreventes.ObterTodosAsync(cancellationToken))
+            .ToDictionary(e => e.Id, e => e.EquipeId);
 
         var alterados = 0;
         foreach (var protocolo in semDono)
         {
             var statusAntes = protocolo.Status;
-            var resultado = MotorDistribuicao.Distribuir(protocolo, conferentesNaEscala, regrasAtivas, catalogoTipos);
+            var equipeDoEscreventeId = equipePorEscreventeId.GetValueOrDefault(protocolo.EscreventeId);
+            var resultado = MotorDistribuicao.Distribuir(protocolo, conferentesNaEscala, regrasAtivas, catalogoTipos, equipeDoEscreventeId);
 
             switch (resultado)
             {
                 case ResultadoDistribuicao.Atribuido atribuido:
                     protocolo.AtribuirA(
                         atribuido.Conferente.Id, relogio.Agora,
-                        atribuido.Avaliacao.DecisaoTipo.RegraAplicada?.Id ?? atribuido.Avaliacao.DecisaoEtapa.RegraAplicada?.Id);
+                        atribuido.Avaliacao.DecisaoTipo.RegraAplicada?.Id
+                            ?? atribuido.Avaliacao.DecisaoEquipe.RegraAplicada?.Id
+                            ?? atribuido.Avaliacao.DecisaoEtapa.RegraAplicada?.Id);
+                    // Seção 11: carga acumulada dentro da própria rodada — este laço processa
+                    // vários protocolos de uma vez, então o desempate por carga (dentro do
+                    // motor) precisa enxergar as atribuições já feitas nesta mesma chamada.
+                    atribuido.Conferente.IncrementarCargaAtual();
                     break;
                 case ResultadoDistribuicao.EnviadoParaPool:
                     protocolo.EnviarParaPool();

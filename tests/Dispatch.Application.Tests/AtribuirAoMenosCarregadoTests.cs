@@ -14,6 +14,7 @@ public class AtribuirAoMenosCarregadoTests
         var casoDeUso = new AtribuirAoMenosCarregado(
             new FakeProtocoloRepository([protocolo]),
             new FakeConferenteRepository([maisCarregado, menosCarregado]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));
@@ -37,6 +38,7 @@ public class AtribuirAoMenosCarregadoTests
         var casoDeUso = new AtribuirAoMenosCarregado(
             new FakeProtocoloRepository([protocolo]),
             new FakeConferenteRepository([conferente]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([regraNega]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));
@@ -55,6 +57,7 @@ public class AtribuirAoMenosCarregadoTests
         var casoDeUso = new AtribuirAoMenosCarregado(
             new FakeProtocoloRepository([protocolo]),
             new FakeConferenteRepository([]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));

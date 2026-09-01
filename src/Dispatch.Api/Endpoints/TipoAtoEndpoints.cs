@@ -67,6 +67,13 @@ public static class TipoAtoEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
+        grupo.MapPut("/{id:guid}/grupo", async (Guid id, DefinirGrupoRequest request, DefinirGrupoDoTipoAto casoDeUso, CancellationToken cancellationToken) =>
+                await casoDeUso.ExecutarAsync(id, request.Grupo, cancellationToken) ? Results.NoContent() : Results.NotFound())
+            .WithName("DefinirGrupoDoTipoAto")
+            .WithSummary("Classificação vista na Matriz da aba Alçada (Transmissões/Sucessões/Família/Garantias/Notariais).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
+
         grupo.MapPost("/{id:guid}/ativar", async (Guid id, AtivarTipoAto casoDeUso, CancellationToken cancellationToken) =>
                 await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound())
             .WithName("AtivarTipoAto")
@@ -99,13 +106,13 @@ public static class TipoAtoEndpoints
             .Produces(StatusCodes.Status409Conflict);
     }
 
-    private static TipoAtoResponse ParaResponse(TipoAto tipoAto) => new(tipoAto.Id, tipoAto.Nome, tipoAto.Ativo);
+    private static TipoAtoResponse ParaResponse(TipoAto tipoAto) => new(tipoAto.Id, tipoAto.Nome, tipoAto.Ativo, tipoAto.Grupo);
 
     private static TipoAtoComUsoResponse ParaComUsoResponse(TipoAtoComUso tipo) =>
-        new(tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade, tipo.Volume, tipo.ConferentesComAlcada);
+        new(tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade, tipo.Grupo, tipo.Volume, tipo.ConferentesComAlcada);
 }
 
-public sealed record TipoAtoResponse(Guid Id, string Nome, bool Ativo);
+public sealed record TipoAtoResponse(Guid Id, string Nome, bool Ativo, GrupoTipoAto? Grupo);
 
 public sealed record CriarTipoAtoRequest(string Nome);
 
@@ -115,4 +122,7 @@ public sealed record RenomearTipoAtoRequest(string Nome);
 
 public sealed record DefinirPesoRequest(int Peso);
 
-public sealed record TipoAtoComUsoResponse(Guid Id, string Nome, bool Ativo, int PesoComplexidade, int Volume, int ConferentesComAlcada);
+public sealed record DefinirGrupoRequest(GrupoTipoAto? Grupo);
+
+public sealed record TipoAtoComUsoResponse(
+    Guid Id, string Nome, bool Ativo, int PesoComplexidade, GrupoTipoAto? Grupo, int Volume, int ConferentesComAlcada);

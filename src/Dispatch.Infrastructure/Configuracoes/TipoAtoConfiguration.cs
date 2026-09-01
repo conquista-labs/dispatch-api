@@ -11,5 +11,6 @@ public sealed class TipoAtoConfiguration : IEntityTypeConfiguration<TipoAto>
         builder.ToTable("tipos_ato");
         builder.HasKey(t => t.Id);
         builder.Property(t => t.Nome).IsRequired().HasMaxLength(200);
+        builder.Property(t => t.Grupo).HasConversion<string>().HasMaxLength(20);
     }
 }

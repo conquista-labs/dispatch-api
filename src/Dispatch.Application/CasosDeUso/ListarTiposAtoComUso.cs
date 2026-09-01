@@ -27,7 +27,7 @@ public sealed class ListarTiposAtoComUso(
             {
                 var comAlcada = alcancePorConferente.Count(a => naEscalaIds.Contains(a.ConferenteId) && a.TiposPermitidosIds.Contains(tipo.Id));
                 return new TipoAtoComUso(
-                    tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade,
+                    tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade, tipo.Grupo,
                     volumePorTipoId.GetValueOrDefault(tipo.Id), comAlcada);
             })
             .OrderBy(t => t.Nome)
@@ -35,4 +35,5 @@ public sealed class ListarTiposAtoComUso(
     }
 }
 
-public sealed record TipoAtoComUso(Guid Id, string Nome, bool Ativo, int PesoComplexidade, int Volume, int ConferentesComAlcada);
+public sealed record TipoAtoComUso(
+    Guid Id, string Nome, bool Ativo, int PesoComplexidade, Dispatch.Domain.GrupoTipoAto? Grupo, int Volume, int ConferentesComAlcada);

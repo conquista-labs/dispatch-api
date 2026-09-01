@@ -14,7 +14,8 @@ public class ObterCoberturaDeAlcadaTests
         IReadOnlyCollection<TipoAto> tiposAto)
     {
         var obterAlcance = new ObterAlcancePorConferente(
-            new FakeConferenteRepository(conferentes), new FakeRegraAlcadaRepository(regras), new FakeTipoAtoRepository(tiposAto));
+            new FakeConferenteRepository(conferentes), new FakeRegraAlcadaRepository(regras), new FakeTipoAtoRepository(tiposAto),
+            new FakeEquipeRepository([]));
         return new ObterCoberturaDeAlcada(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository(conferentes), obterAlcance, new FakeTipoAtoRepository(tiposAto));
     }

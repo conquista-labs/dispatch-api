@@ -40,4 +40,8 @@ public interface IProtocoloRepository
     // diferente de ObterConcluidosPorConferenteAsync, que já existia pra RF-24.
     Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
         DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken);
+
+    // RF-33: "contador de aplicações" de uma regra de alçada — leitura agregada, igual
+    // CargaAtual/Semaforo, nunca persistida na própria regra.
+    Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken);
 }

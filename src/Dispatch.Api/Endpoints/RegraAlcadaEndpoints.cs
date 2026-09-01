@@ -12,13 +12,19 @@ public static class RegraAlcadaEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.CentralDeRegras);
 
-        grupo.MapGet("/", async (ListarRegrasAlcada casoDeUso, CancellationToken cancellationToken) =>
+        grupo.MapGet("/", async (ListarRegrasAlcada casoDeUso, IProtocoloRepository protocolos, CancellationToken cancellationToken) =>
             {
                 var todas = await casoDeUso.ExecutarAsync(cancellationToken);
-                return Results.Ok(todas.Select(ParaResponse).ToList());
+                var respostas = new List<RegraAlcadaResponse>();
+                foreach (var regra in todas)
+                {
+                    var usos = await protocolos.ContarComRegraAplicadaAsync(regra.Id, cancellationToken);
+                    respostas.Add(ParaResponse(regra, usos));
+                }
+                return Results.Ok(respostas);
             })
             .WithName("ListarRegrasAlcada")
-            .WithSummary("Lista todas as regras de alçada, ativas e inativas.")
+            .WithSummary("Lista todas as regras de alçada, ativas e inativas, com o contador de aplicações (RF-33).")
             .Produces<IReadOnlyList<RegraAlcadaResponse>>();
 
         grupo.MapPost("/", async (CriarRegraAlcadaRequest request, CriarRegraAlcada casoDeUso, CancellationToken cancellationToken) =>
@@ -37,19 +43,24 @@ public static class RegraAlcadaEndpoints
                     return Results.BadRequest(new { motivo = "informe exatamente um entre sujeitoNivel e sujeitoConferenteId" });
                 }
 
-                AlvoAlcada alvo;
-                if (request.AlvoEtapa is { } etapa && request.AlvoTipoAtoId is null)
+                // "Equipe" aceita Guid? nulo como valor válido (RF-29a: "sem equipe" é alvo
+                // legítimo) — por isso o XOR usa um flag próprio (AlvoEhEquipe) em vez de só
+                // checar AlvoEquipeId != null, senão não daria pra diferenciar "regra de
+                // equipe = sem equipe" de "não é regra de equipe".
+                var camposDeAlvoInformados = new[] { request.AlvoEtapa is not null, request.AlvoTipoAtoId is not null, request.AlvoEhEquipe, request.AlvoTodosOsAtos }
+                    .Count(informado => informado);
+                if (camposDeAlvoInformados != 1)
                 {
-                    alvo = new AlvoAlcada.PorEtapa(etapa);
+                    return Results.BadRequest(new { motivo = "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe e alvoTodosOsAtos" });
                 }
-                else if (request.AlvoTipoAtoId is { } tipoAtoId && request.AlvoEtapa is null)
+
+                AlvoAlcada alvo = request switch
                 {
-                    alvo = new AlvoAlcada.PorTipoAto(tipoAtoId);
-                }
-                else
-                {
-                    return Results.BadRequest(new { motivo = "informe exatamente um entre alvoEtapa e alvoTipoAtoId" });
-                }
+                    { AlvoEtapa: { } etapa } => new AlvoAlcada.PorEtapa(etapa),
+                    { AlvoTipoAtoId: { } tipoAtoId } => new AlvoAlcada.PorTipoAto(tipoAtoId),
+                    { AlvoEhEquipe: true } => new AlvoAlcada.PorEquipeDeEscrevente(request.AlvoEquipeId),
+                    _ => new AlvoAlcada.PorTodosOsAtos()
+                };
 
                 var resultado = await casoDeUso.ExecutarAsync(sujeito, request.Permissao, alvo, cancellationToken);
                 return resultado switch
@@ -60,6 +71,8 @@ public static class RegraAlcadaEndpoints
                         Results.NotFound(new { motivo = "conferente não encontrado" }),
                     ResultadoCriarRegraAlcada.TipoAtoNaoEncontrado =>
                         Results.NotFound(new { motivo = "tipo de ato não encontrado" }),
+                    ResultadoCriarRegraAlcada.EquipeNaoEncontrada =>
+                        Results.NotFound(new { motivo = "equipe não encontrada" }),
                     _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
                 };
             })
@@ -99,15 +112,19 @@ public static class RegraAlcadaEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
-    private static RegraAlcadaResponse ParaResponse(RegraAlcada regra) => new(
+    private static RegraAlcadaResponse ParaResponse(RegraAlcada regra, int usos) => new(
         regra.Id,
         (regra.Sujeito as SujeitoAlcada.PorNivel)?.Nivel,
         (regra.Sujeito as SujeitoAlcada.PorPessoa)?.ConferenteId,
         regra.Permissao,
         (regra.Alvo as AlvoAlcada.PorEtapa)?.Etapa,
         (regra.Alvo as AlvoAlcada.PorTipoAto)?.TipoAtoId,
+        regra.Alvo is AlvoAlcada.PorEquipeDeEscrevente,
+        (regra.Alvo as AlvoAlcada.PorEquipeDeEscrevente)?.EquipeId,
+        regra.Alvo is AlvoAlcada.PorTodosOsAtos,
         regra.Origem,
-        regra.Ativa);
+        regra.Ativa,
+        usos);
 }
 
 public sealed record CriarRegraAlcadaRequest(
@@ -115,7 +132,10 @@ public sealed record CriarRegraAlcadaRequest(
     Guid? SujeitoConferenteId,
     PermissaoRegra Permissao,
     Etapa? AlvoEtapa,
-    Guid? AlvoTipoAtoId);
+    Guid? AlvoTipoAtoId,
+    bool AlvoEhEquipe,
+    Guid? AlvoEquipeId,
+    bool AlvoTodosOsAtos);
 
 public sealed record CriarRegraAlcadaResponse(Guid RegraId);
 
@@ -126,5 +146,9 @@ public sealed record RegraAlcadaResponse(
     PermissaoRegra Permissao,
     Etapa? AlvoEtapa,
     Guid? AlvoTipoAtoId,
+    bool AlvoEhEquipe,
+    Guid? AlvoEquipeId,
+    bool AlvoTodosOsAtos,
     OrigemRegra Origem,
-    bool Ativa);
+    bool Ativa,
+    int Usos);

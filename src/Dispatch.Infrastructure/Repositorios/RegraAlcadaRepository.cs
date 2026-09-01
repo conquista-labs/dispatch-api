@@ -63,22 +63,52 @@ public sealed class RegraAlcadaRepository(DispatchDbContext dbContext) : IRegraA
             ? new SujeitoAlcada.PorPessoa(conferenteId)
             : new SujeitoAlcada.PorNivel(registro.SujeitoNivel!.Value);
 
-        AlvoAlcada alvo = registro.AlvoTipoAtoId is { } tipoAtoId
-            ? new AlvoAlcada.PorTipoAto(tipoAtoId)
-            : new AlvoAlcada.PorEtapa(registro.AlvoEtapa!.Value);
+        AlvoAlcada alvo = registro.AlvoTipo switch
+        {
+            AlvoTipoRegistro.Etapa => new AlvoAlcada.PorEtapa(registro.AlvoEtapa!.Value),
+            AlvoTipoRegistro.TipoAto => new AlvoAlcada.PorTipoAto(registro.AlvoTipoAtoId!.Value),
+            AlvoTipoRegistro.Equipe => new AlvoAlcada.PorEquipeDeEscrevente(registro.AlvoEquipeId),
+            AlvoTipoRegistro.TodosOsAtos => new AlvoAlcada.PorTodosOsAtos(),
+            _ => throw new InvalidOperationException($"Alvo não mapeado: {registro.AlvoTipo}")
+        };
 
         return new RegraAlcada(registro.Id, sujeito, registro.Permissao, alvo, registro.Origem, registro.Ativa);
     }
 
-    private static RegraAlcadaRegistro ParaRegistro(RegraAlcada regra) => new()
+    private static RegraAlcadaRegistro ParaRegistro(RegraAlcada regra)
     {
-        Id = regra.Id,
-        SujeitoConferenteId = (regra.Sujeito as SujeitoAlcada.PorPessoa)?.ConferenteId,
-        SujeitoNivel = (regra.Sujeito as SujeitoAlcada.PorNivel)?.Nivel,
-        AlvoEtapa = (regra.Alvo as AlvoAlcada.PorEtapa)?.Etapa,
-        AlvoTipoAtoId = (regra.Alvo as AlvoAlcada.PorTipoAto)?.TipoAtoId,
-        Permissao = regra.Permissao,
-        Origem = regra.Origem,
-        Ativa = regra.Ativa
-    };
+        var registro = new RegraAlcadaRegistro
+        {
+            Id = regra.Id,
+            SujeitoConferenteId = (regra.Sujeito as SujeitoAlcada.PorPessoa)?.ConferenteId,
+            SujeitoNivel = (regra.Sujeito as SujeitoAlcada.PorNivel)?.Nivel,
+            Permissao = regra.Permissao,
+            Origem = regra.Origem,
+            Ativa = regra.Ativa
+        };
+
+        switch (regra.Alvo)
+        {
+            case AlvoAlcada.PorEtapa porEtapa:
+                registro.AlvoTipo = AlvoTipoRegistro.Etapa;
+                registro.AlvoEtapa = porEtapa.Etapa;
+                break;
+
+            case AlvoAlcada.PorTipoAto porTipo:
+                registro.AlvoTipo = AlvoTipoRegistro.TipoAto;
+                registro.AlvoTipoAtoId = porTipo.TipoAtoId;
+                break;
+
+            case AlvoAlcada.PorEquipeDeEscrevente porEquipe:
+                registro.AlvoTipo = AlvoTipoRegistro.Equipe;
+                registro.AlvoEquipeId = porEquipe.EquipeId;
+                break;
+
+            case AlvoAlcada.PorTodosOsAtos:
+                registro.AlvoTipo = AlvoTipoRegistro.TodosOsAtos;
+                break;
+        }
+
+        return registro;
+    }
 }

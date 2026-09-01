@@ -8,7 +8,8 @@ namespace Dispatch.Application;
 public sealed class ObterAlcancePorConferente(
     IConferenteRepository conferentes,
     IRegraAlcadaRepository regras,
-    ITipoAtoRepository tiposAto)
+    ITipoAtoRepository tiposAto,
+    IEquipeRepository equipes)
 {
     private static readonly Etapa[] TodasAsEtapas = [Etapa.PreConferencia, Etapa.PosConferencia];
 
@@ -17,6 +18,10 @@ public sealed class ObterAlcancePorConferente(
         var todosConferentes = await conferentes.ObterTodosAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var catalogoTipos = await tiposAto.ObterTodosAsync(cancellationToken);
+        var todasAsEquipes = await equipes.ObterTodasAsync(cancellationToken);
+        // "sem equipe" (null) é um alvo válido de regra (RF-29a) — entra na lista igual a
+        // qualquer outra equipe, representado aqui por um Guid? nulo.
+        var todasAsEquipesIds = todasAsEquipes.Select(e => (Guid?)e.Id).Append(null).ToList();
 
         return todosConferentes.Select(conferente =>
         {
@@ -29,7 +34,11 @@ public sealed class ObterAlcancePorConferente(
                 .Select(tipo => tipo.Id)
                 .ToList();
 
-            return new AlcanceDoConferente(conferente.Id, etapasPermitidas, tiposPermitidos);
+            var equipesPermitidas = todasAsEquipesIds
+                .Where(equipeId => EhPermitido(conferente, new AlvoAlcada.PorEquipeDeEscrevente(equipeId), regrasAtivas))
+                .ToList();
+
+            return new AlcanceDoConferente(conferente.Id, etapasPermitidas, tiposPermitidos, equipesPermitidas);
         }).ToList();
     }
 
@@ -37,4 +46,6 @@ public sealed class ObterAlcancePorConferente(
         ResolvedorAlcada.Resolver(conferente, alvo, regras).Resultado == ResultadoAlcada.Permitido;
 }
 
-public sealed record AlcanceDoConferente(Guid ConferenteId, IReadOnlyList<Etapa> EtapasPermitidas, IReadOnlyList<Guid> TiposPermitidosIds);
+public sealed record AlcanceDoConferente(
+    Guid ConferenteId, IReadOnlyList<Etapa> EtapasPermitidas, IReadOnlyList<Guid> TiposPermitidosIds,
+    IReadOnlyList<Guid?> EquipesPermitidasIds);

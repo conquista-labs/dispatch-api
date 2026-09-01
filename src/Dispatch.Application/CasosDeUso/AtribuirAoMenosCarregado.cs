@@ -9,6 +9,7 @@ namespace Dispatch.Application;
 public sealed class AtribuirAoMenosCarregado(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
+    IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras,
     IUnitOfWork unitOfWork,
     IRelogio relogio)
@@ -26,9 +27,10 @@ public sealed class AtribuirAoMenosCarregado(
             return ResultadoAtribuirAoMenosCarregado.ProtocoloNaoElegivel;
         }
 
+        var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var elegiveis = (await conferentes.ObterNaEscalaAsync(cancellationToken))
-            .Where(c => VerificadorDeAlcada.TemAlcada(c, protocolo, regrasAtivas))
+            .Where(c => VerificadorDeAlcada.TemAlcada(c, protocolo, equipeDoEscreventeId, regrasAtivas))
             .ToList();
 
         if (elegiveis.Count == 0)

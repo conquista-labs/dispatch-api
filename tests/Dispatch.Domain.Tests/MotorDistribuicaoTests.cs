@@ -86,4 +86,41 @@ public class MotorDistribuicaoTests
         var atribuido = Assert.IsType<ResultadoDistribuicao.Atribuido>(resultado);
         Assert.Equal(menosCarregado.Id, atribuido.Conferente.Id);
     }
+
+    [Fact]
+    public void RegraDeEquipeBloqueiaCandidatoQuePassariaEmTipoEEtapa()
+    {
+        // RF-29a: mesmo com tipo e etapa liberados, uma regra de equipe fora da lista fechada
+        // barra o candidato — a alçada precisa das três dimensões permitidas ao mesmo tempo.
+        var conferenteId = Guid.NewGuid();
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var equipePermitida = Guid.NewGuid();
+        var equipeDoEscrevente = Guid.NewGuid();
+        var regraDeEquipe = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Permite,
+            new AlvoAlcada.PorEquipeDeEscrevente(equipePermitida));
+
+        var resultado = MotorDistribuicao.Distribuir(protocolo, [conferente], [regraDeEquipe], [Inventario], equipeDoEscrevente);
+
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal("ninguém com alçada", excecao.Motivo);
+    }
+
+    [Fact]
+    public void RegraDeEquipeLiberaCandidatoQuandoEquipeBate()
+    {
+        var conferenteId = Guid.NewGuid();
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var equipeDoEscrevente = Guid.NewGuid();
+        var regraDeEquipe = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Permite,
+            new AlvoAlcada.PorEquipeDeEscrevente(equipeDoEscrevente));
+
+        var resultado = MotorDistribuicao.Distribuir(protocolo, [conferente], [regraDeEquipe], [Inventario], equipeDoEscrevente);
+
+        var pool = Assert.IsType<ResultadoDistribuicao.EnviadoParaPool>(resultado);
+        Assert.Single(pool.Elegiveis);
+    }
 }

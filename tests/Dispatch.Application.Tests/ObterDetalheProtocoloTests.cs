@@ -8,7 +8,7 @@ public class ObterDetalheProtocoloTests
     public async Task ProtocoloInexistente_RetornaNulo()
     {
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid());
 
@@ -22,7 +22,7 @@ public class ObterDetalheProtocoloTests
         var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoId, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);
 
@@ -37,7 +37,7 @@ public class ObterDetalheProtocoloTests
         var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoAtoId: null, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);
 

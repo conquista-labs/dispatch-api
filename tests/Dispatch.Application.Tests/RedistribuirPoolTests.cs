@@ -22,6 +22,7 @@ public class RedistribuirPoolTests
         var casoDeUso = new RedistribuirPool(
             protocolos,
             new FakeConferenteRepository([conferente]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
@@ -40,6 +41,7 @@ public class RedistribuirPoolTests
         var casoDeUso = new RedistribuirPool(
             protocolos,
             new FakeConferenteRepository([]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
@@ -59,6 +61,7 @@ public class RedistribuirPoolTests
         var casoDeUso = new RedistribuirPool(
             protocolos,
             new FakeConferenteRepository([]),
+            new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
             new FakeTipoAtoRepository([Inventario]),
             new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));

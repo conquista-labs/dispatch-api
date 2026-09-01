@@ -10,6 +10,7 @@ public sealed class CriarRegraAlcada(
     IRegraAlcadaRepository regras,
     IConferenteRepository conferentes,
     ITipoAtoRepository tiposAto,
+    IEquipeRepository equipes,
     IUnitOfWork unitOfWork)
 {
     public async Task<ResultadoCriarRegraAlcada> ExecutarAsync(
@@ -33,6 +34,17 @@ public sealed class CriarRegraAlcada(
             }
         }
 
+        // Guid? nulo em PorEquipeDeEscrevente é "sem equipe" — alvo válido, não precisa
+        // validar referência nenhuma (RF-29a).
+        if (alvo is AlvoAlcada.PorEquipeDeEscrevente { EquipeId: { } equipeId })
+        {
+            var equipe = await equipes.ObterPorIdAsync(equipeId, cancellationToken);
+            if (equipe is null)
+            {
+                return new ResultadoCriarRegraAlcada.EquipeNaoEncontrada();
+            }
+        }
+
         var regra = new RegraAlcada(Guid.NewGuid(), sujeito, permissao, alvo);
         regras.Adicionar(regra);
         await unitOfWork.SalvarAsync(cancellationToken);
@@ -50,4 +62,6 @@ public abstract record ResultadoCriarRegraAlcada
     public sealed record ConferenteNaoEncontrado : ResultadoCriarRegraAlcada;
 
     public sealed record TipoAtoNaoEncontrado : ResultadoCriarRegraAlcada;
+
+    public sealed record EquipeNaoEncontrada : ResultadoCriarRegraAlcada;
 }

@@ -9,6 +9,7 @@ namespace Dispatch.Application;
 public sealed class ObterDetalheProtocolo(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
+    IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras)
 {
     public async Task<ResultadoDetalheProtocolo?> ExecutarAsync(Guid protocoloId, CancellationToken cancellationToken = default)
@@ -21,6 +22,7 @@ public sealed class ObterDetalheProtocolo(
 
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
+        var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
 
         var avaliacoes = conferentesNaEscala.Select(c => new AvaliacaoCandidato(
                 c,
@@ -29,7 +31,8 @@ public sealed class ObterDetalheProtocolo(
                 // resolver regra nenhuma contra.
                 protocolo.TipoAtoId is { } tipoAtoId
                     ? ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(tipoAtoId), regrasAtivas)
-                    : new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null)))
+                    : new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null),
+                ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEquipeDeEscrevente(equipeDoEscreventeId), regrasAtivas)))
             .ToList();
 
         return new ResultadoDetalheProtocolo(protocolo, avaliacoes);

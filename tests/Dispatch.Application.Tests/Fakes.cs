@@ -182,6 +182,9 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
             _protocolos.Where(p => p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
                 && p.ConcluidoEm >= desde && p.ConcluidoEm < ate).ToList());
 
+    public Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
+        Task.FromResult(_protocolos.Count(p => p.RegraAplicadaId == regraAlcadaId));
+
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;
 }

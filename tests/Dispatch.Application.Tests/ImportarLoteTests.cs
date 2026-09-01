@@ -79,6 +79,35 @@ public class ImportarLoteTests
         Assert.Equal(1, tiposAto.Quantidade);
     }
 
+    // Seção 11 do documento de requisitos: "ao distribuir um lote o motor considera a carga
+    // acumulada dentro da própria rodada, e não apenas a carga já gravada". Dois protocolos
+    // urgentes (prazo de 1h) do mesmo tipo/etapa, dois conferentes empatados em carga — sem
+    // o incremento em memória, os dois iriam pro mesmo conferente (sempre o de menor carga
+    // gravada); com o incremento, o segundo protocolo já enxerga a carga do primeiro.
+    [Fact]
+    public async Task DoisProtocolosUrgentesNoMesmoLote_NaoRepetemOMesmoConferente()
+    {
+        var equipeId = Guid.NewGuid();
+        var equipe = new Equipe(equipeId, "5º andar", new Prazo(TipoPrazo.UmaHora), new Prazo(TipoPrazo.UmaHora));
+        var escreventeA = new Escrevente(Guid.NewGuid(), "Escrevente A", equipeId);
+        var escreventeB = new Escrevente(Guid.NewGuid(), "Escrevente B", equipeId);
+        var conferenteX = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var conferenteY = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var linhas = new[]
+        {
+            new LinhaImportacao("262203", "Inventário", "Escrevente A", LinhaDeCorte.AddHours(1)),
+            new LinhaImportacao("262204", "Inventário", "Escrevente B", LinhaDeCorte.AddHours(1))
+        };
+        var casoDeUso = NovoCasoDeUso(
+            out _, out var protocolos, out _,
+            [conferenteX, conferenteY], [escreventeA, escreventeB], [equipe]);
+
+        await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        var donos = protocolos.Todos.Select(p => p.DonoId).ToList();
+        Assert.Equal(2, donos.Distinct().Count());
+    }
+
     // Sem regra de alçada nenhuma, "ausência de regra = permitido" (RF-31) — um tipo novo com
     // pelo menos um conferente na escala já flui pro pool na hora, sem exceção nenhuma. É
     // exatamente o cenário de um cartório novo, sem nenhuma alçada configurada ainda.

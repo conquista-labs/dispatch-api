@@ -15,7 +15,7 @@ public class ObterMinhaFilaTests
             Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PreConferencia));
 
         var casoDeUso = new ObterMinhaFila(
-            new FakeProtocoloRepository([permitido, negado]), new FakeRegraAlcadaRepository([regra]));
+            new FakeProtocoloRepository([permitido, negado]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([regra]));
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -40,7 +40,7 @@ public class ObterMinhaFilaTests
         deOutroConferente.AtribuirA(outroConferenteId, DateTimeOffset.UtcNow);
 
         var casoDeUso = new ObterMinhaFila(
-            new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 

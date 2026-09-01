@@ -995,6 +995,97 @@ sem uso (204) e confirmar que removê-lo de novo dá 404; tentar remover um tipo
 associado devolve 409 com o motivo certo. 191 testes automatizados no total (50 Domain + 141
 Application).
 
+## Motor de alçada v2 — lista fechada por dimensão, equipe, alçada plena, grupo de tipo
+
+O dono atualizou o documento de requisitos e o protótipo com uma revisão grande do motor de
+alçada, motivada por um bug real relatado em produção: regras "Permite" criadas pela
+distribuidora não tinham efeito nenhum — o comportamento até aqui era mesmo "padrão aberto" de
+verdade (ausência de regra = permitido, Permite só importava quando sobrepunha uma Nega que
+existiria de outra forma). Isso batia com o texto *antigo* da seção 4, mas não com o que a
+distribuidora esperava nem com o que o protótipo atualizado faz de verdade — confirmado ao vivo
+navegando a nova ferramenta "Testar" da aba Alçada (simulador real de "quem pode conferir X"),
+não por interpretação de markup ou do texto sozinho.
+
+**Semântica nova, confirmada com o dono**: se um nível/pessoa tem qualquer regra Permite numa
+dimensão (tipo de ato ou equipe do escrevente), isso vira **lista fechada** — tudo que não
+estiver na lista é bloqueado automaticamente, mesmo sem negação explícita. Dois testes ao vivo
+decisivos: nível Júnior com "pode conferir Venda e Compra, Doação, Procuração..." (5 Permite)
+ficou bloqueado de um tipo fora da lista, motivo "Base por nível · X fora da alçada", sem
+nenhuma regra de negação existir pra esse tipo; pessoa com "pode conferir atos de Balcão" (1
+Permite de equipe) ficou bloqueada de "sem equipe" pelo mesmo motivo.
+
+**Algoritmo** (`ResolvedorAlcada.cs`), organizado por **família de alvo** (Etapa/Tipo/Equipe —
+`PorTodosOsAtos` conta como família Tipo): dentro do escopo que "toca" a família (pessoa
+primeiro, se ela tiver qualquer regra ativa naquela família — senão nível), resolve nesta
+ordem: (1) Nega específica do alvo consultado sempre vence; (2) Permite específica; (3) alçada
+plena (só família Tipo) — permite qualquer tipo, mas cede à Nega específica do passo 1 (por
+isso a checagem roda dentro do MESMO escopo, antes de cair pro nível — senão uma Nega de nível
+bloquearia até quem tem alçada plena pessoal, contrariando RF-29b: "continua sujeita às
+restrições explícitas de negação"); (4) lista fechada — se o escopo definiu qualquer Permite
+naquela família sem cobrir o alvo consultado, bloqueia por omissão ("fora da alçada"); (5)
+ausência de regra do escopo na família (ou só Negas de outros alvos) = permitido, padrão aberto.
+As 5 regras de `ResolvedorAlcadaTests.cs` já existentes continuam passando sem alteração —
+nenhuma delas tinha "Permite pra outro alvo da mesma família", cenário que só o passo 4 cobre.
+
+**`AlvoAlcada`** ganhou duas variantes: `PorEquipeDeEscrevente(Guid? EquipeId)` (nulo é "sem
+equipe" como alvo válido — RF-29a, o simulador do protótipo trata assim, não como "sem
+restrição") e `PorTodosOsAtos` (sem payload — alçada plena, RF-29b). `AvaliacaoCandidato` ganha
+`DecisaoEquipe`; `MotorDistribuicao.Distribuir` ganha `Guid? equipeDoEscreventeId = null`
+(default compatível com todo call site/teste antigo).
+
+**Persistência**: `RegraAlcadaRegistro` precisou de um discriminador explícito pro alvo
+(`AlvoTipoRegistro { Etapa, TipoAto, Equipe, TodosOsAtos }`, mesmo padrão de
+`TipoSugestaoRegistro`) — o padrão antigo de par nulo/preenchido não escala pra uma variante sem
+payload (`PorTodosOsAtos`) nem pra uma variante com payload legitimamente nulo
+(`PorEquipeDeEscrevente(null)`). Migration
+`AdicionaEquipeETodosOsAtosEmRegrasAlcadaEGrupoEmTiposAto` precisou de **backfill manual** do
+`alvo_tipo` pras linhas já existentes (`UPDATE ... WHERE alvo_etapa IS NOT NULL` /
+`WHERE alvo_tipo_ato_id IS NOT NULL`) antes de recriar o `CHECK` — sem isso a migration quebraria
+em qualquer banco com regra já cadastrada (aconteceria em produção). Confirmado aplicando contra
+uma cópia real dos dados de produção clonada pro Postgres local (`pg_dump`/`psql` via um
+container `postgres:18` avulso, já que o cliente local é 17.x e o Neon roda 18.x — mismatch de
+major version trava o `pg_dump` direto).
+
+**`TipoAto`** ganha `Grupo` (`GrupoTipoAto?`: Transmissões/Sucessões/Família/Garantias/
+Notariais — os 5 valores vistos ao vivo na Matriz da aba Alçada do protótipo). Sem tela de
+gestão de grupo no protótipo (só leitura agrupada) — `DefinirGrupoDoTipoAto` +
+`PUT /tipos-ato/{id}/grupo` é inventado, mesmo molde de `DefinirPesoDeComplexidadeDoTipoAto`.
+
+**RF-33 (contador de "usos")**: não é campo novo no banco — `RegraAlcadaResponse.Usos` conta
+`Protocolo.RegraAplicadaId == regra.Id` via `IProtocoloRepository.ContarComRegraAplicadaAsync`,
+mesmo padrão de leitura agregada de `CargaAtual`/`Semaforo`.
+
+**Carga acumulada dentro da própria rodada** (premissa da seção 11, confirmada como requisito
+formal nesta revisão): `ImportarLote`/`RedistribuirPool` processam vários protocolos numa
+chamada só, mas o desempate por carga do motor (`OrderBy(CargaAtual)`) só enxergava o valor já
+gravado no banco — dois protocolos urgentes concorrendo pelo mesmo candidato no mesmo lote
+sempre caíam na mesma pessoa. `Conferente.CargaAtual` ganhou `private set` +
+`IncrementarCargaAtual()` (só em memória, nunca persistido — mesmo princípio já usado pro
+próprio `CargaAtual`), chamado por `AplicadorDeDistribuicao.Executar` (cobre `ImportarLote` e
+`DistribuirProtocolo`, que compartilham esse método) e por `RedistribuirPool.ExecutarAsync`
+(não passa por `AplicadorDeDistribuicao`, chama o motor direto).
+
+**Bug de composition root achado testando de verdade, não pelos testes automatizados**:
+esqueci de registrar `DefinirGrupoDoTipoAto` em `ServiceCollectionExtensions.cs` — a API subia
+sem erro nenhum durante `dotnet build`/`dotnet test`, mas explodia no `dotnet run` com
+`InvalidOperationException: Failure to infer one or more parameters` (minimal API não consegue
+decidir se um parâmetro de handler é rota/corpo/serviço quando o tipo do serviço não está no
+container de DI, e reporta isso só na hora de montar o endpoint, não em tempo de compilação).
+Lição: **sempre subir a API de verdade (`dotnet run`) depois de adicionar um caso de uso novo**,
+não confiar só em build/test verde — nenhum teste unitário instancia o composition root inteiro.
+
+**Escopo desta rodada**: só back-end + extensão mínima do construtor de regra do front
+(`AbaAlcada.tsx`) pra dar pra criar regra de equipe/alçada plena pela UI que já existe. A
+reformulação visual grande da aba Alçada do protótipo v2 (3 sub-abas novas — Camadas/Matriz/
+Testar) fica de fora, é projeto à parte.
+
+Testado ponta a ponta contra uma cópia real dos dados de produção (clonados pro Postgres
+local): `GET /conferentes/alcance` confirmando a lista fechada por nível (Júnior restrito a 1
+tipo, Sênior aos 3 que tem regra) e a dimensão equipe (todo mundo aberto, já que nenhuma regra
+de equipe existia nos dados reais ainda); `POST /regras-alcada` criando regra de equipe, de
+equipe=sem-equipe e de alçada plena, todas persistindo e voltando corretas no `GET`. 236 testes
+automatizados no total (60 Domain + 176 Application).
+
 ## Índice de confiança real da sugestão (RF-39-41) — fecha a simplificação consciente do módulo de Aprendizado
 
 Nem o documento de requisitos (seção 7) nem o protótipo aprovado definem uma fórmula de

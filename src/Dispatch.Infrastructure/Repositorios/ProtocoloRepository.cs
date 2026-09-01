@@ -61,4 +61,7 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
             .Where(p => (p.Status == StatusProtocolo.Aprovado || p.Status == StatusProtocolo.Reprovado)
                 && p.ConcluidoEm >= desde && p.ConcluidoEm < ate)
             .ToListAsync(cancellationToken);
+
+    public async Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos.CountAsync(p => p.RegraAplicadaId == regraAlcadaId, cancellationToken);
 }

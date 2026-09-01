@@ -10,7 +10,8 @@ public class ObterAlcancePorConferenteTests
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
         var casoDeUso = new ObterAlcancePorConferente(
-            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]));
+            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]),
+            new FakeEquipeRepository([]));
 
         var alcance = await casoDeUso.ExecutarAsync();
 
@@ -26,7 +27,8 @@ public class ObterAlcancePorConferenteTests
         var regra = new RegraAlcada(
             Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PreConferencia));
         var casoDeUso = new ObterAlcancePorConferente(
-            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([regra]), new FakeTipoAtoRepository([]));
+            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([regra]), new FakeTipoAtoRepository([]),
+            new FakeEquipeRepository([]));
 
         var alcance = await casoDeUso.ExecutarAsync();
 

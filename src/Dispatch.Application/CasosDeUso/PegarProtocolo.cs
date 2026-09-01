@@ -7,6 +7,7 @@ namespace Dispatch.Application;
 // a ação em vez de só esconder o item da lista.
 public sealed class PegarProtocolo(
     IProtocoloRepository protocolos,
+    IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras,
     IUnitOfWork unitOfWork,
     IRelogio relogio)
@@ -25,8 +26,9 @@ public sealed class PegarProtocolo(
             return ResultadoPegarProtocolo.NaoEstaNoPool;
         }
 
+        var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
-        if (!VerificadorDeAlcada.TemAlcada(conferente, protocolo, regrasAtivas))
+        if (!VerificadorDeAlcada.TemAlcada(conferente, protocolo, equipeDoEscreventeId, regrasAtivas))
         {
             return ResultadoPegarProtocolo.SemAlcada;
         }

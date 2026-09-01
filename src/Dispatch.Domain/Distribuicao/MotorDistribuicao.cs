@@ -7,7 +7,8 @@ public static class MotorDistribuicao
         Protocolo protocolo,
         IReadOnlyCollection<Conferente> conferentes,
         IReadOnlyCollection<RegraAlcada> regras,
-        IReadOnlyCollection<TipoAto> catalogoTipos)
+        IReadOnlyCollection<TipoAto> catalogoTipos,
+        Guid? equipeDoEscreventeId = null)
     {
         var tipo = catalogoTipos.FirstOrDefault(t => t.Id == protocolo.TipoAtoId);
         if (tipo is null)
@@ -30,7 +31,8 @@ public static class MotorDistribuicao
                 c,
                 DecisaoEtapa: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEtapa(protocolo.Etapa), regras),
                 // .Value é seguro aqui: se TipoAtoId fosse nulo, já teríamos retornado acima.
-                DecisaoTipo: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(protocolo.TipoAtoId!.Value), regras)))
+                DecisaoTipo: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(protocolo.TipoAtoId!.Value), regras),
+                DecisaoEquipe: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEquipeDeEscrevente(equipeDoEscreventeId), regras)))
             .ToList();
 
         var elegiveis = avaliacoes.Where(a => a.Elegivel).ToList();

@@ -20,12 +20,14 @@ internal static class AplicadorDeDistribuicao
         resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, protocolo.Etapa, equipes);
         protocolo.DefinirPrazo(resolucaoPrazo.Prazo, protocolo.AndamentoEm);
 
-        var resultado = MotorDistribuicao.Distribuir(protocolo, conferentesNaEscala, regras, catalogoTipos);
+        var resultado = MotorDistribuicao.Distribuir(protocolo, conferentesNaEscala, regras, catalogoTipos, escrevente.EquipeId);
 
         switch (resultado)
         {
             case ResultadoDistribuicao.Atribuido atribuido:
                 protocolo.AtribuirA(atribuido.Conferente.Id, agora, RegraAplicadaDe(atribuido.Avaliacao));
+                // Seção 11: carga acumulada dentro da própria rodada — ver Conferente.IncrementarCargaAtual.
+                atribuido.Conferente.IncrementarCargaAtual();
                 break;
             case ResultadoDistribuicao.EnviadoParaPool:
                 protocolo.EnviarParaPool();
@@ -39,7 +41,8 @@ internal static class AplicadorDeDistribuicao
     }
 
     // RNF-02: a regra que decidiu — prioriza a de tipo (mais específica, ver comentário em
-    // Protocolo.RegraAplicadaId) sobre a de etapa; nulo quando os dois vieram do padrão aberto.
+    // Protocolo.RegraAplicadaId), depois a de equipe do escrevente, depois a de etapa; nulo
+    // quando todas vieram do padrão aberto.
     private static Guid? RegraAplicadaDe(AvaliacaoCandidato avaliacao) =>
-        avaliacao.DecisaoTipo.RegraAplicada?.Id ?? avaliacao.DecisaoEtapa.RegraAplicada?.Id;
+        avaliacao.DecisaoTipo.RegraAplicada?.Id ?? avaliacao.DecisaoEquipe.RegraAplicada?.Id ?? avaliacao.DecisaoEtapa.RegraAplicada?.Id;
 }

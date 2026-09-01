@@ -15,12 +15,19 @@ public sealed class TipoAto
     // mínimo 1 — não existe "peso zero" no requisito.
     public int PesoComplexidade { get; private set; }
 
-    public TipoAto(Guid id, string nome, bool ativo = true, int pesoComplexidade = 1)
+    // Nascido nulo quando o tipo entra sozinho pela importação (RF-09 não pede classificação
+    // nesse momento) — a distribuidora classifica depois na tela "Tipos de ato". Não existe
+    // tela de gestão de grupo no protótipo (só leitura agrupada na Matriz de alçada), então os
+    // 5 valores ficam fixos como enum, mesmo padrão de Nivel/Etapa/TipoPrazo.
+    public GrupoTipoAto? Grupo { get; private set; }
+
+    public TipoAto(Guid id, string nome, bool ativo = true, int pesoComplexidade = 1, GrupoTipoAto? grupo = null)
     {
         Id = id;
         Nome = nome;
         Ativo = ativo;
         PesoComplexidade = pesoComplexidade;
+        Grupo = grupo;
     }
 
     public void Renomear(string nome) => Nome = nome;
@@ -30,4 +37,18 @@ public sealed class TipoAto
     public void Desativar() => Ativo = false;
 
     public void DefinirPesoDeComplexidade(int peso) => PesoComplexidade = peso;
+
+    public void DefinirGrupo(GrupoTipoAto? grupo) => Grupo = grupo;
+}
+
+// Classificação de alto nível do catálogo, vista ao vivo na Matriz da aba Alçada do protótipo
+// (Transmissões, Sucessões, Família, Garantias, Notariais) — usada hoje só como agrupamento de
+// leitura; nenhuma regra de negócio depende do valor em si.
+public enum GrupoTipoAto
+{
+    Transmissoes,
+    Sucessoes,
+    Familia,
+    Garantias,
+    Notariais
 }
