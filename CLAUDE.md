@@ -1176,3 +1176,101 @@ Testado ponta a ponta contra o Postgres local: `GET /equipes`/`/escreventes`/`/t
 Conferente voltando 200 depois da correção (403 antes), `POST /equipes` e `GET
 /escreventes/sem-equipe` continuando 403 pro mesmo token (confirma que a correção não abriu
 mutação nenhuma). 239 testes automatizados no total (60 Domain + 179 Application).
+
+## Motor de alçada v3 — cascata de camadas, reserva, grupo como alvo
+
+Investigando o redesign visual da aba Alçada (as 3 sub-abas novas do protótipo v2 — Camadas/
+Matriz/Testar, a frente escolhida pelo dono depois do v2), achei que a ferramenta interativa
+(`Dispatch.dc.html`) evoluiu pra um algoritmo de alçada **diferente** do "Motor v2" já em
+produção — confirmado lendo a lógica-fonte do protótipo (`bloqueioPuro`/`decideCamada`/
+`camadaDe`/`trilhaPura`) e ao vivo nas 3 sub-abas via Playwright, não só por leitura de markup.
+O documento de requisitos formal (`Dispatch - Requisitos.dc.html`, seção 4) **ainda descreve o
+modelo v2** — a ferramenta interativa avançou sem isso virar texto formal. Decisão do dono:
+motor v3 primeiro (correto e testado), a tela depois — construir a tela sobre o back antigo
+mostraria dado que ele não sabe calcular do jeito prometido. **Decisão consciente: não editei
+`Dispatch - Requisitos.dc.html`** — é gerado por uma ferramenta de design externa do dono, igual
+já foi decidido pro Motor v2; a documentação da divergência e do algoritmo novo vive aqui.
+
+**O algoritmo mudou em três pontos**, em relação ao "Model A" v2 (escopo binário pessoa-ou-
+nível por família):
+
+1. **Cascata de 3 camadas**, avaliadas nesta ordem contra o **caso inteiro** (etapa + tipo +
+   equipe do escrevente juntos, não uma dimensão isolada) — a de baixo sobrescreve a de cima
+   quando tem opinião, mesmo em dimensões que ela nem tocou:
+   - `Base por nível` — toda regra cujo sujeito é Nível, qualquer alvo.
+   - `Ajuste por equipe` — regra de PESSOA cujo alvo é a equipe do escrevente.
+   - `Exceção por pessoa` — regra de PESSOA cujo alvo não é equipe (tipo/grupo/etapa/todos).
+   Dentro de uma camada: negação que bate no caso vence primeiro; senão, entre as permissões da
+   camada, alçada plena satisfaz sozinha; senão, cada dimensão (equipe/etapa/grupo/tipo, nesta
+   ordem) que tiver alguma permissão na camada vira lista fechada (mesma regra do v2, agora
+   rodada por camada, cobrindo as 4 dimensões possíveis, não só a família do alvo perguntado).
+   Camada sem regra aplicável não opina e não interfere na cascata.
+2. **Terceiro tipo de permissão: `PermissaoRegra.Reserva`** — checado **antes** de qualquer
+   camada: reserva ativa batendo no caso bloqueia todo mundo que não é o sujeito dela, direto.
+   Não concede acesso sozinha ao próprio sujeito — ele ainda precisa de outra regra (ou do
+   padrão aberto) pra ter Permitido de verdade.
+3. **`AlvoAlcada.PorGrupoTipoAto(GrupoTipoAto)`** — mira todos os tipos de um grupo de uma vez
+   (mesmo enum `TipoAto.Grupo` do Motor v2), sem listar tipo por tipo.
+
+**`ResolvedorAlcada` — API mudou de "resolve um alvo" pra "resolve um caso".** Novo tipo
+`CasoAlcada(Etapa, TipoAto, Guid? EquipeId)` (leva o `TipoAto` inteiro, não só o Id — precisa
+do `.Grupo`). `Resolver(Conferente, CasoAlcada, regras) → DecisaoAlcada` roda a cascata e
+devolve só o veredito final (usado no caminho quente da distribuição). `Explicar(Conferente,
+CasoAlcada, regras) → IReadOnlyList<PassoTrilha>` reaproveita a mesma lógica interna mas devolve
+o passo-a-passo por camada — só chamado pelas leituras explicativas (painel de detalhe,
+simulador "Testar"), não pelo `MotorDistribuicao`/`ImportarLote`, pra não alocar lista à toa no
+caminho mais quente do sistema. `DecisaoAlcada` ganhou `Motivo` (`MotivoAlcada?` — enum leve:
+`Etapa`/`Tipo`/`Grupo`/`Equipe`/`Geral`/`Reservado`, **sem nome próprio embutido**: o texto final
+("Testamento fora da alçada", "reservado a Márcio Gomes") é responsabilidade do front, que já
+tem os lookups de nome prontos — mesma disciplina de "back manda o fato cru" já seguida em todo
+o resto do projeto, mesmo o protótipo interpolando nomes direto no motivo).
+
+**`AvaliacaoCandidato` simplificou**: de `(Conferente, DecisaoEtapa, DecisaoTipo, DecisaoEquipe)`
+— 3 decisões pra AND'ar — pra `(Conferente, DecisaoAlcada Decisao)`, já que agora é uma decisão
+só por candidato. `MotorDistribuicao` monta um `CasoAlcada` só por protocolo e chama `Resolver`
+uma vez por candidato (não mais três). `AplicadorDeDistribuicao.RegraAplicadaDe` colapsou pra
+`avaliacao.Decisao.RegraAplicada?.Id` — a cascata já decidiu qual regra venceu, não precisa mais
+de prioridade manual entre 3 campos.
+
+**Simplificação consciente em `ObterAlcancePorConferente` (RF-34)**: com o caso resolvido de
+forma holística, "quantos tipos alcança" deixou de ser um fato puro por tipo — uma regra de
+equipe pode depender da combinação inteira. Adotei a mesma aproximação já usada pelo RF-30/
+cobertura e pelo próprio simulador do protótipo: fixa um **caso representativo** por eixo
+(`Etapa = PosConferencia` + sem equipe pra "tipos permitidos"; um tipo representativo — o
+primeiro que a pessoa já alcança nesse caso-base, senão o primeiro do catálogo — pra "etapas" e
+"equipes permitidas"). Documentado no código como aproximação, não fato exato.
+
+**Novo caso de uso `SimularAlcada`** — base do "Testar" do protótipo: mesmo padrão de
+`ObterDetalheProtocolo`, mas sobre um caso hipotético (etapa/tipo/equipe escolhidos na hora),
+não um `Protocolo` real. `POST /regras-alcada/testar`, corpo `{etapa, tipoAtoId, equipeId?}`,
+404 se o tipo não existir. `ObterDetalheProtocolo` também passou a usar `Explicar` (não só
+`Resolver`) e ganhou `ITipoAtoRepository` — o painel de detalhe agora mostra a trilha completa,
+não só elegível/não elegível.
+
+**Persistência**: `RegraAlcadaRegistro` ganhou `AlvoGrupoTipoAto` (`GrupoTipoAto?`) e
+`AlvoTipoRegistro` ganhou `Grupo` — mesmo padrão de discriminador já usado pro Motor v2, sem
+precisar de backfill desta vez (nenhuma linha existente usa o discriminador novo, diferente da
+migration anterior que teve que popular linha existente). `PermissaoRegra.Reserva` não pediu
+nenhuma mudança de schema — a coluna já é `HasConversion<string>()` solto, sem `CHECK` travando
+o conjunto de valores. Migration `AdicionaGrupoEmRegrasAlcada`: 1 coluna nova nullable + 1
+branch a mais no `CHECK` de alvo, nada mais.
+
+**Endpoints**: `CriarRegraAlcadaRequest`/`RegraAlcadaResponse` ganham `AlvoGrupo`
+(`GrupoTipoAto?`), XOR de criação passa a contar 5 campos. `PermissaoRegra.Reserva` já flui sem
+mudança nenhuma no endpoint de criar (é só mais um valor do mesmo enum que o request já aceita).
+
+**Blast radius que precisou de `ITipoAtoRepository` novo** (não tinham antes): `PegarProtocolo`,
+`ObterMinhaFila` (`MinhaFila.cs`), `AtribuirAoMenosCarregado`, `ObterDetalheProtocolo` — todos
+precisam do `TipoAto` inteiro agora (não só o Id) pra montar o `CasoAlcada`. Cada um trata tipo
+desconhecido/removido do catálogo como "sem alçada" antes mesmo de chamar o resolvedor, mesma
+semântica de exceção que `MotorDistribuicao` já tinha.
+
+Testado ponta a ponta contra o Postgres local depois de aplicar a migration: `POST
+/regras-alcada/testar` devolvendo a trilha por camada certa (uma regra de nível permitindo
+sobrescrita por uma exceção pessoal negando por etapa, motivo `"Etapa"`); `POST /regras-alcada`
+criando regra de grupo (`alvoGrupo: "Notariais"`) e de reserva (`permissao: "Reserva"`),
+persistindo e voltando corretas no `GET`; XOR rejeitando dois alvos ao mesmo tempo com 400.
+244 testes automatizados no total (64 Domain + 180 Application).
+
+**Escopo desta rodada**: só o motor (Domain/Application/Infrastructure/Api). A reformulação
+visual da aba Alçada (Camadas/Matriz/Testar no front) é a próxima frente, consumindo este back.

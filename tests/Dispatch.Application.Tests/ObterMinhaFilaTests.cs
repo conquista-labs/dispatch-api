@@ -8,14 +8,15 @@ public class ObterMinhaFilaTests
     public async Task PoolDisponivel_SoTraProtocolosDentroDaAlcada()
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
-        var tipo = Guid.NewGuid();
-        var permitido = new Protocolo(Guid.NewGuid(), "1", tipo, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
-        var negado = new Protocolo(Guid.NewGuid(), "2", tipo, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var permitido = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+        var negado = new Protocolo(Guid.NewGuid(), "2", tipo.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var regra = new RegraAlcada(
             Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PreConferencia));
 
         var casoDeUso = new ObterMinhaFila(
-            new FakeProtocoloRepository([permitido, negado]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([regra]));
+            new FakeProtocoloRepository([permitido, negado]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([regra]),
+            new FakeTipoAtoRepository([tipo]));
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -40,7 +41,8 @@ public class ObterMinhaFilaTests
         deOutroConferente.AtribuirA(outroConferenteId, DateTimeOffset.UtcNow);
 
         var casoDeUso = new ObterMinhaFila(
-            new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([]));
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 

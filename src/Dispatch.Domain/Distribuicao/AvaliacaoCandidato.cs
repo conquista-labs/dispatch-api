@@ -1,9 +1,8 @@
 namespace Dispatch.Domain;
 
-public sealed record AvaliacaoCandidato(Conferente Conferente, DecisaoAlcada DecisaoEtapa, DecisaoAlcada DecisaoTipo, DecisaoAlcada DecisaoEquipe)
+// Motor v3: uma decisão só por candidato (o caso inteiro — etapa+tipo+equipe — resolvido numa
+// cascata, ver ResolvedorAlcada), não mais 3 decisões independentes por dimensão.
+public sealed record AvaliacaoCandidato(Conferente Conferente, DecisaoAlcada Decisao)
 {
-    public bool Elegivel =>
-        DecisaoEtapa.Resultado == ResultadoAlcada.Permitido &&
-        DecisaoTipo.Resultado == ResultadoAlcada.Permitido &&
-        DecisaoEquipe.Resultado == ResultadoAlcada.Permitido;
+    public bool Elegivel => Decisao.Resultado == ResultadoAlcada.Permitido;
 }

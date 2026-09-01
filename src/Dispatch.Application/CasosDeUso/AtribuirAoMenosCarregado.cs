@@ -11,6 +11,7 @@ public sealed class AtribuirAoMenosCarregado(
     IConferenteRepository conferentes,
     IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras,
+    ITipoAtoRepository tiposAto,
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
@@ -27,10 +28,18 @@ public sealed class AtribuirAoMenosCarregado(
             return ResultadoAtribuirAoMenosCarregado.ProtocoloNaoElegivel;
         }
 
+        // Tipo desconhecido nunca tem alvo pra resolver regra nenhuma — sem alçada por
+        // definição (mesma exceção que o motor de distribuição já usa).
+        var tipo = protocolo.TipoAtoId is { } tipoAtoId ? await tiposAto.ObterPorIdAsync(tipoAtoId, cancellationToken) : null;
+        if (tipo is null)
+        {
+            return ResultadoAtribuirAoMenosCarregado.NinguemComAlcada;
+        }
+
         var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var elegiveis = (await conferentes.ObterNaEscalaAsync(cancellationToken))
-            .Where(c => VerificadorDeAlcada.TemAlcada(c, protocolo, equipeDoEscreventeId, regrasAtivas))
+            .Where(c => VerificadorDeAlcada.TemAlcada(c, protocolo, tipo, equipeDoEscreventeId, regrasAtivas))
             .ToList();
 
         if (elegiveis.Count == 0)

@@ -8,7 +8,8 @@ public class ObterDetalheProtocoloTests
     public async Task ProtocoloInexistente_RetornaNulo()
     {
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([]), new FakeConferenteRepository([]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([]));
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid());
 
@@ -18,11 +19,12 @@ public class ObterDetalheProtocoloTests
     [Fact]
     public async Task TipoConhecidoSemRegraNenhuma_TodosNaEscalaSaoElegiveis()
     {
-        var tipoId = Guid.NewGuid();
-        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoId, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([tipo]));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);
 
@@ -37,7 +39,8 @@ public class ObterDetalheProtocoloTests
         var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoAtoId: null, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new ObterDetalheProtocolo(
-            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]));
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([]));
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);
 

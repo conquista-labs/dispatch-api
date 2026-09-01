@@ -47,7 +47,7 @@ public class MotorDistribuicaoTests
         Assert.Equal("ninguém com alçada", excecao.Motivo);
         var avaliacao = Assert.Single(excecao.Avaliacoes);
         Assert.False(avaliacao.Elegivel);
-        Assert.Equal(regraNegaTipo, avaliacao.DecisaoTipo.RegraAplicada);
+        Assert.Equal(regraNegaTipo, avaliacao.Decisao.RegraAplicada);
     }
 
     [Fact]

@@ -9,6 +9,7 @@ public sealed class PegarProtocolo(
     IProtocoloRepository protocolos,
     IEscreventeRepository escreventes,
     IRegraAlcadaRepository regras,
+    ITipoAtoRepository tiposAto,
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
@@ -26,9 +27,17 @@ public sealed class PegarProtocolo(
             return ResultadoPegarProtocolo.NaoEstaNoPool;
         }
 
+        // Tipo desconhecido nunca tem alvo pra resolver regra nenhuma — sem alçada por
+        // definição (mesma exceção que o motor de distribuição já usa).
+        var tipo = protocolo.TipoAtoId is { } tipoAtoId ? await tiposAto.ObterPorIdAsync(tipoAtoId, cancellationToken) : null;
+        if (tipo is null)
+        {
+            return ResultadoPegarProtocolo.SemAlcada;
+        }
+
         var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
-        if (!VerificadorDeAlcada.TemAlcada(conferente, protocolo, equipeDoEscreventeId, regrasAtivas))
+        if (!VerificadorDeAlcada.TemAlcada(conferente, protocolo, tipo, equipeDoEscreventeId, regrasAtivas))
         {
             return ResultadoPegarProtocolo.SemAlcada;
         }

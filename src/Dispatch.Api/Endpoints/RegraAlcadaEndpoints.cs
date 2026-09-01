@@ -47,11 +47,18 @@ public static class RegraAlcadaEndpoints
                 // legítimo) — por isso o XOR usa um flag próprio (AlvoEhEquipe) em vez de só
                 // checar AlvoEquipeId != null, senão não daria pra diferenciar "regra de
                 // equipe = sem equipe" de "não é regra de equipe".
-                var camposDeAlvoInformados = new[] { request.AlvoEtapa is not null, request.AlvoTipoAtoId is not null, request.AlvoEhEquipe, request.AlvoTodosOsAtos }
+                var camposDeAlvoInformados = new[]
+                    {
+                        request.AlvoEtapa is not null, request.AlvoTipoAtoId is not null, request.AlvoEhEquipe,
+                        request.AlvoTodosOsAtos, request.AlvoGrupo is not null
+                    }
                     .Count(informado => informado);
                 if (camposDeAlvoInformados != 1)
                 {
-                    return Results.BadRequest(new { motivo = "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe e alvoTodosOsAtos" });
+                    return Results.BadRequest(new
+                    {
+                        motivo = "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe, alvoTodosOsAtos e alvoGrupo"
+                    });
                 }
 
                 AlvoAlcada alvo = request switch
@@ -59,6 +66,7 @@ public static class RegraAlcadaEndpoints
                     { AlvoEtapa: { } etapa } => new AlvoAlcada.PorEtapa(etapa),
                     { AlvoTipoAtoId: { } tipoAtoId } => new AlvoAlcada.PorTipoAto(tipoAtoId),
                     { AlvoEhEquipe: true } => new AlvoAlcada.PorEquipeDeEscrevente(request.AlvoEquipeId),
+                    { AlvoGrupo: { } grupo } => new AlvoAlcada.PorGrupoTipoAto(grupo),
                     _ => new AlvoAlcada.PorTodosOsAtos()
                 };
 
@@ -110,6 +118,23 @@ public static class RegraAlcadaEndpoints
             .WithTags(OpenApiTags.CentralDeRegras)
             .Produces<IReadOnlyList<AlcanceDoConferente>>()
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        grupo.MapPost("/testar", async (TestarAlcadaRequest request, SimularAlcada casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(request.Etapa, request.TipoAtoId, request.EquipeId, cancellationToken);
+                if (resultado is null)
+                {
+                    return Results.NotFound(new { motivo = "tipo de ato não encontrado" });
+                }
+
+                return Results.Ok(new TestarAlcadaResponse(resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
+                    a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
+                    a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList()));
+            })
+            .WithName("TestarAlcada")
+            .WithSummary("Simulador \"Testar\" da aba Alçada — quem pode/não pode conferir um caso hipotético e por quê.")
+            .Produces<TestarAlcadaResponse>()
+            .Produces(StatusCodes.Status404NotFound);
     }
 
     private static RegraAlcadaResponse ParaResponse(RegraAlcada regra, int usos) => new(
@@ -122,6 +147,7 @@ public static class RegraAlcadaEndpoints
         regra.Alvo is AlvoAlcada.PorEquipeDeEscrevente,
         (regra.Alvo as AlvoAlcada.PorEquipeDeEscrevente)?.EquipeId,
         regra.Alvo is AlvoAlcada.PorTodosOsAtos,
+        (regra.Alvo as AlvoAlcada.PorGrupoTipoAto)?.Grupo,
         regra.Origem,
         regra.Ativa,
         usos);
@@ -135,7 +161,8 @@ public sealed record CriarRegraAlcadaRequest(
     Guid? AlvoTipoAtoId,
     bool AlvoEhEquipe,
     Guid? AlvoEquipeId,
-    bool AlvoTodosOsAtos);
+    bool AlvoTodosOsAtos,
+    GrupoTipoAto? AlvoGrupo);
 
 public sealed record CriarRegraAlcadaResponse(Guid RegraId);
 
@@ -149,6 +176,11 @@ public sealed record RegraAlcadaResponse(
     bool AlvoEhEquipe,
     Guid? AlvoEquipeId,
     bool AlvoTodosOsAtos,
+    GrupoTipoAto? AlvoGrupo,
     OrigemRegra Origem,
     bool Ativa,
     int Usos);
+
+public sealed record TestarAlcadaRequest(Etapa Etapa, Guid TipoAtoId, Guid? EquipeId);
+
+public sealed record TestarAlcadaResponse(IReadOnlyList<AlcadaConferenteResponse> Avaliacoes);

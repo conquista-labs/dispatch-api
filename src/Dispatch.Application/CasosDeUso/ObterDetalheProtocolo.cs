@@ -10,7 +10,8 @@ public sealed class ObterDetalheProtocolo(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
     IEscreventeRepository escreventes,
-    IRegraAlcadaRepository regras)
+    IRegraAlcadaRepository regras,
+    ITipoAtoRepository tiposAto)
 {
     public async Task<ResultadoDetalheProtocolo?> ExecutarAsync(Guid protocoloId, CancellationToken cancellationToken = default)
     {
@@ -23,20 +24,32 @@ public sealed class ObterDetalheProtocolo(
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
+        var tipo = protocolo.TipoAtoId is { } tipoAtoId ? await tiposAto.ObterPorIdAsync(tipoAtoId, cancellationToken) : null;
 
-        var avaliacoes = conferentesNaEscala.Select(c => new AvaliacaoCandidato(
-                c,
-                ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEtapa(protocolo.Etapa), regrasAtivas),
-                // Tipo desconhecido (TipoAtoId nulo) nunca é elegível — não tem alvo pra
-                // resolver regra nenhuma contra.
-                protocolo.TipoAtoId is { } tipoAtoId
-                    ? ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(tipoAtoId), regrasAtivas)
-                    : new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null),
-                ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEquipeDeEscrevente(equipeDoEscreventeId), regrasAtivas)))
+        // Tipo desconhecido (TipoAtoId nulo, ou removido do catálogo) nunca é elegível — não
+        // tem alvo pra resolver regra nenhuma contra.
+        if (tipo is null)
+        {
+            var negado = new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null);
+            return new ResultadoDetalheProtocolo(
+                protocolo, conferentesNaEscala.Select(c => new AvaliacaoCandidatoComTrilha(c, negado, [])).ToList());
+        }
+
+        var caso = new CasoAlcada(protocolo.Etapa, tipo, equipeDoEscreventeId);
+        var avaliacoes = conferentesNaEscala
+            .Select(c => new AvaliacaoCandidatoComTrilha(
+                c, ResolvedorAlcada.Resolver(c, caso, regrasAtivas), ResolvedorAlcada.Explicar(c, caso, regrasAtivas)))
             .ToList();
 
         return new ResultadoDetalheProtocolo(protocolo, avaliacoes);
     }
 }
 
-public sealed record ResultadoDetalheProtocolo(Protocolo Protocolo, IReadOnlyList<AvaliacaoCandidato> Avaliacoes);
+// Mesma forma de AvaliacaoCandidato (Domain), com a trilha por camada a mais — só faz sentido
+// pra leitura explicativa (painel de detalhe, simulador "Testar"), não pro Domain em si.
+public sealed record AvaliacaoCandidatoComTrilha(Conferente Conferente, DecisaoAlcada Decisao, IReadOnlyList<PassoTrilha> Trilha)
+{
+    public bool Elegivel => Decisao.Resultado == ResultadoAlcada.Permitido;
+}
+
+public sealed record ResultadoDetalheProtocolo(Protocolo Protocolo, IReadOnlyList<AvaliacaoCandidatoComTrilha> Avaliacoes);

@@ -69,6 +69,7 @@ public sealed class RegraAlcadaRepository(DispatchDbContext dbContext) : IRegraA
             AlvoTipoRegistro.TipoAto => new AlvoAlcada.PorTipoAto(registro.AlvoTipoAtoId!.Value),
             AlvoTipoRegistro.Equipe => new AlvoAlcada.PorEquipeDeEscrevente(registro.AlvoEquipeId),
             AlvoTipoRegistro.TodosOsAtos => new AlvoAlcada.PorTodosOsAtos(),
+            AlvoTipoRegistro.Grupo => new AlvoAlcada.PorGrupoTipoAto(registro.AlvoGrupoTipoAto!.Value),
             _ => throw new InvalidOperationException($"Alvo não mapeado: {registro.AlvoTipo}")
         };
 
@@ -106,6 +107,11 @@ public sealed class RegraAlcadaRepository(DispatchDbContext dbContext) : IRegraA
 
             case AlvoAlcada.PorTodosOsAtos:
                 registro.AlvoTipo = AlvoTipoRegistro.TodosOsAtos;
+                break;
+
+            case AlvoAlcada.PorGrupoTipoAto porGrupo:
+                registro.AlvoTipo = AlvoTipoRegistro.Grupo;
+                registro.AlvoGrupoTipoAto = porGrupo.Grupo;
                 break;
         }
 

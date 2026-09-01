@@ -26,13 +26,9 @@ public static class MotorDistribuicao
 
         var candidatosNaEscala = conferentes.Where(c => c.NaEscala).ToList();
 
+        var caso = new CasoAlcada(protocolo.Etapa, tipo, equipeDoEscreventeId);
         var avaliacoes = candidatosNaEscala
-            .Select(c => new AvaliacaoCandidato(
-                c,
-                DecisaoEtapa: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEtapa(protocolo.Etapa), regras),
-                // .Value é seguro aqui: se TipoAtoId fosse nulo, já teríamos retornado acima.
-                DecisaoTipo: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorTipoAto(protocolo.TipoAtoId!.Value), regras),
-                DecisaoEquipe: ResolvedorAlcada.Resolver(c, new AlvoAlcada.PorEquipeDeEscrevente(equipeDoEscreventeId), regras)))
+            .Select(c => new AvaliacaoCandidato(c, ResolvedorAlcada.Resolver(c, caso, regras)))
             .ToList();
 
         var elegiveis = avaliacoes.Where(a => a.Elegivel).ToList();

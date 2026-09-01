@@ -7,8 +7,8 @@ public class AtribuirAoMenosCarregadoTests
     [Fact]
     public async Task ProtocoloNoPool_AtribuiAoElegivelDeMenorCarga()
     {
-        var tipoId = Guid.NewGuid();
-        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoId, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var maisCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 5);
         var menosCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 1);
         var casoDeUso = new AtribuirAoMenosCarregado(
@@ -16,6 +16,7 @@ public class AtribuirAoMenosCarregadoTests
             new FakeConferenteRepository([maisCarregado, menosCarregado]),
             new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([tipo]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));
 
@@ -29,17 +30,18 @@ public class AtribuirAoMenosCarregadoTests
     [Fact]
     public async Task NinguemComAlcada_Rejeita()
     {
-        var tipoId = Guid.NewGuid();
-        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipoId, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var protocolo = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.MarcarExcecao("ninguém com alçada");
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var regraNega = new RegraAlcada(
-            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorTipoAto(tipoId));
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorTipoAto(tipo.Id));
         var casoDeUso = new AtribuirAoMenosCarregado(
             new FakeProtocoloRepository([protocolo]),
             new FakeConferenteRepository([conferente]),
             new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([regraNega]),
+            new FakeTipoAtoRepository([tipo]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));
 
@@ -59,6 +61,7 @@ public class AtribuirAoMenosCarregadoTests
             new FakeConferenteRepository([]),
             new FakeEscreventeRepository([]),
             new FakeRegraAlcadaRepository([]),
+            new FakeTipoAtoRepository([]),
             new FakeUnitOfWork(),
             new FakeRelogio(DateTimeOffset.UtcNow));
 

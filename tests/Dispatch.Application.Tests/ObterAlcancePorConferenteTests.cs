@@ -24,10 +24,11 @@ public class ObterAlcancePorConferenteTests
     public async Task RegraDeNivelNegandoEtapa_ExcluiEssaEtapaDoAlcance()
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
         var regra = new RegraAlcada(
             Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PreConferencia));
         var casoDeUso = new ObterAlcancePorConferente(
-            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([regra]), new FakeTipoAtoRepository([]),
+            new FakeConferenteRepository([conferente]), new FakeRegraAlcadaRepository([regra]), new FakeTipoAtoRepository([tipo]),
             new FakeEquipeRepository([]));
 
         var alcance = await casoDeUso.ExecutarAsync();

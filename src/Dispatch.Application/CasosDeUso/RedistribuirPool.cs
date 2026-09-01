@@ -39,11 +39,7 @@ public sealed class RedistribuirPool(
             switch (resultado)
             {
                 case ResultadoDistribuicao.Atribuido atribuido:
-                    protocolo.AtribuirA(
-                        atribuido.Conferente.Id, relogio.Agora,
-                        atribuido.Avaliacao.DecisaoTipo.RegraAplicada?.Id
-                            ?? atribuido.Avaliacao.DecisaoEquipe.RegraAplicada?.Id
-                            ?? atribuido.Avaliacao.DecisaoEtapa.RegraAplicada?.Id);
+                    protocolo.AtribuirA(atribuido.Conferente.Id, relogio.Agora, atribuido.Avaliacao.Decisao.RegraAplicada?.Id);
                     // Seção 11: carga acumulada dentro da própria rodada — este laço processa
                     // vários protocolos de uma vez, então o desempate por carga (dentro do
                     // motor) precisa enxergar as atribuições já feitas nesta mesma chamada.

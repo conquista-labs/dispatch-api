@@ -22,6 +22,7 @@ internal sealed class RegraAlcadaRegistro
     public Etapa? AlvoEtapa { get; set; }
     public Guid? AlvoTipoAtoId { get; set; }
     public Guid? AlvoEquipeId { get; set; }
+    public GrupoTipoAto? AlvoGrupoTipoAto { get; set; }
     public PermissaoRegra Permissao { get; set; }
     public OrigemRegra Origem { get; set; }
     public bool Ativa { get; set; }
@@ -32,5 +33,6 @@ internal enum AlvoTipoRegistro
     Etapa,
     TipoAto,
     Equipe,
-    TodosOsAtos
+    TodosOsAtos,
+    Grupo
 }

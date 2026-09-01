@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RedistribuirPool>();
         services.AddScoped<AtribuirManualmente>();
         services.AddScoped<ObterDetalheProtocolo>();
+        services.AddScoped<SimularAlcada>();
         services.AddScoped<DevolverAoPool>();
         services.AddScoped<AtribuirAoMenosCarregado>();
         services.AddScoped<DefinirPrioridadeDoProtocolo>();

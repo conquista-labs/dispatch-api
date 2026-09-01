@@ -284,7 +284,8 @@ public static class ProtocoloEndpoints
             p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId, p.CorrigidoEm, p.ReabertoEm,
             p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
             resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
-                a.Conferente.Id, a.Elegivel, a.DecisaoEtapa.RegraAplicada?.Id, a.DecisaoTipo.RegraAplicada?.Id)).ToList());
+                a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
+                a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList());
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
@@ -354,7 +355,12 @@ public sealed record DetalheProtocoloResponse(
 // RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto
 // (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
 // servem pra mostrar "por qual regra" quando existir uma.
-public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, Guid? RegraEtapaId, Guid? RegraTipoId);
+public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, Guid? RegraId, MotivoAlcada? Motivo, IReadOnlyList<PassoTrilhaResponse> Trilha);
+
+// Motor v3: uma entrada por camada que opinou sobre o caso (nível/equipe/pessoa, mais reserva
+// se houver) — "Camada" já vem como o texto legível do Domain (ver ResolvedorAlcada.Explicar),
+// mesmo padrão de MotivoExcecao (curto, pt-BR, gerado no back).
+public sealed record PassoTrilhaResponse(string Camada, ResultadoAlcada Efeito, Guid? RegraId);
 
 public sealed record PedidoReaberturaResponse(
     Guid PedidoId,

@@ -17,4 +17,8 @@ public abstract record AlvoAlcada
     // Alçada plena (RF-29b) — sem payload. Só é consultado dentro da família Tipo (ver
     // ResolvedorAlcada) e cede a uma regra de Nega específica do mesmo escopo.
     public sealed record PorTodosOsAtos : AlvoAlcada;
+
+    // Grupo de tipo de ato (Transmissões/Sucessões/Família/Garantias/Notariais — mesmo enum de
+    // TipoAto.Grupo) — mira todos os tipos daquele grupo de uma vez, sem listar um por um.
+    public sealed record PorGrupoTipoAto(GrupoTipoAto Grupo) : AlvoAlcada;
 }

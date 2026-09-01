@@ -40,9 +40,7 @@ internal static class AplicadorDeDistribuicao
         return resultado;
     }
 
-    // RNF-02: a regra que decidiu — prioriza a de tipo (mais específica, ver comentário em
-    // Protocolo.RegraAplicadaId), depois a de equipe do escrevente, depois a de etapa; nulo
-    // quando todas vieram do padrão aberto.
-    private static Guid? RegraAplicadaDe(AvaliacaoCandidato avaliacao) =>
-        avaliacao.DecisaoTipo.RegraAplicada?.Id ?? avaliacao.DecisaoEquipe.RegraAplicada?.Id ?? avaliacao.DecisaoEtapa.RegraAplicada?.Id;
+    // RNF-02: a regra que decidiu — no motor v3 é uma decisão só por candidato (não mais 3
+    // decisões pra combinar), a cascata de camadas já resolveu qual regra venceu.
+    private static Guid? RegraAplicadaDe(AvaliacaoCandidato avaliacao) => avaliacao.Decisao.RegraAplicada?.Id;
 }

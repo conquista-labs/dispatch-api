@@ -20,10 +20,11 @@ internal sealed class RegraAlcadaRegistroConfiguration : IEntityTypeConfiguratio
         {
             t.HasCheckConstraint("ck_regras_alcada_sujeito", "num_nonnulls(sujeito_conferente_id, sujeito_nivel) = 1");
             t.HasCheckConstraint("ck_regras_alcada_alvo", """
-                (alvo_tipo = 'Etapa' AND alvo_etapa IS NOT NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL)
-                OR (alvo_tipo = 'TipoAto' AND alvo_tipo_ato_id IS NOT NULL AND alvo_etapa IS NULL AND alvo_equipe_id IS NULL)
-                OR (alvo_tipo = 'Equipe' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL)
-                OR (alvo_tipo = 'TodosOsAtos' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL)
+                (alvo_tipo = 'Etapa' AND alvo_etapa IS NOT NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
+                OR (alvo_tipo = 'TipoAto' AND alvo_tipo_ato_id IS NOT NULL AND alvo_etapa IS NULL AND alvo_equipe_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
+                OR (alvo_tipo = 'Equipe' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
+                OR (alvo_tipo = 'TodosOsAtos' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
+                OR (alvo_tipo = 'Grupo' AND alvo_grupo_tipo_ato IS NOT NULL AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL)
                 """);
         });
 
@@ -31,6 +32,7 @@ internal sealed class RegraAlcadaRegistroConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.SujeitoNivel).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.AlvoTipo).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.AlvoEtapa).HasConversion<string>().HasMaxLength(20);
+        builder.Property(r => r.AlvoGrupoTipoAto).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.Permissao).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.Origem).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.Ativa);

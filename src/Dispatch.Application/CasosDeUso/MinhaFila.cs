@@ -12,7 +12,8 @@ public sealed record MinhaFila(
 public sealed class ObterMinhaFila(
     IProtocoloRepository protocolos,
     IEscreventeRepository escreventes,
-    IRegraAlcadaRepository regras)
+    IRegraAlcadaRepository regras,
+    ITipoAtoRepository tiposAto)
 {
     public async Task<MinhaFila> ExecutarAsync(Conferente conferente, CancellationToken cancellationToken = default)
     {
@@ -20,9 +21,14 @@ public sealed class ObterMinhaFila(
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
         var equipePorEscreventeId = (await escreventes.ObterTodosAsync(cancellationToken))
             .ToDictionary(e => e.Id, e => e.EquipeId);
+        var tipoPorId = (await tiposAto.ObterTodosAsync(cancellationToken)).ToDictionary(t => t.Id);
 
         var poolDisponivel = pool
-            .Where(p => VerificadorDeAlcada.TemAlcada(conferente, p, equipePorEscreventeId.GetValueOrDefault(p.EscreventeId), regrasAtivas))
+            // Tipo desconhecido (TipoAtoId nulo) nunca tem alvo pra resolver regra nenhuma —
+            // fica fora do pool disponível de qualquer conferente (mesma exceção que o motor
+            // de distribuição já usa).
+            .Where(p => p.TipoAtoId is { } tipoAtoId && tipoPorId.TryGetValue(tipoAtoId, out var tipo)
+                && VerificadorDeAlcada.TemAlcada(conferente, p, tipo, equipePorEscreventeId.GetValueOrDefault(p.EscreventeId), regrasAtivas))
             .ToList();
 
         var atribuidos = await protocolos.ObterAtribuidosAAsync(conferente.Id, cancellationToken);
