@@ -903,11 +903,11 @@ Duas simplificações conscientes, documentadas no código (`ObterDashboard.cs`)
   existe histórico do resultado original antes de uma correção (RF-24a) salvo à parte; seria
   preciso inferir via `CorrigidoEm == null`, e essa não é uma leitura confiável o bastante pra
   virar métrica de bonificação sem confirmar com a operação.
-- **Sem "cumprimento de prazo por equipe/etapa" nem KPI de "custo por ato"** (RF-43 pede os
-  dois) — o primeiro precisaria juntar Equipe+Escrevente+Protocolo+Etapa numa tabela agregada
-  nova, maior que o núcleo pedido; o segundo exigiria um dado de custo/salário que não existe
-  em lugar nenhum do sistema — inventar um valor violaria a regra de não inventar dado que o
-  back não calcula. Documentado como próximo passo, não esquecido.
+- **Sem KPI de "custo por ato"** (RF-43 pede) — exigiria um dado de custo/salário que não
+  existe em lugar nenhum do sistema; inventar um valor violaria a regra de não inventar dado
+  que o back não calcula. Documentado como próximo passo, não esquecido. ("Cumprimento de
+  prazo por equipe/etapa", a outra metade dessa mesma simplificação, foi fechado depois — ver
+  seção "Cumprimento de prazo por equipe" mais abaixo.)
 
 **`ObterDashboard`** (novo caso de uso) — `ExecutarAsync(PeriodoDashboard periodo, Guid?
 conferenteRestritoId, ...)`. Período é janela móvel a partir de `IRelogio.Agora` (7/30/90
@@ -1287,3 +1287,38 @@ início); `ObterMinhaFila.ExecutarAsync` ordena `poolDisponivel` do mesmo jeito.
 deliberadamente restrito ao pool (não estendido a atribuídos/em conferência/concluídos/exceções
 — o pedido foi específico). 2 testes novos (ordem ascendente, nulo por último) — 246 testes
 automatizados no total (64 Domain + 182 Application).
+
+## Cumprimento de prazo por equipe — fecha metade do gap do RF-43
+
+O dono escolheu RF-43 (gaps do Dashboard) entre as opções apresentadas depois do redesign de
+Filtros do front. Investigação prévia (`dispatch-web/CLAUDE.md` já documentava) confirmou que
+"desempenho por tipo de ato" já existia de ponta a ponta — só faltava mesmo "cumprimento de
+prazo por equipe e etapa", a simplificação registrada na seção do Dashboard acima.
+
+`ObterDashboard` ganhou `IEscreventeRepository`/`IEquipeRepository` (portas já existentes,
+usadas em outros casos de uso — nenhum repositório novo). Agrupa `concluidosNoPeriodo` por
+`(EquipeId do escrevente, Etapa)` — **não** só por equipe: o prazo combinado é
+`Equipe.PrazoPara(Etapa)`, então a mesma equipe pode ter cumprimento bem diferente entre pré e
+pós-conferência, misturar as duas escondería isso. Escrevente sem equipe entra como grupo
+próprio (`EquipeId: null`, `EquipeNome: "sem equipe"`) — ele tem prazo real (D+1 padrão, ver
+`ResolvedorDePrazo`), só não tem equipe pra nomear; ficar de fora seria esconder informação real
+de cumprimento. `CalcularCumprimentoPrazoPorEquipe` reaproveita o `EstaNoPrazo` já usado por
+`CalcularKpis`/`CalcularDesempenho` — mesma regra de "no prazo", sem nova definição. Ordenado
+por pior percentual primeiro (`OrderBy(PercentualNoPrazo)`), igual ao protótipo aprovado
+(`slaEquipes.sort((a,b) => a.noPrazo - b.noPrazo)`, confirmado direto no `Dispatch.dc.html`).
+
+Novo record `CumprimentoPrazoEquipe(EquipeId, EquipeNome, Etapa, Prazo, Total,
+PercentualNoPrazo)` — `Prazo` é `TipoPrazo?` (o `Prazo.Tipo` do primeiro protocolo do grupo; só
+pro texto informativo "pós-conferência · 1 hora" do card, não entra no cálculo do percentual).
+Vem vazio na visão restrita do conferente (`conferenteRestritoId != null`), mesmo padrão de
+`PorTipoAto` — RF-45 não pede isso pro conferente. `DashboardResponse` ganhou o campo espelhado
+(`CumprimentoPrazoEquipeResponse`).
+
+Testado contra o Postgres local depois de subir a API de verdade (`dotnet run`, não só
+`dotnet build`/`dotnet test` — evita repetir a lição do "composition root" documentada no Motor
+de alçada v2, mesmo não sendo um caso de uso novo desta vez, só um construtor com dependência
+nova): `GET /dashboard?periodo=Trimestre` respondendo com `cumprimentoPrazoEquipe: []` (banco
+local sem protocolo concluído nesse período — resposta vazia e coerente, não quebrou nada).
+1 teste novo (`CumprimentoPrazoEquipe_AgrupaPorEquipeEEtapa_PiorPercentualPrimeiro` — 2 equipes
++ 1 grupo "sem equipe", 3 combinações de etapa/percentual, confirma agrupamento e ordenação) —
+247 testes automatizados no total (64 Domain + 183 Application).

@@ -13,6 +13,8 @@ public sealed class ObterDashboard(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
     ITipoAtoRepository tiposAto,
+    IEscreventeRepository escreventes,
+    IEquipeRepository equipes,
     IUsuarioRepository usuarios,
     IRelogio relogio)
 {
@@ -55,7 +57,10 @@ public sealed class ObterDashboard(
 
         if (conferenteRestritoId is null)
         {
-            return new ResultadoDashboard(kpis, todosOsDesempenhos, MediaDaCasa: null, porTipoAto);
+            var todosEscreventes = (await escreventes.ObterTodosAsync(cancellationToken)).ToDictionary(e => e.Id);
+            var todasEquipes = (await equipes.ObterTodasAsync(cancellationToken)).ToDictionary(e => e.Id);
+            var cumprimentoPrazoEquipe = CalcularCumprimentoPrazoPorEquipe(concluidosNoPeriodo, todosEscreventes, todasEquipes);
+            return new ResultadoDashboard(kpis, todosOsDesempenhos, MediaDaCasa: null, porTipoAto, cumprimentoPrazoEquipe);
         }
 
         // RF-45: o conferente só vê os próprios números + a média da casa sem identificar
@@ -63,7 +68,7 @@ public sealed class ObterDashboard(
         var meuDesempenho = todosOsDesempenhos.SingleOrDefault(d => d.ConferenteId == conferenteRestritoId);
         var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho];
         var mediaDaCasa = CalcularMediaDaCasa(todosOsDesempenhos);
-        return new ResultadoDashboard(kpis, lista, mediaDaCasa, PorTipoAto: []);
+        return new ResultadoDashboard(kpis, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: []);
     }
 
     private static int DiasDoPeriodo(PeriodoDashboard periodo) => periodo switch
@@ -176,13 +181,39 @@ public sealed class ObterDashboard(
             })
             .OrderByDescending(t => t.Volume)
             .ToList();
+
+    // RF-43: "onde o prazo combinado não está sendo cumprido" — agrupa por equipe do escrevente
+    // (protótipo aprovado, `slaEquipes`) + etapa, já que o prazo combinado é por essa dupla
+    // (Equipe.PrazoPara(Etapa)), não só por equipe. Escrevente sem equipe entra como grupo
+    // próprio ("sem equipe", EquipeId nulo) — ele tem prazo real (D+1 padrão, ver
+    // ResolvedorDePrazo), só não tem equipe pra nomear. Pior percentual primeiro, igual o
+    // protótipo (`sort((a,b) => a.noPrazo - b.noPrazo)`).
+    private static IReadOnlyList<CumprimentoPrazoEquipe> CalcularCumprimentoPrazoPorEquipe(
+        IReadOnlyCollection<Protocolo> concluidos,
+        IReadOnlyDictionary<Guid, Escrevente> catalogoEscreventes,
+        IReadOnlyDictionary<Guid, Equipe> catalogoEquipes) =>
+        concluidos
+            .Where(p => catalogoEscreventes.ContainsKey(p.EscreventeId))
+            .GroupBy(p => (EquipeId: catalogoEscreventes[p.EscreventeId].EquipeId, p.Etapa))
+            .Select(g =>
+            {
+                var equipeNome = g.Key.EquipeId is { } equipeId && catalogoEquipes.TryGetValue(equipeId, out var equipe)
+                    ? equipe.Nome
+                    : "sem equipe";
+                var noPrazo = g.Count(EstaNoPrazo);
+                return new CumprimentoPrazoEquipe(
+                    g.Key.EquipeId, equipeNome, g.Key.Etapa, g.First().Prazo?.Tipo, g.Count(), (double)noPrazo / g.Count());
+            })
+            .OrderBy(c => c.PercentualNoPrazo)
+            .ToList();
 }
 
 public sealed record ResultadoDashboard(
     KpisDashboard Kpis,
     IReadOnlyList<DesempenhoConferente> Desempenho,
     DesempenhoConferente? MediaDaCasa,
-    IReadOnlyList<DesempenhoTipoAto> PorTipoAto);
+    IReadOnlyList<DesempenhoTipoAto> PorTipoAto,
+    IReadOnlyList<CumprimentoPrazoEquipe> CumprimentoPrazoEquipe);
 
 public sealed record KpisDashboard(int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, TimeSpan? TempoMedio);
 
@@ -210,3 +241,11 @@ public enum FaixaBonificacao
 }
 
 public sealed record DesempenhoTipoAto(Guid TipoAtoId, string Nome, int Volume, TimeSpan? TempoMedio, double PercentualReprovacao);
+
+// EquipeId nulo = "sem equipe" (EquipeNome já vem como "sem equipe" nesse caso — mesmo padrão
+// de InfoProtocolo no front, mas resolvido aqui porque é o único lugar do Dashboard que precisa
+// desse nome). Prazo nulo só pode acontecer se, por algum motivo, nenhum protocolo do grupo
+// tiver prazo definido (não deveria acontecer com protocolo concluído, mas o vencimento em si
+// não depende disso — é só o texto informativo "etapa · prazo" que ficaria incompleto).
+public sealed record CumprimentoPrazoEquipe(
+    Guid? EquipeId, string EquipeNome, Etapa Etapa, TipoPrazo? Prazo, int Total, double PercentualNoPrazo);

@@ -12,10 +12,11 @@ public class ObterDashboardTests
         new(Guid.NewGuid(), usuarioId, nivel, 8, naEscala: true, cargaAtual: 0);
 
     private static Protocolo NovoProtocoloConcluido(
-        Guid donoId, Guid? tipoAtoId, DateTimeOffset concluidoEm, bool aprovado = true, DateTimeOffset? vencimentoEm = null, TimeSpan? duracao = null)
+        Guid donoId, Guid? tipoAtoId, DateTimeOffset concluidoEm, bool aprovado = true, DateTimeOffset? vencimentoEm = null,
+        TimeSpan? duracao = null, Guid? escreventeId = null, Etapa etapa = Etapa.PosConferencia)
     {
         var inicio = concluidoEm - (duracao ?? TimeSpan.FromMinutes(10));
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", tipoAtoId, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", tipoAtoId, escreventeId ?? Guid.NewGuid(), etapa, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(donoId, DateTimeOffset.UtcNow);
         if (vencimentoEm is { } vencimento)
         {
@@ -39,10 +40,12 @@ public class ObterDashboardTests
 
     private static ObterDashboard NovoCasoDeUso(
         IReadOnlyCollection<Protocolo> protocolos, IReadOnlyCollection<Conferente> conferentes,
-        IReadOnlyCollection<TipoAto> tiposAto, IReadOnlyCollection<Usuario> usuarios) =>
+        IReadOnlyCollection<TipoAto> tiposAto, IReadOnlyCollection<Usuario> usuarios,
+        IReadOnlyCollection<Escrevente>? escreventes = null, IReadOnlyCollection<Equipe>? equipes = null) =>
         new(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository(conferentes),
-            new FakeTipoAtoRepository(tiposAto), new FakeUsuarioRepository(usuarios), new FakeRelogio(Agora));
+            new FakeTipoAtoRepository(tiposAto), new FakeEscreventeRepository(escreventes ?? []),
+            new FakeEquipeRepository(equipes ?? []), new FakeUsuarioRepository(usuarios), new FakeRelogio(Agora));
 
     [Fact]
     public async Task UmSoConferenteComVolume_PontuaOMaximoEmVolumeEComplexidade()
@@ -145,6 +148,49 @@ public class ObterDashboardTests
 
         Assert.Equal(0, resultado.Kpis.AtosConferidos);
         Assert.Empty(resultado.Desempenho);
+    }
+
+    [Fact]
+    public async Task CumprimentoPrazoEquipe_AgrupaPorEquipeEEtapa_PiorPercentualPrimeiro()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var equipeBoa = new Equipe(Guid.NewGuid(), "5º andar", new Prazo(TipoPrazo.D1), new Prazo(TipoPrazo.UmaHora));
+        var equipeRuim = new Equipe(Guid.NewGuid(), "Balcão", new Prazo(TipoPrazo.D1), new Prazo(TipoPrazo.UmaHora));
+        var escreventeBom = new Escrevente(Guid.NewGuid(), "Bruno", equipeBoa.Id);
+        var escreventeRuim = new Escrevente(Guid.NewGuid(), "Carla", equipeRuim.Id);
+        var escreventeOrfao = new Escrevente(Guid.NewGuid(), "Duda", equipeId: null);
+
+        var protocolos = new List<Protocolo>
+        {
+            // equipeBoa · Pós: 1 no prazo, 1 fora do prazo → 50%.
+            NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), vencimentoEm: Agora.AddDays(-1).AddHours(1), escreventeId: escreventeBom.Id, etapa: Etapa.PosConferencia),
+            NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), vencimentoEm: Agora.AddDays(-2), escreventeId: escreventeBom.Id, etapa: Etapa.PosConferencia),
+            // equipeRuim · Pós: os 2 fora do prazo → 0%.
+            NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), vencimentoEm: Agora.AddDays(-2), escreventeId: escreventeRuim.Id, etapa: Etapa.PosConferencia),
+            NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), vencimentoEm: Agora.AddDays(-2), escreventeId: escreventeRuim.Id, etapa: Etapa.PosConferencia),
+            // sem equipe · Pré: 1 no prazo → 100%.
+            NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), vencimentoEm: Agora.AddDays(-1).AddHours(1), escreventeId: escreventeOrfao.Id, etapa: Etapa.PreConferencia),
+        };
+        var casoDeUso = NovoCasoDeUso(
+            protocolos, [conferente], [tipo], [usuario],
+            [escreventeBom, escreventeRuim, escreventeOrfao], [equipeBoa, equipeRuim]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(3, resultado.CumprimentoPrazoEquipe.Count);
+        // Pior primeiro: Balcão (0%), depois 5º andar (50%), depois sem equipe (100%).
+        Assert.Equal(["Balcão", "5º andar", "sem equipe"], resultado.CumprimentoPrazoEquipe.Select(c => c.EquipeNome));
+        var balcao = resultado.CumprimentoPrazoEquipe[0];
+        Assert.Equal(equipeRuim.Id, balcao.EquipeId);
+        Assert.Equal(Etapa.PosConferencia, balcao.Etapa);
+        Assert.Equal(2, balcao.Total);
+        Assert.Equal(0.0, balcao.PercentualNoPrazo);
+        var semEquipe = resultado.CumprimentoPrazoEquipe[2];
+        Assert.Null(semEquipe.EquipeId);
+        Assert.Equal(Etapa.PreConferencia, semEquipe.Etapa);
+        Assert.Equal(1.0, semEquipe.PercentualNoPrazo);
     }
 
     [Fact]

@@ -47,7 +47,10 @@ public static class DashboardEndpoints
         new KpisResponse(resultado.Kpis.AtosConferidos, resultado.Kpis.PercentualNoPrazo, resultado.Kpis.PercentualAprovado, resultado.Kpis.TempoMedio),
         resultado.Desempenho.Select(ParaDesempenhoResponse).ToList(),
         resultado.MediaDaCasa is { } media ? ParaDesempenhoResponse(media) : null,
-        resultado.PorTipoAto.Select(t => new DesempenhoTipoAtoResponse(t.TipoAtoId, t.Nome, t.Volume, t.TempoMedio, t.PercentualReprovacao)).ToList());
+        resultado.PorTipoAto.Select(t => new DesempenhoTipoAtoResponse(t.TipoAtoId, t.Nome, t.Volume, t.TempoMedio, t.PercentualReprovacao)).ToList(),
+        resultado.CumprimentoPrazoEquipe
+            .Select(c => new CumprimentoPrazoEquipeResponse(c.EquipeId, c.EquipeNome, c.Etapa, c.Prazo, c.Total, c.PercentualNoPrazo))
+            .ToList());
 
     private static DesempenhoConferenteResponse ParaDesempenhoResponse(DesempenhoConferente d) => new(
         d.ConferenteId, d.Nome, d.Nivel, d.Volume, d.TempoMedio, d.PercentualNoPrazo, d.PercentualAprovado, d.ComplexidadeMedia,
@@ -59,7 +62,8 @@ public sealed record DashboardResponse(
     KpisResponse Kpis,
     IReadOnlyList<DesempenhoConferenteResponse> Desempenho,
     DesempenhoConferenteResponse? MediaDaCasa,
-    IReadOnlyList<DesempenhoTipoAtoResponse> PorTipoAto);
+    IReadOnlyList<DesempenhoTipoAtoResponse> PorTipoAto,
+    IReadOnlyList<CumprimentoPrazoEquipeResponse> CumprimentoPrazoEquipe);
 
 public sealed record KpisResponse(int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, TimeSpan? TempoMedio);
 
@@ -83,3 +87,5 @@ public sealed record DesempenhoConferenteResponse(
 public sealed record ParcelasScoreResponse(double Volume, double Prazo, double Qualidade, double Complexidade);
 
 public sealed record DesempenhoTipoAtoResponse(Guid TipoAtoId, string Nome, int Volume, TimeSpan? TempoMedio, double PercentualReprovacao);
+
+public sealed record CumprimentoPrazoEquipeResponse(Guid? EquipeId, string EquipeNome, Etapa Etapa, TipoPrazo? Prazo, int Total, double PercentualNoPrazo);
