@@ -296,3 +296,51 @@ internal sealed class FakeSugestaoRepository : ISugestaoRepository
 
     public int Quantidade => _sugestoes.Count;
 }
+
+internal sealed class FakeUsuarioTotpRepository : IUsuarioTotpRepository
+{
+    private readonly List<UsuarioTotp> _registros;
+
+    public FakeUsuarioTotpRepository(IReadOnlyCollection<UsuarioTotp> registros) => _registros = registros.ToList();
+
+    public Task<UsuarioTotp?> ObterPorUsuarioIdAsync(Guid usuarioId, CancellationToken cancellationToken) =>
+        Task.FromResult(_registros.SingleOrDefault(r => r.UsuarioId == usuarioId));
+
+    public void Adicionar(UsuarioTotp usuarioTotp) => _registros.Add(usuarioTotp);
+}
+
+internal sealed class FakeEventoAutenticacaoRepository : IEventoAutenticacaoRepository
+{
+    private readonly List<EventoAutenticacao> _eventos = [];
+
+    public void Adicionar(EventoAutenticacao evento) => _eventos.Add(evento);
+
+    public IReadOnlyList<EventoAutenticacao> Todos => _eventos;
+}
+
+// Não simula RFC 6238 de verdade (janela de tolerância, replay por bloco) — só o suficiente pra
+// exercitar os casos de uso. A biblioteca real (Otp.NET) é validada manualmente (dotnet run +
+// autenticador de verdade), não por unit test.
+internal sealed class FakeTotp : ITotp
+{
+    private long _contador;
+
+    public byte[] GerarSegredo() => [1, 2, 3, 4, 5];
+
+    public string CodificarBase32(byte[] segredo) => Convert.ToBase64String(segredo);
+
+    public string MontarUriOtpAuth(byte[] segredo, string email) => $"otpauth://totp/Dispatch:{email}";
+
+    public bool Validar(byte[] segredo, string codigo, long? ultimoContadorAceito, out long contador)
+    {
+        contador = ++_contador;
+        return codigo == "123456";
+    }
+}
+
+internal sealed class FakeCifrador : ICifrador
+{
+    public string Cifrar(byte[] dados) => Convert.ToBase64String(dados);
+
+    public byte[] Decifrar(string textoCifrado) => Convert.FromBase64String(textoCifrado);
+}

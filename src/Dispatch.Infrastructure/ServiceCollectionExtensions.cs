@@ -21,6 +21,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRegraAlcadaRepository, RegraAlcadaRepository>();
         services.AddScoped<ITipoAtoRepository, TipoAtoRepository>();
         services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+        services.AddScoped<IUsuarioTotpRepository, UsuarioTotpRepository>();
+        services.AddScoped<IEventoAutenticacaoRepository, EventoAutenticacaoRepository>();
         services.AddScoped<IProtocoloRepository, ProtocoloRepository>();
         services.AddScoped<IEscreventeRepository, EscreventeRepository>();
         services.AddScoped<ILoteImportacaoRepository, LoteImportacaoRepository>();
@@ -30,8 +32,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRelogio, RelogioDoSistema>();
         services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
         services.AddScoped<IEmissorDeToken, EmissorDeTokenJwt>();
+        services.AddSingleton<ITotp, TotpComOtpNet>();
+        services.AddSingleton<ICifrador, CifradorAes>();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Secao));
+        services.Configure<TotpOptions>(configuration.GetSection(TotpOptions.Secao));
 
         services.AddScoped<DistribuirProtocolo>();
         services.AddScoped<Autenticar>();
@@ -97,6 +102,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EditarProtocoloManual>();
         services.AddScoped<ExcluirProtocolo>();
         services.AddScoped<RestaurarProtocolo>();
+        services.AddScoped<RegistrarTotp>();
+        services.AddScoped<ConfirmarRegistroTotp>();
+        services.AddScoped<IniciarRecuperacaoSenha>();
+        services.AddScoped<ValidarCodigoRecuperacao>();
+        services.AddScoped<RedefinirSenha>();
 
         return services;
     }

@@ -1410,3 +1410,111 @@ criação, não só na edição). `ExecutarAsync` ganhou o parâmetro `observaca
 `Protocolo.DefinirObservacao`, método que já existia); endpoint/request DTO acompanharam. 1
 teste novo (`ComObservacao_GravaJuntoNaCriacao`) — 269 testes automatizados no total (67 Domain
 + 202 Application).
+
+## TOTP e recuperação de senha, caminho feliz (RF-01a a RF-01l)
+
+Login sempre foi só e-mail+senha (decisão de escopo mínimo documentada desde o início deste
+arquivo). O dono pediu pra construir o resto: registro de autenticador TOTP (RFC 6238) e
+recuperação de senha em 3 etapas sem e-mail/SMS — mas **explicitamente sem** RF-01m/RF-01n (os
+casos de exceção "sem autenticador"/liberação da distribuidora e códigos de emergência do
+admin), porque dependem deste caminho feliz existir primeiro e nem têm tela no protótipo.
+
+**Achado relendo o protótipo com atenção**: TOTP não é 2FA obrigatório no login normal — o
+"Entrar" de sempre autentica direto, sem pedir código nenhum. Registrar o autenticador é um
+fluxo separado, autoiniciado pelo próprio usuário ("Registrar autenticador", visível já na tela
+de login), cuja única função real é servir de prova de identidade na recuperação de senha.
+Implementado exatamente assim — mais simples que 2FA em todo login, e é o que o protótipo
+aprovado de fato mostra.
+
+**TOTP de verdade, não mock** — diferente do protótipo (que aceita qualquer código de 6
+dígitos exceto "000000", QR decorativo): `TotpComOtpNet` usa a lib `Otp.NET`, RFC 6238 real,
+janela de tolerância de 1 bloco (±30s) e barra reuso de código (contador do bloco usado tem que
+ser maior que o último aceito). Testado ponta a ponta com um TOTP calculado na mão em Python a
+partir do segredo Base32 devolvido por `POST /auth/totp/registrar` — não só com mock.
+
+**`UsuarioTotp`** (`Dispatch.Domain/Usuarios/`) — 1:1 com `Usuario` (chave é o próprio
+`UsuarioId`, sem FK própria — primeira entidade do projeto nesse formato). Guarda o segredo
+**cifrado** (RNF-15: `CifradorAes`, AES-CBC com IV aleatório por chamada, chave de
+`Totp:ChaveDeCifragem` — fora do banco, mesmo padrão de `Jwt:ChaveDeAssinatura`), tentativas e
+bloqueio (RF-01i: 5 erradas bloqueia 15min), e o hash do token de recuperação (nunca o token em
+claro — mesmo `IHashDeSenha`/`PasswordHasher` da senha).
+
+**Token de recuperação não é JWT de sessão** — é um token opaco (`{usuarioId:N}.{aleatório}`)
+que a etapa 2 (`ValidarCodigoRecuperacao`) emite depois de validar o código, e a etapa 3
+(`RedefinirSenha`) exige pra trocar a senha. Por que não indexar/consultar por hash: o
+`PasswordHasher` salga a cada chamada, então o mesmo texto nunca produz o mesmo hash duas vezes
+— não dá pra fazer `WHERE hash = @candidato`. Por isso o `usuarioId` vai embutido no próprio
+token (não é segredo — nesse ponto do fluxo o front já sabe o e-mail), e quem garante posse
+legítima é o `hashDeSenha.Verificar` contra a parte aleatória.
+
+**RF-01h (anti-enumeração)**: `IniciarRecuperacaoSenha` sempre devolve 200 genérico, e-mail
+existindo ou não — só grava evento de auditoria se o usuário existir de verdade (não vaza nada
+pela resposta). `ValidarCodigoRecuperacao` devolve o mesmíssimo `CodigoInvalido` pra e-mail
+inexistente, TOTP não confirmado e código errado — nunca dá pra saber, pela resposta, qual dos
+três foi (mesmo espírito de `ResultadoAutenticacao.Rejeitado`).
+
+**RF-01k (encerrar sessões) exigiu customizar a validação do JWT pela primeira vez no
+projeto** — `Usuario` ganhou `SessoesValidasApartirDe` (`DateTimeOffset`, `MinValue` por
+padrão — sem quebrar o construtor existente, e semanticamente correto: quem nunca trocou a
+senha não tem carimbo nenhum que importe). `RedefinirSenha` (Domain) bumpa esse carimbo junto
+com o hash, truncado pro segundo (ver bug abaixo). `Program.cs` ganhou
+`JwtBearerOptions.Events.OnTokenValidated`: busca o `Usuario` pelo claim de id e rejeita o
+token se `IssuedAt < SessoesValidasApartirDe` — 1 consulta a mais por request autenticado,
+aceitável pro volume deste sistema (cartório interno, não API pública de alto tráfego). RF-01k
+também devolve pro pool os atos que estavam **em conferência** (não "atribuídos") com o
+usuário: resolve `Conferente` a partir do `Usuario` via `ObterPorUsuarioIdAsync` (mesma
+resolução que Minha fila já faz a partir do JWT), depois
+`ObterEmConferenciaPorConferenteAsync` + `EnviarParaPool()` — nada novo no Domain.
+
+**Dois bugs reais, achados só rodando de verdade (`dotnet run` + curl), não por
+`dotnet build`/`dotnet test`**:
+
+1. **ASP.NET Core 10 valida o JWT via `Microsoft.IdentityModel.JsonWebTokens.JsonWebToken`, não
+   mais `System.IdentityModel.Tokens.Jwt.JwtSecurityToken`** — o handler novo. Um cast direto
+   pro tipo antigo dentro de `OnTokenValidated` compila liso e só explode em runtime, na
+   primeira chamada autenticada (`InvalidCastException`). Corrigido castando pro tipo certo.
+2. **`EmissorDeTokenJwt` nunca setava a claim `iat`** — a sobrecarga de `JwtSecurityToken`
+   usada não preenche isso sozinha; o token saía sem `IssuedAt` de verdade (confirmado
+   decodificando o payload na mão). Enquanto `SessoesValidasApartirDe` de todo mundo era
+   `MinValue` (ninguém tinha trocado senha ainda) isso nunca dava problema — só apareceu
+   quando testei a troca de senha de ponta a ponta e o `auth.spec.ts` (e mais 7 specs) do
+   `dispatch-web` começaram a falhar tentando logar: todo login passou a devolver um token que
+   `GET /auth/me` rejeitava na hora (401), porque `IssuedAt` bugado ficava sempre "menor" que
+   o carimbo real gravado na troca de senha. Corrigido adicionando a claim `iat` explícita
+   (`JwtRegisteredClaimNames.Iat`, Unix seconds) na emissão do token. Truncar
+   `SessoesValidasApartirDe` pro segundo (não guardar milissegundos) evita a mesma classe de
+   problema no caso extremo de login e troca de senha no mesmíssimo segundo. **Lição**: uma
+   mudança na validação do JWT (`Program.cs`) é praticamente invisível pra `dotnet
+   build`/`dotnet test` — só um login de verdade seguido de uma chamada autenticada real prova
+   que o pipeline inteiro funciona. Rodar a suíte e2e permanente do `dispatch-web` depois dessa
+   mudança pegou o bug antes do dono ver.
+
+**Regras de senha (RF-01j)** — `RegrasDeSenha` (Domain, estático): ≥12 caracteres e não
+começar com `senha|123|cartorio|dispatch` (case-insensitive) — mesmas 3 regras do protótipo.
+Validado no back (fonte da verdade); o front replica pra feedback ao vivo.
+
+**Fora de escopo, por decisão explícita do dono**: RF-01m (liberação sem autenticador pela
+distribuidora) e RF-01n (códigos de recuperação de emergência do admin) — ficam pendentes,
+documentados aqui pra não esquecer, mas sem nenhuma tela no protótipo pra referenciar quando
+chegar a vez.
+
+Endpoints novos em `AuthEndpoints.cs`: `POST /auth/totp/registrar` (autenticado),
+`POST /auth/totp/confirmar` (autenticado), `POST /auth/recuperar/iniciar` (anônimo, sempre
+200), `POST /auth/recuperar/validar-codigo` (anônimo, 200/401/423), `POST
+/auth/recuperar/redefinir-senha` (anônimo, 204/400/401).
+
+Testado ponta a ponta contra o Postgres local com TOTP real (código calculado em Python a
+partir do segredo Base32): registrar → confirmar com código certo (204) → validar-codigo na
+recuperação → token de recuperação → redefinir com senha fraca (400) → redefinir com senha
+forte (204) → reusar o mesmo token (401, uso único) → sessão antiga rejeitada depois da troca
+(401, RF-01k) → login com senha antiga falha, com a nova funciona. Suíte e2e permanente do
+`dispatch-web` voltou a passar 100% nos specs de autenticação depois do fix do `iat` (os 8
+specs que continuam falhando são de áreas que esta rodada não tocou — tipos de ato, alçada,
+importação — e não têm nenhuma mudança de código do lado deles; é deriva de dado acumulado no
+Postgres local ao longo da sessão, não regressão).
+
+38 testes novos (7 domínio — `UsuarioTests`, `UsuarioTotpTests`, `RegrasDeSenhaTests` — e 31 de
+aplicação entre os 5 casos de uso novos) — 305 testes automatizados no total.
+
+**Escopo desta rodada**: só o back. O front (telas de registro de TOTP e recuperação de senha,
+QR de verdade renderizado no cliente, links na tela de login) é a próxima frente.

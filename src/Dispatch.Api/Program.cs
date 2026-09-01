@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using Dispatch.Api.Endpoints;
 using Dispatch.Api.OpenApi;
+using Dispatch.Application;
 using Dispatch.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -50,6 +52,30 @@ builder.Services
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.ChaveDeAssinatura))
+        };
+
+        // RF-01k: "encerrar todas as sessões abertas" — JWT é stateless por padrão (sem jti,
+        // sem blocklist), então isso só existe se checarmos aqui, a cada request autenticado,
+        // contra Usuario.SessoesValidasApartirDe (bump feito só na troca de senha). 1 consulta
+        // a mais por request — aceitável pro volume deste sistema (cartório interno).
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var usuarioId = Guid.Parse(context.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var usuarios = context.HttpContext.RequestServices.GetRequiredService<IUsuarioRepository>();
+                var usuario = await usuarios.ObterPorIdAsync(usuarioId, context.HttpContext.RequestAborted);
+
+                // ASP.NET Core 10 valida o token via Microsoft.IdentityModel.JsonWebTokens.JsonWebToken
+                // (o handler novo), não mais o System.IdentityModel.Tokens.Jwt.JwtSecurityToken de
+                // sempre — só descoberto rodando de verdade (dotnet build/test não pegam isso, o cast
+                // errado só falha em runtime, na primeira chamada autenticada).
+                var emitidoEm = ((Microsoft.IdentityModel.JsonWebTokens.JsonWebToken)context.SecurityToken).IssuedAt;
+                if (usuario is null || DateTime.SpecifyKind(emitidoEm, DateTimeKind.Utc) < usuario.SessoesValidasApartirDe)
+                {
+                    context.Fail("Sessão encerrada — faça login novamente.");
+                }
+            }
         };
     });
 
