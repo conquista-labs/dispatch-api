@@ -1518,3 +1518,27 @@ aplicação entre os 5 casos de uso novos) — 305 testes automatizados no total
 
 **Escopo desta rodada**: só o back. O front (telas de registro de TOTP e recuperação de senha,
 QR de verdade renderizado no cliente, links na tela de login) é a próxima frente.
+
+## Prioridade com 3 níveis (Baixa/Média/Alta)
+
+O app só tinha `Normal`/`Alta` — simplificação de uma rodada anterior, documentada como gap.
+O protótipo aprovado sempre teve 3 níveis (confirmado no markup: seletor de 3 botões, eixo de
+filtro com 3 opções). Fechado agora: `Prioridade` (`src/Dispatch.Domain/Prioridade.cs`) ganhou
+`Baixa`.
+
+**Achado que evitou uma migration**: releitura da seção 4/RF-18d do documento de requisitos
+confirma que 3 níveis é só detalhe de UI do protótipo, não um RF numerado — a única regra de
+negócio formal continua binária ("urgente = prioridade **alta** OU prazo curto"), e como
+`Prioridade` já é mapeada como string (`HasConversion<string>().HasMaxLength(20)`, sem CHECK
+constraint), um valor novo no enum não pede `dotnet ef migrations add` nenhuma — é só mais uma
+string possível dentro da mesma coluna. `Protocolo.Urgente` não mudou uma linha.
+
+**"Normal" continua se chamando assim no C#/banco, não virou "Media"** — todo protocolo já
+gravado tem `Prioridade = "Normal"`; renomear o enum quebraria a leitura desses registros
+(`HasConversion<string>` faz `Enum.Parse`, e um "Normal" gravado não bateria com um membro
+`Media` novo). O rótulo "Média" mostrado ao usuário é só do `dispatch-web`
+(`PRIORIDADE_LABEL`) — mesmo padrão que "Alta" já usa (`'Alta (urgente)'` no seletor,
+divergência de rótulo aceita antes).
+
+1 teste novo (`ProtocoloTests.PrazoD1OuD2ComPrioridadeBaixa_NaoEhUrgente`, par do teste
+equivalente já existente pra `Normal`) — 307 testes automatizados no total.

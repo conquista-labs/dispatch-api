@@ -29,6 +29,18 @@ public class ProtocoloTests
         Assert.False(protocolo.Urgente);
     }
 
+    [Theory]
+    [InlineData(TipoPrazo.D1)]
+    [InlineData(TipoPrazo.D2)]
+    public void PrazoD1OuD2ComPrioridadeBaixa_NaoEhUrgente(TipoPrazo tipo)
+    {
+        var protocolo = NovoProtocolo(Prioridade.Baixa);
+
+        protocolo.DefinirPrazo(new Prazo(tipo), DateTimeOffset.UtcNow);
+
+        Assert.False(protocolo.Urgente);
+    }
+
     [Fact]
     public void PrioridadeAlta_EhUrgenteMesmoComPrazoD2()
     {
