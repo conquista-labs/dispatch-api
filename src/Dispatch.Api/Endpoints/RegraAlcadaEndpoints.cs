@@ -121,15 +121,17 @@ public static class RegraAlcadaEndpoints
 
         grupo.MapPost("/testar", async (TestarAlcadaRequest request, SimularAlcada casoDeUso, CancellationToken cancellationToken) =>
             {
-                var resultado = await casoDeUso.ExecutarAsync(request.Etapa, request.TipoAtoId, request.EquipeId, cancellationToken);
+                var resultado = await casoDeUso.ExecutarAsync(request.Etapa, request.TipoAtoId, request.EquipeId, request.Prioridade, cancellationToken);
                 if (resultado is null)
                 {
                     return Results.NotFound(new { motivo = "tipo de ato não encontrado" });
                 }
 
-                return Results.Ok(new TestarAlcadaResponse(resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
-                    a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
-                    a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList()));
+                return Results.Ok(new TestarAlcadaResponse(
+                    resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
+                        a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
+                        a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList(),
+                    resultado.Destino, resultado.ConferenteId, resultado.Motivo));
             })
             .WithName("TestarAlcada")
             .WithSummary("Simulador \"Testar\" da aba Alçada — quem pode/não pode conferir um caso hipotético e por quê.")
@@ -181,6 +183,7 @@ public sealed record RegraAlcadaResponse(
     bool Ativa,
     int Usos);
 
-public sealed record TestarAlcadaRequest(Etapa Etapa, Guid TipoAtoId, Guid? EquipeId);
+public sealed record TestarAlcadaRequest(Etapa Etapa, Guid TipoAtoId, Guid? EquipeId, Prioridade Prioridade);
 
-public sealed record TestarAlcadaResponse(IReadOnlyList<AlcadaConferenteResponse> Avaliacoes);
+public sealed record TestarAlcadaResponse(
+    IReadOnlyList<AlcadaConferenteResponse> Avaliacoes, string Destino, Guid? ConferenteId, string? Motivo);

@@ -1542,3 +1542,26 @@ divergência de rótulo aceita antes).
 
 1 teste novo (`ProtocoloTests.PrazoD1OuD2ComPrioridadeBaixa_NaoEhUrgente`, par do teste
 equivalente já existente pra `Normal`) — 307 testes automatizados no total.
+
+## Fix: simulador "Testar" da aba Alçada agora roda o motor de verdade
+
+Achado numa auditoria de qualidade do front (pedida pelo dono): `SimularAlcada.cs` só devolvia
+elegibilidade por conferente (`ResolvedorAlcada.Explicar`) — o destino (pool/atribuído/
+exceção) mostrado no simulador "Testar" (`dispatch-web`, `AbaAlcadaTestar.tsx`) era inferido no
+front só pela contagem de elegíveis, o que dava errado sempre que urgência importasse (a regra
+real, `MotorDistribuicao.cs:34-46`, decide primeiro por `Protocolo.Urgente`, não por contagem —
+ex.: 1 único elegível mas não urgente vai pro pool, não "direto pra ele"; vários elegíveis mas
+urgente atribui a um só, o de menor carga, não "pool aberto").
+
+**Fix**: `SimularAlcada.ExecutarAsync` ganhou o parâmetro `Prioridade prioridade`. Depois de
+montar as avaliações de elegibilidade (inalterado), monta um `Protocolo`+`Escrevente`
+transitórios (mesma técnica de `SimularProtocoloManual.cs` — nunca persistidos, `Escrevente`
+só precisa do `EquipeId` recebido, sem nome de verdade) e chama
+`AplicadorDeDistribuicao.Executar` (já existente, `internal`, mesmo pacote) pra obter o
+`ResultadoDistribuicao` real. `ResultadoSimulacaoAlcada` ganhou `Destino`/`ConferenteId`/
+`Motivo`, espelhando o mesmo shape que `SimularProtocoloManual` já expõe.
+`TestarAlcadaRequest`/`TestarAlcadaResponse` (`RegraAlcadaEndpoints.cs`) acompanharam.
+
+4 testes novos em `SimularAlcadaTests.cs` (não existia antes) cobrindo exatamente os 3
+cenários que provavam a diferença entre a inferência antiga (por contagem) e a regra real (por
+urgência) — 311 testes automatizados no total.
