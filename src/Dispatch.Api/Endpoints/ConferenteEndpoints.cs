@@ -118,6 +118,7 @@ public static class ConferenteEndpoints
                 Guid id,
                 ObterMinhaFila casoDeUso,
                 IConferenteRepository conferentes,
+                ObterConfiguracao obterConfiguracao,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
@@ -129,10 +130,11 @@ public static class ConferenteEndpoints
 
                 var fila = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
                 var agora = relogio.Agora;
+                var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
                 return Results.Ok(new MinhaFilaResponse(
-                    fila.PoolDisponivel.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    fila.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList()));
+                    fila.PoolDisponivel.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
+                    fila.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
+                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList()));
             })
             .WithName("ObterFilaDoConferente")
             .WithSummary("Mesma leitura de Minha fila (RF-19), só que de um conferente específico — pra Distribuidora acompanhar, nunca agir.")

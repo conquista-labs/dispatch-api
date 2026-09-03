@@ -15,10 +15,11 @@ public class ImportarLoteTests
         out FakeTipoAtoRepository tiposAto,
         IReadOnlyCollection<Conferente>? conferentes = null,
         IReadOnlyCollection<Escrevente>? escreventesIniciais = null,
-        IReadOnlyCollection<Equipe>? equipes = null)
+        IReadOnlyCollection<Equipe>? equipes = null,
+        IReadOnlyCollection<Protocolo>? protocolosIniciais = null)
     {
         escreventes = new FakeEscreventeRepository(escreventesIniciais ?? []);
-        protocolos = new FakeProtocoloRepository([]);
+        protocolos = new FakeProtocoloRepository(protocolosIniciais ?? []);
         tiposAto = new FakeTipoAtoRepository([Inventario]);
         return new ImportarLote(
             escreventes,
@@ -244,6 +245,44 @@ public class ImportarLoteTests
         var linha = Assert.Single(resumo.Linhas!);
         Assert.False(linha.TipoConhecido);
         Assert.Equal(0, linha.ComAlcada);
+    }
+
+    // Continuidade de conferência (pedido do dono, não é RF numerado — ver
+    // ResolvedorDeContinuidade): protocolo reprovado reaparecendo num lote seguinte, mesmo
+    // Número e mesma etapa, vai direto pro mesmo dono de antes — mesmo ele não sendo quem o
+    // motor escolheria por carga (conferenteX está mais carregado que conferenteY aqui).
+    [Fact]
+    public async Task LinhaComMesmoNumeroEEtapaDeUmProtocoloReprovadoAnterior_AtribuiDiretoAoDonoDaquelaVez()
+    {
+        var conferenteX = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 5);
+        var conferenteY = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var protocoloAnterior = new Protocolo(Guid.NewGuid(), "262203", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, LinhaDeCorte.AddHours(-5));
+        protocoloAnterior.AtribuirA(conferenteX.Id, LinhaDeCorte.AddHours(-4));
+        protocoloAnterior.Reprovar(LinhaDeCorte.AddHours(-3));
+        var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(
+            out _, out _, out _, [conferenteX, conferenteY], protocolosIniciais: [protocoloAnterior]);
+
+        var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        var atribuicao = Assert.Single(resumo.AtribuidosPorConferente);
+        Assert.Equal(conferenteX.Id, atribuicao.ConferenteId);
+    }
+
+    [Fact]
+    public async Task LinhaComContinuidade_DonoAnteriorForaDaEscala_VaiParaExcecaoComMotivoProprio()
+    {
+        var protocoloAnterior = new Protocolo(Guid.NewGuid(), "262203", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, LinhaDeCorte.AddHours(-5));
+        protocoloAnterior.AtribuirA(Guid.NewGuid(), LinhaDeCorte.AddHours(-4));
+        protocoloAnterior.Reprovar(LinhaDeCorte.AddHours(-3));
+        var linhas = new[] { new LinhaImportacao("262203", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out _, protocolosIniciais: [protocoloAnterior]);
+
+        var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        Assert.Equal(1, resumo.Excecoes);
+        var novo = protocolos.Todos.Single(p => p.Id != protocoloAnterior.Id);
+        Assert.Equal("conferente da primeira conferência não está mais disponível", novo.MotivoExcecao);
     }
 
     [Fact]

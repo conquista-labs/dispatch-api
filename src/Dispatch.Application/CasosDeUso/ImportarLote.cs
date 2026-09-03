@@ -61,6 +61,14 @@ public sealed class ImportarLote(
         var tipoPorNome = (await tiposAto.ObterTodosAsync(cancellationToken))
             .ToDictionary(t => t.Nome, StringComparer.OrdinalIgnoreCase);
 
+        // Continuidade de conferência (pedido do dono, não é RF numerado — ver
+        // ResolvedorDeContinuidade): busca em lote o histórico de todos os números relevantes
+        // de uma vez, não um por linha, mesmo cuidado de N+1 do resto deste método.
+        var historicoPorNumero = (await protocolos.ObterPorNumerosAsync(
+                relevantes.Select(l => l.Protocolo).Distinct().ToList(), cancellationToken))
+            .GroupBy(p => p.Numero)
+            .ToDictionary(g => g.Key, g => (IReadOnlyCollection<Protocolo>)g.ToList());
+
         var novosEscreventes = new List<Escrevente>();
         var novosTipos = new List<TipoAto>();
         var atribuicoes = new Dictionary<Guid, int>();
@@ -115,9 +123,13 @@ public sealed class ImportarLote(
                 Guid.NewGuid(), linha.Protocolo, tipoAto.Id, escrevente.Id, etapa, linha.DataHoraAndamento,
                 loteImportacaoId: lote?.Id, tipoAtoNomeOriginal: linha.TipoAto);
 
+            var donoDaPrimeiraConferenciaId = historicoPorNumero.TryGetValue(linha.Protocolo, out var historico)
+                ? ResolvedorDeContinuidade.Resolver(historico, etapa)
+                : null;
+
             var resultado = AplicadorDeDistribuicao.Executar(
                 protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, tipoPorNome.Values, agora,
-                out var resolucaoPrazo);
+                out var resolucaoPrazo, donoDaPrimeiraConferenciaId);
 
             if (resolucaoPrazo.SemEquipeSinalizado)
             {

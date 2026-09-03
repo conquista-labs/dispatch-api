@@ -15,12 +15,14 @@ internal static class AplicadorDeDistribuicao
         IReadOnlyCollection<RegraAlcada> regras,
         IReadOnlyCollection<TipoAto> catalogoTipos,
         DateTimeOffset agora,
-        out ResolucaoPrazo resolucaoPrazo)
+        out ResolucaoPrazo resolucaoPrazo,
+        Guid? donoDaPrimeiraConferenciaId = null)
     {
         resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, protocolo.Etapa, equipes);
         protocolo.DefinirPrazo(resolucaoPrazo.Prazo, protocolo.AndamentoEm);
 
-        var resultado = MotorDistribuicao.Distribuir(protocolo, conferentesNaEscala, regras, catalogoTipos, escrevente.EquipeId);
+        var resultado = MotorDistribuicao.Distribuir(
+            protocolo, conferentesNaEscala, regras, catalogoTipos, escrevente.EquipeId, donoDaPrimeiraConferenciaId);
 
         switch (resultado)
         {

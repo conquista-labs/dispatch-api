@@ -10,6 +10,7 @@ public sealed class GerarSugestoes(
     IConferenteRepository conferentes,
     IEscreventeRepository escreventes,
     ISugestaoRepository sugestoes,
+    IConfiguracaoRepository configuracao,
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
@@ -20,12 +21,15 @@ public sealed class GerarSugestoes(
         var todosProtocolos = await protocolos.ObterParaDistribuicaoAsync(loteImportacaoId: null, cancellationToken);
         var todosConferentes = await conferentes.ObterTodosAsync(cancellationToken);
         var todosEscreventes = await escreventes.ObterTodosAsync(cancellationToken);
+        var config = await configuracao.ObterAsync(cancellationToken);
 
         var candidatos = new List<CandidatoSugestao>();
-        candidatos.AddRange(GeradorDeSugestoes.TipoDesconhecido(todosProtocolos, todosConferentes));
-        candidatos.AddRange(GeradorDeSugestoes.PrazoIrreal(todosProtocolos, todosEscreventes));
-        candidatos.AddRange(GeradorDeSugestoes.EscreventeOrfao(todosEscreventes, todosProtocolos));
-        candidatos.AddRange(GeradorDeSugestoes.RiscoQualidade(todosProtocolos, todosConferentes));
+        candidatos.AddRange(GeradorDeSugestoes.TipoDesconhecido(todosProtocolos, todosConferentes, config.LimiarTipoDesconhecido));
+        candidatos.AddRange(GeradorDeSugestoes.PrazoIrreal(
+            todosProtocolos, todosEscreventes, config.LimiarPrazoIrrealCasos, config.LimiarPrazoIrrealEstouro));
+        candidatos.AddRange(GeradorDeSugestoes.EscreventeOrfao(todosEscreventes, todosProtocolos, config.LimiarEscreventeOrfao));
+        candidatos.AddRange(GeradorDeSugestoes.RiscoQualidade(
+            todosProtocolos, todosConferentes, config.LimiarRiscoQualidadeCasos, config.LimiarRiscoQualidadeReprovacao));
 
         var agora = relogio.Agora;
         var novas = 0;

@@ -10,12 +10,6 @@ namespace Dispatch.Api.Endpoints;
 // sempre no servidor).
 public static class MinhaFilaEndpoints
 {
-    // Mesmas faixas hardcoded do RF-14 (DistribuicaoEndpoints) — ainda sem tabela `config`
-    // (seção 8). Duplicado aqui de propósito: é configuração, não lógica, e as duas telas
-    // podem divergir de faixa no futuro sem acoplar uma na outra.
-    private static readonly TimeSpan FaixaAtencao = TimeSpan.FromHours(4);
-    private static readonly TimeSpan FaixaUrgente = TimeSpan.FromMinutes(60);
-
     public static void MapMinhaFilaEndpoints(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/minha-fila")
@@ -26,6 +20,7 @@ public static class MinhaFilaEndpoints
                 ObterMinhaFila casoDeUso,
                 ClaimsPrincipal usuario,
                 IConferenteRepository conferentes,
+                ObterConfiguracao obterConfiguracao,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
@@ -37,10 +32,11 @@ public static class MinhaFilaEndpoints
 
                 var fila = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
                 var agora = relogio.Agora;
+                var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
                 return Results.Ok(new MinhaFilaResponse(
-                    fila.PoolDisponivel.Select(p => ParaResumo(p, agora)).ToList(),
-                    fila.Atribuidos.Select(p => ParaResumo(p, agora)).ToList(),
-                    fila.EmConferencia.Select(p => ParaResumo(p, agora)).ToList()));
+                    fila.PoolDisponivel.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
+                    fila.Atribuidos.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
+                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList()));
             })
             .WithName("ObterMinhaFila")
             .WithSummary("As três colunas do conferente: pool disponível (já filtrado pela alçada), atribuídos e em conferência (RF-19).")
@@ -189,7 +185,7 @@ public static class MinhaFilaEndpoints
                 };
             })
             .WithName("CorrigirResultado")
-            .WithSummary($"Troca aprovado↔reprovado dentro de {CorrigirResultado.JanelaDeCorrecao.TotalMinutes:0} min depois de concluído (RF-24a).")
+            .WithSummary("Troca aprovado↔reprovado dentro da janela de correção configurada, depois de concluído (RF-24a).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status403Forbidden)
@@ -269,9 +265,10 @@ public static class MinhaFilaEndpoints
     // internal, não private: ConferenteEndpoints reaproveita (GET /conferentes/{id}/fila —
     // Distribuidora vendo a fila de um conferente específico, em leitura) e DistribuicaoEndpoints
     // também (RF-14 — antes tinha uma cópia própria, unificado numa auditoria de qualidade) —
-    // é mapeamento de verdade (Protocolo → DTO), diferente das faixas hardcoded acima, que são
-    // config e por isso ficam duplicadas de propósito.
-    internal static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
+    // é mapeamento de verdade (Protocolo → DTO). Faixas do semáforo entram como parâmetro
+    // (tabela `config`, seção 8) em vez de campo estático — cada chamador busca a config uma
+    // vez por request via ObterConfiguracao.
+    internal static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
@@ -283,7 +280,7 @@ public static class MinhaFilaEndpoints
         protocolo.VencimentoEm,
         protocolo.MotivoExcecao,
         protocolo.Observacao,
-        protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
+        protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
         protocolo.IniciadoEm);
 
     internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo, Guid? pedidoReaberturaPendenteId) => new(

@@ -7,12 +7,6 @@ namespace Dispatch.Api.Endpoints;
 
 public static class ProtocoloEndpoints
 {
-    // Mesmos limiares hardcoded de DistribuicaoEndpoints (RF-14) — ainda não é configuração de
-    // sistema de verdade (RF-30c fala nisso), só constante duplicada até existir uma tabela
-    // de configuração.
-    private static readonly TimeSpan FaixaAtencao = TimeSpan.FromHours(4);
-    private static readonly TimeSpan FaixaUrgente = TimeSpan.FromMinutes(60);
-
     public static void MapProtocoloEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/protocolos/redistribuir-pool", async (RedistribuirPool casoDeUso, CancellationToken cancellationToken) =>
@@ -103,12 +97,17 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status403Forbidden)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
 
-        app.MapGet("/protocolos/{id:guid}/detalhe", async (Guid id, ObterDetalheProtocolo casoDeUso, IRelogio relogio, CancellationToken cancellationToken) =>
+        app.MapGet("/protocolos/{id:guid}/detalhe", async (
+                Guid id, ObterDetalheProtocolo casoDeUso, ObterConfiguracao obterConfiguracao, IRelogio relogio, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
-                return resultado is null
-                    ? Results.NotFound(new { motivo = "protocolo não encontrado" })
-                    : Results.Ok(ParaDetalheResponse(resultado, relogio.Agora));
+                if (resultado is null)
+                {
+                    return Results.NotFound(new { motivo = "protocolo não encontrado" });
+                }
+
+                var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
+                return Results.Ok(ParaDetalheResponse(resultado, relogio.Agora, config.FaixaAtencao, config.FaixaUrgente));
             })
             .WithName("ObterDetalheProtocolo")
             .WithSummary("Painel de detalhe (RF-18a) — todos os campos do protocolo, mais quem pode conferir este ato especificamente.")
@@ -310,17 +309,20 @@ public static class ProtocoloEndpoints
     private static PedidoReaberturaResponse ParaPedidoReaberturaResponse(PedidoReaberturaResumo r) => new(
         r.PedidoId, r.ProtocoloId, r.ProtocoloNumero, r.TipoAtoId, r.Etapa, r.StatusAtual, r.SolicitanteId, r.NomeSolicitante, r.CriadoEm);
 
-    private static DetalheProtocoloResponse ParaDetalheResponse(ResultadoDetalheProtocolo resultado, DateTimeOffset agora)
+    private static DetalheProtocoloResponse ParaDetalheResponse(
+        ResultadoDetalheProtocolo resultado, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente)
     {
         var p = resultado.Protocolo;
         return new DetalheProtocoloResponse(
             p.Id, p.Numero, p.TipoAtoId, p.TipoAtoNomeOriginal, p.EscreventeId, p.Etapa, p.Prioridade, p.AndamentoEm,
             p.Prazo?.Tipo, p.VencimentoEm, p.Status, p.DonoId, p.MotivoExcecao, p.Observacao,
             p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId, p.CorrigidoEm, p.ReabertoEm,
-            p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
+            p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
             resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
                 a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
-                a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList());
+                a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList(),
+            resultado.HistoricoConferencias.Select(h => new HistoricoConferenciaResponse(
+                h.Id, h.AndamentoEm, h.Status, h.DonoId, h.ConcluidoEm)).ToList());
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
@@ -397,12 +399,19 @@ public sealed record DetalheProtocoloResponse(
     DateTimeOffset? CorrigidoEm,
     DateTimeOffset? ReabertoEm,
     FaixaSemaforo? Semaforo,
-    IReadOnlyList<AlcadaConferenteResponse> Alcada);
+    IReadOnlyList<AlcadaConferenteResponse> Alcada,
+    IReadOnlyList<HistoricoConferenciaResponse> HistoricoConferencias);
 
 // RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto
 // (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
 // servem pra mostrar "por qual regra" quando existir uma.
 public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, Guid? RegraId, MotivoAlcada? Motivo, IReadOnlyList<PassoTrilhaResponse> Trilha);
+
+// Continuidade de conferência (pedido do dono, não é RF numerado): outras linhas com o mesmo
+// Número — front resolve o nome do dono via lookup de conferentes, mesma disciplina de "back
+// manda o fato cru" de todo o resto do projeto.
+public sealed record HistoricoConferenciaResponse(
+    Guid ProtocoloId, DateTimeOffset AndamentoEm, StatusProtocolo Status, Guid? DonoId, DateTimeOffset? ConcluidoEm);
 
 // Motor v3: uma entrada por camada que opinou sobre o caso (nível/equipe/pessoa, mais reserva
 // se houver) — "Camada" já vem como o texto legível do Domain (ver ResolvedorAlcada.Explicar),

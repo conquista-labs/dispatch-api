@@ -1632,3 +1632,108 @@ verdade nas fases que mexem em `Program.cs`/DI/rota) entre cada uma.
 Verificação de cada fase: `dotnet build && dotnet test` (312 testes, era 311 antes do teste
 novo da Fase 0) e `dotnet run` de verdade contra o Postgres local nas fases que mexeram em
 `Program.cs`/rotas/DI, com smoke test via curl cobrindo os endpoints tocados.
+
+## Continuidade de conferência (pedido do dono, não é RF numerado)
+
+Quando um protocolo Reprovado reaparece num relatório seguinte (RF-07/"linha de corte") na
+mesma etapa, ele é atribuído direto ao conferente que fez a **primeira** conferência dele (a
+linha mais antiga com essa etapa e um dono, não a mais recente) — em vez de rodar o motor do
+zero e possivelmente cair com outra pessoa. Investigação prévia confirmou que isso **não é um
+RF numerado nem está no protótipo aprovado** — o próprio documento de requisitos trata "volta
+pro mesmo escrevente?" como pergunta em aberto, nunca respondida; e não existia nenhum código
+que correlacionasse múltiplas linhas de `Protocolo` pelo mesmo `Numero` (que não é único, de
+propósito). Decisões tomadas com o dono: se o conferente anterior não está mais elegível (saiu
+da escala, foi removido, perdeu alçada pro tipo desde então) vira Exceção — não recai pro
+motor normal; quando elegível, é atribuição direta, sem passar por urgência/carga/pool.
+
+- **`ResolvedorDeContinuidade`** (`Dispatch.Domain/Distribuicao/`, novo) — função pura, mesmo
+  molde de `ResolvedorDePrazo`/`ResolvedorAlcada`: dado o histórico de um Número e a etapa
+  atual, devolve o `DonoId` da linha mais antiga com essa etapa e um dono (ou nulo).
+- **`MotorDistribuicao.Distribuir`** ganhou `Guid? donoDaPrimeiraConferenciaId = null` (mesmo
+  padrão de quando `equipeDoEscreventeId` entrou no Motor v3). Se informado e o dono anterior
+  está entre os elegíveis: `Atribuido` direto, **`RegraAplicada` fica nula de propósito** — não
+  foi uma `RegraAlcada` que decidiu, foi a continuidade (mesma convenção de decisão humana,
+  RNF-02). Se não está mais elegível: `Excecao("conferente da primeira conferência não está
+  mais disponível", ...)`. Continuidade não mascara os early-exits de "tipo desconhecido"/
+  "tipo desativado" — só se aplica depois deles.
+- **`IProtocoloRepository.ObterPorNumerosAsync`** (novo) — todas as linhas (qualquer status/
+  lote) com um conjunto de números. Serve dois consumidores: a checagem de continuidade em
+  lote dentro de `ImportarLote` (busca única antes do laço, agrupada por Número — mesmo
+  cuidado de N+1 do resto do método) e o histórico do painel de detalhe.
+- **`ObterDetalheProtocolo`** ganhou `HistoricoConferencias` (outras linhas com o mesmo
+  Número, mais recente primeiro) — exposto no `GET /protocolos/{id}/detalhe` já existente,
+  **nenhum endpoint novo**. `HistoricoConferenciaResponse` é o formato cru de sempre (back
+  manda o fato, front resolve nome do dono e rótulo de status).
+- **Front (`dispatch-web`)**: `PainelDetalheProtocolo.tsx` ganhou a seção "HISTÓRICO DE
+  CONFERÊNCIAS" (só aparece quando há histórico), reaproveitando o mesmo padrão visual de
+  `ListaAlcada`/`LINHA DO TEMPO` já existentes — sem sessão de protótipo nova, é extensão de
+  uma tela que já existe.
+
+Testado ponta a ponta contra o Postgres local: importar → conferente pega/inicia/reprova →
+reimportar a mesma linha (mesmo Número, andamento novo, mesma etapa) → atribuição direta
+confirmada ao mesmo conferente (`atribuidosPorConferente` no resumo, sem passar por
+`enviadosParaPool`), `regraAplicadaId: null` no detalhe, e a seção de histórico aparecendo com
+o registro anterior (`Reprovado`, mesmo dono). Suíte e2e permanente do `dispatch-web` rodada de
+novo — mesmas 8 falhas pré-existentes, nenhuma nova. 8 testes novos (4
+`ResolvedorDeContinuidadeTests`, 4 `MotorDistribuicaoTests`, 2 `ImportarLoteTests`) — 322
+testes automatizados no total.
+
+**Estendido pro cadastro manual** (pedido do dono, "tem que seguir o mesmo fluxo que fizemos na
+importação"): `CriarProtocoloManual` bloqueava qualquer `Número` duplicado com 409
+(`ExisteComNumeroAsync`, removida — ficou sem uso), sem checar o status do protocolo existente.
+Isso protege contra cadastro duplicado por engano, mas a importação não precisa dessa proteção
+(tem a linha de corte) — então manter o bloqueio idêntico impediria a mesma continuidade que
+acabou de ser construída pra reimportação. Decisão: **`ResolvedorDeContinuidade.PodeRecriar`**
+(novo) — só bloqueia se algum registro existente pro Número ainda está "em uso" (`Pool`,
+`Atribuido`, `Conferindo`, `Excecao` ou `Aprovado`); libera quando todos já chegaram a um estado
+que não bloqueia mais (`Reprovado` — o cenário real —, `Descartado` ou `Excluido`). Quando
+libera, `ResolvedorDeContinuidade.Resolver` decide a atribuição igual à importação.
+`SimularProtocoloManual` (a prévia do modal) acompanhou a mesma lógica — sem isso, o modal
+mostraria "número indisponível" ou um destino diferente do que `CriarProtocoloManual` ia
+produzir de verdade ao confirmar. Nenhuma mudança no front: `numeroDisponivel` já era um
+booleano cru vindo do back, sem suposição de "por quê" — muda só quando o back diz que mudou.
+
+Testado ponta a ponta contra o Postgres local: protocolo Atribuído → cadastro manual do mesmo
+Número bloqueia 409 (igual antes) → reprova via Minha fila → cadastro manual do mesmo Número
+sucede (201) e atribui direto ao mesmo dono → simulador confirma o mesmo destino antes de
+confirmar. 13 testes novos (10 `PodeRecriar` parametrizados, 2 `CriarProtocoloManualTests`, 1
+`SimularProtocoloManualTests`) — 335 testes automatizados no total.
+
+## Tabela `config` (seção 8) — fecha o item do backlog
+
+12 constantes que várias partes do código já citavam como "até a tabela config existir" viraram
+uma tabela de verdade: `Configuracao` (Domain, linha única) com `FaixaAtencao`/`FaixaUrgente`
+(RF-14/19/24), `LimiteDeAtosSimultaneos` (RF-21), `JanelaDeCorrecao` (RF-24a),
+`DiasDeMemoriaDescarte` (RF-40), `TempoMedioPorAtoMinutos` (RF-28) e os 6 limiares do módulo de
+aprendizado (`GeradorDeSugestoes`). `DuracaoTipica` (dicionário `TipoPrazo → TimeSpan` usado por
+`PrazoIrreal`) ficou de fora de propósito — é estrutura mapeada, não escalar.
+
+- **`GET`/`PUT /config`** (Distribuidora) — editável sem redeploy via curl/Swagger, sem tela
+  própria no front ainda (decisão consciente, mesmo padrão de "back primeiro, tela depois" já
+  usado em outras frentes). `PUT` substitui os 12 valores juntos (sem edição parcial, mesmo
+  molde de `PUT /equipes/{id}`) e valida (positivo, ou 0–1 nos dois percentuais) antes de
+  gravar — 400 com motivo em vez de clampar silenciosamente (diferente de
+  `DefinirPesoDeComplexidadeDoTipoAto`, que clampa: aqui é edição deliberada de config, não um
+  valor derivado, então clampar sem avisar esconderia erro de digitação).
+- **`ObterConfiguracao`** — pass-through fino, mesmo molde de `ObterUsuarioAtual`, consumido
+  tanto por `GET /config` quanto pelos 4 endpoints que precisam das faixas do semáforo pra
+  montar `ProtocoloResumo`/`DetalheProtocoloResponse` (`/protocolos/{id}/detalhe`,
+  `/protocolos/distribuicao`, `/minha-fila/`, `/conferentes/{id}/fila`,
+  `/protocolos/importar/pre-visualizar`) — cada endpoint busca a config uma vez por request,
+  os 3 campos `static readonly` duplicados (`ProtocoloEndpoints`/`MinhaFilaEndpoints`/
+  `ImportacaoEndpoints`) saíram.
+- `IniciarConferencia`, `CorrigirResultado`, `DescartarSugestao`, `ListarConferentes`,
+  `GerarSugestoes` (Application) injetam `IConfiguracaoRepository` direto — só a camada Api
+  segue a regra de "nunca repositório direto, sempre um caso de uso" (`ObterConfiguracao`).
+- Migration `AdicionaConfiguracao`: `CreateTable` + `InsertData` semeando uma linha com os
+  valores que eram hardcoded antes (4h/60min/1/15min/30dias/18min/5/8/0.6/3/6/0.5) — sem a
+  semente, `ConfiguracaoRepository.ObterAsync` (`SingleAsync`, não `SingleOrDefaultAsync` — a
+  ausência de linha é erro de setup, não caso de negócio) quebraria em runtime.
+
+Testado ponta a ponta contra o Postgres local: `GET /config` mostrando os defaults semeados;
+`PUT /config` com `limiteDeAtosSimultaneos: 2` mudando o comportamento real na hora (segundo
+`iniciar` que dava 409 com o valor antigo passou a dar 204, sem reiniciar a API); `PUT` com
+valor inválido (`limiteDeAtosSimultaneos: 0`) devolvendo 400 com motivo; `GET
+/protocolos/distribuicao`/`/protocolos/importar/pre-visualizar` continuando normais com as
+faixas vindas do banco. 6 testes novos (`ObterConfiguracaoTests`, `AtualizarConfiguracaoTests`)
+— 341 testes automatizados no total.

@@ -3,15 +3,13 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // RF-21: arranca o cronômetro de um protocolo já atribuído ao próprio conferente. O limite de
-// simultâneos é hardcoded por ora — mesma pendência do semáforo (seção 8, tabela `config`
-// ainda não existe).
+// simultâneos vem da tabela `config` (seção 8).
 public sealed class IniciarConferencia(
     IProtocoloRepository protocolos,
+    IConfiguracaoRepository configuracao,
     IRelogio relogio,
     IUnitOfWork unitOfWork)
 {
-    private const int LimiteDeAtosSimultaneos = 1;
-
     public async Task<ResultadoIniciarConferencia> ExecutarAsync(
         Guid protocoloId, Conferente conferente, CancellationToken cancellationToken = default)
     {
@@ -27,7 +25,8 @@ public sealed class IniciarConferencia(
         }
 
         var emConferencia = await protocolos.ObterEmConferenciaPorConferenteAsync(conferente.Id, cancellationToken);
-        if (emConferencia.Count >= LimiteDeAtosSimultaneos)
+        var config = await configuracao.ObterAsync(cancellationToken);
+        if (emConferencia.Count >= config.LimiteDeAtosSimultaneos)
         {
             return ResultadoIniciarConferencia.LimiteDeSimultaneosAtingido;
         }

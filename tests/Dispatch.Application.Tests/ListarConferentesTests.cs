@@ -10,7 +10,8 @@ public class ListarConferentesTests
         var usuario = new Usuario(Guid.NewGuid(), "Márcio Gomes", "marcio@cartorio.com", "hash", Papel.Conferente);
         var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 3);
 
-        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]));
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 
@@ -34,7 +35,8 @@ public class ListarConferentesTests
         var usuario = new Usuario(Guid.NewGuid(), "Alguém", "alguem@cartorio.com", "hash", Papel.Conferente);
         var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Junior, jornadaHoras: 0, naEscala: false, cargaAtual: 0);
 
-        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]));
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 
@@ -44,7 +46,7 @@ public class ListarConferentesTests
     [Fact]
     public async Task SemConferentes_RetornaListaVazia()
     {
-        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([]), new FakeUsuarioRepository([]));
+        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([]), new FakeUsuarioRepository([]), new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 
@@ -60,7 +62,8 @@ public class ListarConferentesTests
         usuario.Desativar();
         var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: false, cargaAtual: 0);
 
-        var casoDeUso = new ListarConferentes(new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]));
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 
@@ -76,7 +79,8 @@ public class ListarConferentesTests
         var conferenteA = new Conferente(Guid.NewGuid(), usuarioA.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
 
         var casoDeUso = new ListarConferentes(
-            new FakeConferenteRepository([conferenteB, conferenteA]), new FakeUsuarioRepository([usuarioB, usuarioA]));
+            new FakeConferenteRepository([conferenteB, conferenteA]), new FakeUsuarioRepository([usuarioB, usuarioA]),
+            new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 
@@ -97,7 +101,8 @@ public class ListarConferentesTests
         // Entrada "fora de ordem" de propósito — o resultado precisa vir por Id (a2 antes de
         // a1 não é o esperado; a ordem certa é a1 antes de a2, pela comparação de Guid).
         var casoDeUso = new ListarConferentes(
-            new FakeConferenteRepository([conferente2, conferente1]), new FakeUsuarioRepository([usuario2, usuario1]));
+            new FakeConferenteRepository([conferente2, conferente1]), new FakeUsuarioRepository([usuario2, usuario1]),
+            new FakeConfiguracaoRepository());
 
         var resultado = await casoDeUso.ExecutarAsync();
 

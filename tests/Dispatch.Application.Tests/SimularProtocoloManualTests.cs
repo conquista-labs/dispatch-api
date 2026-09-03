@@ -42,6 +42,25 @@ public class SimularProtocoloManualTests
         Assert.False(resultado.NumeroDisponivel);
     }
 
+    // Mesmo fluxo de continuidade do cadastro manual de verdade — a prévia não pode mentir
+    // sobre o destino que ExecutarAsync vai produzir ao confirmar.
+    [Fact]
+    public async Task NumeroComHistoricoReprovadoNaMesmaEtapa_NumeroDisponivelTrueEDestinoEhOMesmoDono()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var donoAnterior = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var reprovadoAnterior = new Protocolo(Guid.NewGuid(), "999005", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, Agora.AddDays(-1));
+        reprovadoAnterior.AtribuirA(donoAnterior.Id, Agora.AddDays(-1));
+        reprovadoAnterior.Reprovar(Agora.AddDays(-1));
+        var casoDeUso = NovoCasoDeUso([donoAnterior], [], [], [tipo], [], [reprovadoAnterior]);
+
+        var resultado = await casoDeUso.ExecutarAsync("999005", tipo.Id, "Alguém", Etapa.PosConferencia, Prioridade.Normal);
+
+        Assert.True(resultado.NumeroDisponivel);
+        Assert.Equal("Atribuido", resultado.Destino);
+        Assert.Equal(donoAnterior.Id, resultado.ConferenteId);
+    }
+
     [Fact]
     public async Task EscreventeComEquipe_DevolveEquipeEPrazoDaEquipe()
     {

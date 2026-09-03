@@ -121,5 +121,6 @@ app.MapMinhaFilaEndpoints();
 app.MapSugestaoEndpoints();
 app.MapTipoAtoEndpoints();
 app.MapDashboardEndpoints();
+app.MapConfiguracaoEndpoints();
 
 app.Run();

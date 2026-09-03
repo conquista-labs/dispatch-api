@@ -8,7 +8,8 @@ public static class MotorDistribuicao
         IReadOnlyCollection<Conferente> conferentes,
         IReadOnlyCollection<RegraAlcada> regras,
         IReadOnlyCollection<TipoAto> catalogoTipos,
-        Guid? equipeDoEscreventeId = null)
+        Guid? equipeDoEscreventeId = null,
+        Guid? donoDaPrimeiraConferenciaId = null)
     {
         var tipo = catalogoTipos.FirstOrDefault(t => t.Id == protocolo.TipoAtoId);
         if (tipo is null)
@@ -32,6 +33,31 @@ public static class MotorDistribuicao
             .ToList();
 
         var elegiveis = avaliacoes.Where(a => a.Elegivel).ToList();
+
+        // Continuidade de conferência (pedido do dono, não é RF numerado): quem fez a primeira
+        // conferência deste Número nesta mesma etapa tem prioridade total sobre urgência/carga
+        // — não é só mais um critério de desempate, ou ele leva ou vira exceção; nunca recai
+        // pro resto do motor. Só chega aqui se "tipo desconhecido"/"tipo desativado" não
+        // dispararam acima (early-exit com avaliações vazias) — continuidade não mascara esses
+        // dois motivos.
+        if (donoDaPrimeiraConferenciaId is { } donoAnteriorId)
+        {
+            var avaliacaoAnterior = elegiveis.FirstOrDefault(a => a.Conferente.Id == donoAnteriorId);
+            if (avaliacaoAnterior is null)
+            {
+                return new ResultadoDistribuicao.Excecao("conferente da primeira conferência não está mais disponível", avaliacoes);
+            }
+
+            // RegraAplicada fica nula de propósito — a regra de alçada aqui só comprova que o
+            // conferente ainda tem acesso, não foi ela que decidiu quem leva o protocolo (foi a
+            // continuidade). Mesma convenção de decisão humana (AtribuirManualmente/
+            // PegarProtocolo): RegraAplicadaId só registra quando uma RegraAlcada de verdade
+            // decidiu, RNF-02.
+            var decisaoPorContinuidade = new AvaliacaoCandidato(
+                avaliacaoAnterior.Conferente, new DecisaoAlcada(ResultadoAlcada.Permitido, RegraAplicada: null));
+            return new ResultadoDistribuicao.Atribuido(avaliacaoAnterior.Conferente, decisaoPorContinuidade, elegiveis);
+        }
+
         if (elegiveis.Count == 0)
         {
             return new ResultadoDistribuicao.Excecao("ninguém com alçada", avaliacoes);

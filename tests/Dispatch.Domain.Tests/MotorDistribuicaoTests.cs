@@ -123,4 +123,65 @@ public class MotorDistribuicaoTests
         var pool = Assert.IsType<ResultadoDistribuicao.EnviadoParaPool>(resultado);
         Assert.Single(pool.Elegiveis);
     }
+
+    [Fact]
+    public void ContinuidadeDeConferencia_AtribuiDiretoAoDonoAnterior_MesmoSemUrgenciaOuMenorCarga()
+    {
+        // Prova que continuidade bypassa as duas checagens seguintes do motor (pool por não
+        // ser urgente, e desempate por carga) — não é só mais um critério de desempate.
+        var donoAnterior = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 5);
+        var outroMenosCarregado = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+
+        var resultado = MotorDistribuicao.Distribuir(
+            protocolo, [donoAnterior, outroMenosCarregado], [], [Inventario], donoDaPrimeiraConferenciaId: donoAnterior.Id);
+
+        var atribuido = Assert.IsType<ResultadoDistribuicao.Atribuido>(resultado);
+        Assert.Equal(donoAnterior.Id, atribuido.Conferente.Id);
+        // RNF-02: RegraAplicada fica nula — não foi uma RegraAlcada que decidiu, foi a
+        // continuidade (mesma convenção de decisão humana).
+        Assert.Null(atribuido.Avaliacao.Decisao.RegraAplicada);
+    }
+
+    [Fact]
+    public void ContinuidadeDeConferencia_DonoAnteriorForaDaEscala_VaiParaExcecao()
+    {
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var donoAnteriorId = Guid.NewGuid();
+
+        var resultado = MotorDistribuicao.Distribuir(protocolo, [], [], [Inventario], donoDaPrimeiraConferenciaId: donoAnteriorId);
+
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal("conferente da primeira conferência não está mais disponível", excecao.Motivo);
+    }
+
+    [Fact]
+    public void ContinuidadeDeConferencia_DonoAnteriorSemAlcadaAgora_VaiParaExcecao()
+    {
+        var donoAnterior = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Inventario.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var regraNegaTipo = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorTipoAto(Inventario.Id));
+
+        var resultado = MotorDistribuicao.Distribuir(
+            protocolo, [donoAnterior], [regraNegaTipo], [Inventario], donoDaPrimeiraConferenciaId: donoAnterior.Id);
+
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal("conferente da primeira conferência não está mais disponível", excecao.Motivo);
+    }
+
+    [Fact]
+    public void ContinuidadeDeConferencia_TipoDesativado_MotivoDeTipoPrevalece()
+    {
+        // Continuidade não mascara os early-exits de tipo desconhecido/desativado — a causa
+        // real (catálogo) é mais fundamental do que "quem conferiu da última vez".
+        var inventarioDesativado = new TipoAto(Guid.NewGuid(), "Inventário", ativo: false);
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", inventarioDesativado.Id, Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+
+        var resultado = MotorDistribuicao.Distribuir(
+            protocolo, [], [], [inventarioDesativado], donoDaPrimeiraConferenciaId: Guid.NewGuid());
+
+        var excecao = Assert.IsType<ResultadoDistribuicao.Excecao>(resultado);
+        Assert.Equal("tipo desativado", excecao.Motivo);
+    }
 }

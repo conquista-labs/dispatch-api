@@ -32,6 +32,41 @@ public class CriarProtocoloManualTests
         Assert.Equal(1, protocolos.Quantidade);
     }
 
+    // Continuidade de conferência (mesmo fluxo da importação — ver ResolvedorDeContinuidade):
+    // Número com histórico só Reprovado na mesma etapa libera o cadastro e atribui direto ao
+    // mesmo dono, sem passar pelo motor normal.
+    [Fact]
+    public async Task NumeroComHistoricoReprovadoNaMesmaEtapa_LiberaEAtribuiDiretoAoDonoAnterior()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var donoAnterior = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var reprovadoAnterior = new Protocolo(Guid.NewGuid(), "999020", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, Agora.AddDays(-1));
+        reprovadoAnterior.AtribuirA(donoAnterior.Id, Agora.AddDays(-1));
+        reprovadoAnterior.Reprovar(Agora.AddDays(-1));
+        var (casoDeUso, protocolos, _) = NovoCasoDeUso([donoAnterior], [], [], [tipo], [], [reprovadoAnterior]);
+
+        var resultado = await casoDeUso.ExecutarAsync("999020", tipo.Id, "Alguém", Etapa.PosConferencia, Prioridade.Normal, observacao: null);
+
+        var sucesso = Assert.IsType<ResultadoCriarProtocoloManual.Sucesso>(resultado);
+        var atribuido = Assert.IsType<ResultadoDistribuicao.Atribuido>(sucesso.Distribuicao);
+        Assert.Equal(donoAnterior.Id, atribuido.Conferente.Id);
+        Assert.Equal(2, protocolos.Quantidade);
+    }
+
+    [Fact]
+    public async Task NumeroComHistoricoAindaAtribuido_ContinuaBloqueando()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var existente = new Protocolo(Guid.NewGuid(), "999021", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, Agora);
+        existente.AtribuirA(Guid.NewGuid(), Agora);
+        var (casoDeUso, protocolos, _) = NovoCasoDeUso([], [], [], [tipo], [], [existente]);
+
+        var resultado = await casoDeUso.ExecutarAsync("999021", tipo.Id, "Alguém", Etapa.PosConferencia, Prioridade.Normal, observacao: null);
+
+        Assert.IsType<ResultadoCriarProtocoloManual.NumeroJaExiste>(resultado);
+        Assert.Equal(1, protocolos.Quantidade);
+    }
+
     [Fact]
     public async Task NumeroLivre_CriaEPersisteEResolveEscreventeNovo()
     {

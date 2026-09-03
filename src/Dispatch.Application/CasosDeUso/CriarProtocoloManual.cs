@@ -3,9 +3,11 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // RF-18f: cadastro de ato que chega fora do relatório, passando pelas mesmas regras de prazo e
-// alçada da importação — reaproveita DistribuirProtocolo (o mesmo fluxo do endpoint avulso), só
-// acrescentando o bloqueio de número duplicado que o cadastro manual pede (diferente da
-// importação, que tolera Numero repetido de propósito — ver ImportarLote/"linha de corte").
+// alçada da importação — reaproveita DistribuirProtocolo (o mesmo fluxo do endpoint avulso).
+// Segue o mesmo fluxo de continuidade da importação (ResolvedorDeContinuidade): Número
+// duplicado não é bloqueio automático, só quando o(s) registro(s) existentes ainda estão "em
+// uso" (proteção contra cadastro duplicado por engano — a importação não precisa disso porque
+// tem a linha de corte).
 public sealed class CriarProtocoloManual(
     IProtocoloRepository protocolos,
     IEscreventeRepository escreventes,
@@ -17,7 +19,8 @@ public sealed class CriarProtocoloManual(
         string numero, Guid tipoAtoId, string escreventeNome, Etapa etapa, Prioridade prioridade, string? observacao,
         CancellationToken cancellationToken = default)
     {
-        if (await protocolos.ExisteComNumeroAsync(numero, cancellationToken))
+        var historico = await protocolos.ObterPorNumerosAsync([numero], cancellationToken);
+        if (!ResolvedorDeContinuidade.PodeRecriar(historico))
         {
             return new ResultadoCriarProtocoloManual.NumeroJaExiste();
         }
@@ -35,7 +38,9 @@ public sealed class CriarProtocoloManual(
         // RF-15/18f: observação é opcional já na criação — o protótipo aprovado tem esse campo
         // no mesmo modal ("o conferente vê isso no card").
         protocolo.DefinirObservacao(observacao);
-        var resultado = await distribuirProtocolo.ExecutarAsync(protocolo, escrevente, cancellationToken);
+
+        var donoDaPrimeiraConferenciaId = ResolvedorDeContinuidade.Resolver(historico, etapa);
+        var resultado = await distribuirProtocolo.ExecutarAsync(protocolo, escrevente, donoDaPrimeiraConferenciaId, cancellationToken);
 
         return new ResultadoCriarProtocoloManual.Sucesso(protocolo.Id, resultado, protocolo.VencimentoEm);
     }

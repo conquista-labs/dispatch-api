@@ -11,6 +11,9 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
     public async Task<Protocolo?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos.Where(p => numeros.Contains(p.Numero)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.Where(p => ids.Contains(p.Id)).ToListAsync(cancellationToken);
 
@@ -68,7 +71,4 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
 
     public async Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.CountAsync(p => p.RegraAplicadaId == regraAlcadaId, cancellationToken);
-
-    public async Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken) =>
-        await dbContext.Protocolos.AnyAsync(p => p.Numero == numero, cancellationToken);
 }

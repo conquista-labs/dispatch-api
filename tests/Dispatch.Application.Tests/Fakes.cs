@@ -23,6 +23,21 @@ internal sealed class FakeConferenteRepository : IConferenteRepository
     public void Adicionar(Conferente conferente) => _conferentes.Add(conferente);
 }
 
+// Pré-carregado com os mesmos valores que eram hardcoded antes da tabela config existir —
+// testes que não têm nada a ver com configuração continuam com o mesmo comportamento de
+// sempre, só a origem do valor mudou.
+internal sealed class FakeConfiguracaoRepository : IConfiguracaoRepository
+{
+    private readonly Configuracao _configuracao;
+
+    public FakeConfiguracaoRepository(Configuracao? configuracao = null) =>
+        _configuracao = configuracao ?? new Configuracao(
+            Guid.NewGuid(), TimeSpan.FromHours(4), TimeSpan.FromMinutes(60), 1, TimeSpan.FromMinutes(15),
+            30, 18, 5, 8, 0.6, 3, 6, 0.5);
+
+    public Task<Configuracao> ObterAsync(CancellationToken cancellationToken) => Task.FromResult(_configuracao);
+}
+
 internal sealed class FakeEquipeRepository : IEquipeRepository
 {
     private readonly List<Equipe> _equipes;
@@ -140,6 +155,9 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
     public Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(_protocolos.Where(p => ids.Contains(p.Id)).ToList());
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(_protocolos.Where(p => numeros.Contains(p.Numero)).ToList());
+
     public Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());
@@ -187,9 +205,6 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
 
     public Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
         Task.FromResult(_protocolos.Count(p => p.RegraAplicadaId == regraAlcadaId));
-
-    public Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken) =>
-        Task.FromResult(_protocolos.Any(p => p.Numero == numero));
 
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;

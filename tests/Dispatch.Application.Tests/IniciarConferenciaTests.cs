@@ -13,7 +13,7 @@ public class IniciarConferenciaTests
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         var casoDeUso = new IniciarConferencia(
-            new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -27,7 +27,7 @@ public class IniciarConferenciaTests
     {
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var casoDeUso = new IniciarConferencia(
-            new FakeProtocoloRepository([]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakeProtocoloRepository([]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), conferente);
 
@@ -41,7 +41,7 @@ public class IniciarConferenciaTests
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         protocolo.AtribuirA(Guid.NewGuid(), DateTimeOffset.UtcNow);
         var casoDeUso = new IniciarConferencia(
-            new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -54,7 +54,7 @@ public class IniciarConferenciaTests
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
         var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var casoDeUso = new IniciarConferencia(
-            new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakeProtocoloRepository([protocolo]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -74,7 +74,7 @@ public class IniciarConferenciaTests
         novo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
 
         var casoDeUso = new IniciarConferencia(
-            new FakeProtocoloRepository([jaEmConferencia, novo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakeProtocoloRepository([jaEmConferencia, novo]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(novo.Id, conferente);
 

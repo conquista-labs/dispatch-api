@@ -50,10 +50,8 @@ public interface IProtocoloRepository
     // CargaAtual/Semaforo, nunca persistida na própria regra.
     Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken);
 
-    // RF-18f: bloqueia número duplicado no cadastro manual — Numero não é único no banco (não
-    // tem índice único, de propósito, ver ImportarLote/"linha de corte"), mas o cadastro manual
-    // é uma ação humana pontual, diferente de reprocessar relatório; qualquer status conta,
-    // inclusive Excluido (um número que já existiu, mesmo apagado, não devia ser reusado às
-    // cegas por um cadastro manual novo).
-    Task<bool> ExisteComNumeroAsync(string numero, CancellationToken cancellationToken);
+    // Continuidade de conferência + histórico do painel de detalhe: todas as linhas (qualquer
+    // status/lote) com esses números. Numero não é único de propósito — um mesmo item pode ter
+    // várias linhas ao longo do tempo (reprocessamento, RF-07).
+    Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken);
 }

@@ -18,6 +18,7 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
     public DbSet<EventoAutenticacao> EventosAutenticacao => Set<EventoAutenticacao>();
     public DbSet<LoteImportacao> LotesImportacao => Set<LoteImportacao>();
     public DbSet<PedidoReabertura> PedidosReabertura => Set<PedidoReabertura>();
+    public DbSet<Configuracao> Configuracoes => Set<Configuracao>();
     internal DbSet<RegraAlcadaRegistro> RegrasDeAlcada => Set<RegraAlcadaRegistro>();
     internal DbSet<SugestaoRegistro> Sugestoes => Set<SugestaoRegistro>();
 

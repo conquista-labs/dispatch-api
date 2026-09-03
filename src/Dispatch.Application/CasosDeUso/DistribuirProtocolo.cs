@@ -16,6 +16,7 @@ public sealed class DistribuirProtocolo(
     public async Task<ResultadoDistribuicao> ExecutarAsync(
         Protocolo protocolo,
         Escrevente escrevente,
+        Guid? donoDaPrimeiraConferenciaId = null,
         CancellationToken cancellationToken = default)
     {
         var resultado = AplicadorDeDistribuicao.Executar(
@@ -26,7 +27,8 @@ public sealed class DistribuirProtocolo(
             await regras.ObterAtivasAsync(cancellationToken),
             await tiposAto.ObterTodosAsync(cancellationToken),
             relogio.Agora,
-            out _);
+            out _,
+            donoDaPrimeiraConferenciaId);
 
         protocolos.Adicionar(protocolo);
         await unitOfWork.SalvarAsync(cancellationToken);

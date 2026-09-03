@@ -20,7 +20,11 @@ public sealed class SimularProtocoloManual(
         string numero, Guid tipoAtoId, string escreventeNome, Etapa etapa, Prioridade prioridade,
         CancellationToken cancellationToken = default)
     {
-        var numeroDisponivel = !await protocolos.ExisteComNumeroAsync(numero, cancellationToken);
+        // Mesmo fluxo de continuidade da importação/cadastro manual (ResolvedorDeContinuidade)
+        // — a prévia precisa mostrar o mesmo destino que ExecutarAsync (CriarProtocoloManual)
+        // vai produzir de verdade ao confirmar, senão o modal mentiria sobre o resultado.
+        var historico = await protocolos.ObterPorNumerosAsync([numero], cancellationToken);
+        var numeroDisponivel = ResolvedorDeContinuidade.PodeRecriar(historico);
         var catalogoTipos = await tiposAto.ObterTodosAsync(cancellationToken);
         var tipoAto = catalogoTipos.FirstOrDefault(t => t.Id == tipoAtoId);
 
@@ -30,6 +34,7 @@ public sealed class SimularProtocoloManual(
         var agora = relogio.Agora;
         var protocolo = new Protocolo(Guid.NewGuid(), numero, tipoAto?.Id, escrevente.Id, etapa, agora, prioridade);
 
+        var donoDaPrimeiraConferenciaId = numeroDisponivel ? ResolvedorDeContinuidade.Resolver(historico, etapa) : null;
         var resultado = AplicadorDeDistribuicao.Executar(
             protocolo,
             escrevente,
@@ -38,7 +43,8 @@ public sealed class SimularProtocoloManual(
             await regras.ObterAtivasAsync(cancellationToken),
             catalogoTipos,
             agora,
-            out var resolucaoPrazo);
+            out var resolucaoPrazo,
+            donoDaPrimeiraConferenciaId);
 
         var (destino, conferenteId, motivo) = resultado switch
         {

@@ -30,7 +30,7 @@ public class GerarSugestoesTests
         var sugestaoRepo = new FakeSugestaoRepository([]);
         var casoDeUso = new GerarSugestoes(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository([dono]), new FakeEscreventeRepository([]),
-            sugestaoRepo, new FakeUnitOfWork(), new FakeRelogio(Agora));
+            sugestaoRepo, new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var novas = await casoDeUso.ExecutarAsync();
 
@@ -51,7 +51,7 @@ public class GerarSugestoesTests
         var relogio = new FakeRelogio(Agora);
         var casoDeUso = new GerarSugestoes(
             repoProtocolos, new FakeConferenteRepository([dono]), new FakeEscreventeRepository([]),
-            sugestaoRepo, new FakeUnitOfWork(), relogio);
+            sugestaoRepo, new FakeConfiguracaoRepository(), new FakeUnitOfWork(), relogio);
 
         await casoDeUso.ExecutarAsync();
 
@@ -85,7 +85,7 @@ public class GerarSugestoesTests
         var sugestaoRepo = new FakeSugestaoRepository([sugestaoExistente]);
         var casoDeUso = new GerarSugestoes(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository([dono]), new FakeEscreventeRepository([]),
-            sugestaoRepo, new FakeUnitOfWork(), new FakeRelogio(Agora));
+            sugestaoRepo, new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var novas = await casoDeUso.ExecutarAsync();
 
@@ -106,7 +106,7 @@ public class GerarSugestoesTests
         var sugestaoRepo = new FakeSugestaoRepository([sugestaoExistente]);
         var casoDeUso = new GerarSugestoes(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository([dono]), new FakeEscreventeRepository([]),
-            sugestaoRepo, new FakeUnitOfWork(), new FakeRelogio(Agora));
+            sugestaoRepo, new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var novas = await casoDeUso.ExecutarAsync();
 

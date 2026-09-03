@@ -31,7 +31,7 @@ public class CorrigirResultadoTests
         var conferente = NovoConferente();
         var protocolo = NovoProtocoloConcluido(conferente, Agora.AddMinutes(-5));
         var protocolos = new FakeProtocoloRepository([protocolo]);
-        var casoDeUso = new CorrigirResultado(protocolos, new FakeRelogio(Agora), new FakeUnitOfWork());
+        var casoDeUso = new CorrigirResultado(protocolos, new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -46,7 +46,7 @@ public class CorrigirResultadoTests
         var conferente = NovoConferente();
         var protocolo = NovoProtocoloConcluido(conferente, Agora.AddMinutes(-16));
         var protocolos = new FakeProtocoloRepository([protocolo]);
-        var casoDeUso = new CorrigirResultado(protocolos, new FakeRelogio(Agora), new FakeUnitOfWork());
+        var casoDeUso = new CorrigirResultado(protocolos, new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -61,7 +61,7 @@ public class CorrigirResultadoTests
         var outroConferente = NovoConferente();
         var protocolo = NovoProtocoloConcluido(dono, Agora.AddMinutes(-1));
         var protocolos = new FakeProtocoloRepository([protocolo]);
-        var casoDeUso = new CorrigirResultado(protocolos, new FakeRelogio(Agora), new FakeUnitOfWork());
+        var casoDeUso = new CorrigirResultado(protocolos, new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, outroConferente);
 
@@ -76,7 +76,7 @@ public class CorrigirResultadoTests
         protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
         protocolo.IniciarConferencia(DateTimeOffset.UtcNow);
         var protocolos = new FakeProtocoloRepository([protocolo]);
-        var casoDeUso = new CorrigirResultado(protocolos, new FakeRelogio(Agora), new FakeUnitOfWork());
+        var casoDeUso = new CorrigirResultado(protocolos, new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente);
 
@@ -88,7 +88,7 @@ public class CorrigirResultadoTests
     {
         var conferente = NovoConferente();
         var protocolos = new FakeProtocoloRepository([]);
-        var casoDeUso = new CorrigirResultado(protocolos, new FakeRelogio(Agora), new FakeUnitOfWork());
+        var casoDeUso = new CorrigirResultado(protocolos, new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), conferente);
 

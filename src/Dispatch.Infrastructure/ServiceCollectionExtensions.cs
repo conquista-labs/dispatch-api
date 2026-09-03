@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILoteImportacaoRepository, LoteImportacaoRepository>();
         services.AddScoped<ISugestaoRepository, SugestaoRepository>();
         services.AddScoped<IPedidoReaberturaRepository, PedidoReaberturaRepository>();
+        services.AddScoped<IConfiguracaoRepository, ConfiguracaoRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWorkEfCore>();
         services.AddSingleton<IRelogio, RelogioDoSistema>();
         services.AddSingleton<IHashDeSenha, HashDeSenhaAspNetCore>();
@@ -57,6 +58,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IniciarRecuperacaoSenha>();
         services.AddScoped<ValidarCodigoRecuperacao>();
         services.AddScoped<RedefinirSenha>();
+
+        // Configuração (ConfiguracaoEndpoints)
+        services.AddScoped<ObterConfiguracao>();
+        services.AddScoped<AtualizarConfiguracao>();
 
         // Conferente (ConferenteEndpoints)
         services.AddScoped<CadastrarConferente>();

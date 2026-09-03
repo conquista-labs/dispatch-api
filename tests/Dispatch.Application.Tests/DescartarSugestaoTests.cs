@@ -11,7 +11,7 @@ public class DescartarSugestaoTests
     {
         var sugestao = new Sugestao(
             Guid.NewGuid(), "chave", new PayloadSugestao.TipoDesconhecido("X", Nivel.Pleno), "evidência", 5, 0.8, Agora);
-        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([sugestao]), new FakeUnitOfWork(), new FakeRelogio(Agora));
+        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([sugestao]), new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await casoDeUso.ExecutarAsync(sugestao.Id);
 
@@ -23,7 +23,7 @@ public class DescartarSugestaoTests
     [Fact]
     public async Task SugestaoInexistente_RetornaFalse()
     {
-        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([]), new FakeUnitOfWork(), new FakeRelogio(Agora));
+        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([]), new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid());
 
@@ -36,7 +36,7 @@ public class DescartarSugestaoTests
         var sugestao = new Sugestao(
             Guid.NewGuid(), "chave", new PayloadSugestao.TipoDesconhecido("X", Nivel.Pleno), "evidência", 5, 0.8, Agora);
         sugestao.Aplicar(Agora);
-        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([sugestao]), new FakeUnitOfWork(), new FakeRelogio(Agora));
+        var casoDeUso = new DescartarSugestao(new FakeSugestaoRepository([sugestao]), new FakeConfiguracaoRepository(), new FakeUnitOfWork(), new FakeRelogio(Agora));
 
         var resultado = await casoDeUso.ExecutarAsync(sugestao.Id);
 

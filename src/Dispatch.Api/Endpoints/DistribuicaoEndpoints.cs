@@ -11,21 +11,23 @@ public static class DistribuicaoEndpoints
         app.MapGet("/protocolos/distribuicao", async (
                 Guid? loteImportacaoId,
                 ObterVisaoDistribuicao casoDeUso,
+                ObterConfiguracao obterConfiguracao,
                 IRelogio relogio,
                 CancellationToken cancellationToken) =>
             {
                 var visao = await casoDeUso.ExecutarAsync(loteImportacaoId, cancellationToken);
                 var agora = relogio.Agora;
+                var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
+                ProtocoloResumo ParaResumo(Protocolo p) => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente);
 
                 return Results.Ok(new VisaoDistribuicaoResponse(
-                    visao.Pool.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    visao.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    visao.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    visao.Concluidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
-                    visao.Excecoes.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    visao.Pool.Select(ParaResumo).ToList(),
+                    visao.Atribuidos.Select(ParaResumo).ToList(),
+                    visao.EmConferencia.Select(ParaResumo).ToList(),
+                    visao.Concluidos.Select(ParaResumo).ToList(),
+                    visao.Excecoes.Select(ParaResumo).ToList(),
                     visao.PorConferente
-                        .Select(g => new GrupoPorConferenteResponse(
-                            g.ConferenteId, g.Protocolos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList()))
+                        .Select(g => new GrupoPorConferenteResponse(g.ConferenteId, g.Protocolos.Select(ParaResumo).ToList()))
                         .ToList()));
             })
             .WithName("ObterVisaoDistribuicao")

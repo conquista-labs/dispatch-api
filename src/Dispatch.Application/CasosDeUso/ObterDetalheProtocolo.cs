@@ -26,13 +26,21 @@ public sealed class ObterDetalheProtocolo(
         var equipeDoEscreventeId = (await escreventes.ObterPorIdAsync(protocolo.EscreventeId, cancellationToken))?.EquipeId;
         var tipo = protocolo.TipoAtoId is { } tipoAtoId ? await tiposAto.ObterPorIdAsync(tipoAtoId, cancellationToken) : null;
 
+        // Histórico de conferências (pedido do dono, não é RF numerado): outras linhas com o
+        // mesmo Número (RF-07, Numero não é único de propósito) — a mais recente primeiro,
+        // mesmo padrão de "quem vence primeiro no topo" já usado no pool.
+        var historico = (await protocolos.ObterPorNumerosAsync([protocolo.Numero], cancellationToken))
+            .Where(p => p.Id != protocolo.Id)
+            .OrderByDescending(p => p.AndamentoEm)
+            .ToList();
+
         // Tipo desconhecido (TipoAtoId nulo, ou removido do catálogo) nunca é elegível — não
         // tem alvo pra resolver regra nenhuma contra.
         if (tipo is null)
         {
             var negado = new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null);
             return new ResultadoDetalheProtocolo(
-                protocolo, conferentesNaEscala.Select(c => new AvaliacaoCandidatoComTrilha(c, negado, [])).ToList());
+                protocolo, conferentesNaEscala.Select(c => new AvaliacaoCandidatoComTrilha(c, negado, [])).ToList(), historico);
         }
 
         var caso = new CasoAlcada(protocolo.Etapa, tipo, equipeDoEscreventeId);
@@ -41,7 +49,7 @@ public sealed class ObterDetalheProtocolo(
                 c, ResolvedorAlcada.Resolver(c, caso, regrasAtivas), ResolvedorAlcada.Explicar(c, caso, regrasAtivas)))
             .ToList();
 
-        return new ResultadoDetalheProtocolo(protocolo, avaliacoes);
+        return new ResultadoDetalheProtocolo(protocolo, avaliacoes, historico);
     }
 }
 
@@ -52,4 +60,5 @@ public sealed record AvaliacaoCandidatoComTrilha(Conferente Conferente, DecisaoA
     public bool Elegivel => Decisao.Resultado == ResultadoAlcada.Permitido;
 }
 
-public sealed record ResultadoDetalheProtocolo(Protocolo Protocolo, IReadOnlyList<AvaliacaoCandidatoComTrilha> Avaliacoes);
+public sealed record ResultadoDetalheProtocolo(
+    Protocolo Protocolo, IReadOnlyList<AvaliacaoCandidatoComTrilha> Avaliacoes, IReadOnlyList<Protocolo> HistoricoConferencias);
