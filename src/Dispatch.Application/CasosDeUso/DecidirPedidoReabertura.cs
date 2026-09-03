@@ -25,9 +25,17 @@ public sealed class DecidirPedidoReabertura(
         if (aprovar)
         {
             // Protocolo sempre existe aqui — pedido não é criado sem protocolo válido
-            // (PedirReabertura já valida isso), e protocolos não são apagados.
+            // (PedirReabertura já valida isso), e protocolos não são apagados (soft-delete).
+            // Mas o status pode ter mudado desde que o pedido foi criado (ex.: excluído nesse
+            // meio-tempo) — mesma guarda que ReabrirConferencia.cs já aplica, senão aprovar um
+            // pedido velho força a transição por baixo de ExcluirProtocolo/RestaurarProtocolo.
             var protocolo = await protocolos.ObterPorIdAsync(pedido.ProtocoloId, cancellationToken);
-            protocolo!.ReabrirConferencia(agora);
+            if (protocolo!.Status is not (StatusProtocolo.Aprovado or StatusProtocolo.Reprovado))
+            {
+                return new ResultadoDecidirPedidoReabertura.StatusInvalido();
+            }
+
+            protocolo.ReabrirConferencia(agora);
             pedido.Aprovar(decididoPorId, agora);
         }
         else
@@ -49,4 +57,6 @@ public abstract record ResultadoDecidirPedidoReabertura
     public sealed record NaoEncontrado : ResultadoDecidirPedidoReabertura;
 
     public sealed record NaoEstaPendente : ResultadoDecidirPedidoReabertura;
+
+    public sealed record StatusInvalido : ResultadoDecidirPedidoReabertura;
 }

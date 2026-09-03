@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using Dispatch.Api;
 using Dispatch.Api.Endpoints;
 using Dispatch.Api.OpenApi;
 using Dispatch.Application;
@@ -62,7 +63,7 @@ builder.Services
         {
             OnTokenValidated = async context =>
             {
-                var usuarioId = Guid.Parse(context.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var usuarioId = context.Principal!.ObterUsuarioId();
                 var usuarios = context.HttpContext.RequestServices.GetRequiredService<IUsuarioRepository>();
                 var usuario = await usuarios.ObterPorIdAsync(usuarioId, context.HttpContext.RequestAborted);
 
@@ -108,6 +109,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
     .WithTags(OpenApiTags.Sistema)
     .AllowAnonymous();
 app.MapAuthEndpoints();
+app.MapTotpEndpoints();
+app.MapRecuperacaoSenhaEndpoints();
 app.MapProtocoloEndpoints();
 app.MapConferenteEndpoints();
 app.MapImportacaoEndpoints();

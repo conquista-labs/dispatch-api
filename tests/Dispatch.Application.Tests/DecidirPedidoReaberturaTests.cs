@@ -69,6 +69,26 @@ public class DecidirPedidoReaberturaTests
     }
 
     [Fact]
+    public async Task Aprovar_ProtocoloFoiExcluidoDepoisDoPedido_StatusInvalido()
+    {
+        // Cenário do bug real: pedido pendente criado, protocolo excluído (soft-delete) nesse
+        // meio-tempo, distribuidora aprova o pedido velho sem saber da exclusão — não pode
+        // forçar o protocolo de volta pra Conferindo por baixo do RestaurarProtocolo.
+        var conferente = NovoConferente();
+        var protocolo = NovoProtocoloConcluido(conferente);
+        var pedido = new PedidoReabertura(Guid.NewGuid(), protocolo.Id, conferente.Id, Agora.AddMinutes(-5));
+        protocolo.Excluir();
+        var casoDeUso = new DecidirPedidoReabertura(
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: true, Guid.NewGuid());
+
+        Assert.IsType<ResultadoDecidirPedidoReabertura.StatusInvalido>(resultado);
+        Assert.Equal(StatusPedidoReabertura.Pendente, pedido.Status);
+        Assert.Equal(StatusProtocolo.Excluido, protocolo.Status);
+    }
+
+    [Fact]
     public async Task IdInexistente_NaoEncontrado()
     {
         var casoDeUso = new DecidirPedidoReabertura(

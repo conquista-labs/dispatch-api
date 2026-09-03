@@ -47,7 +47,7 @@ public sealed class AtribuirAoMenosCarregado(
             return ResultadoAtribuirAoMenosCarregado.NinguemComAlcada;
         }
 
-        var escolhido = elegiveis.OrderBy(c => c.CargaAtual).First();
+        var escolhido = MotorDistribuicao.EscolherMenosCarregado(elegiveis, c => c);
         // Decisão humana explícita (a distribuidora clicou o botão), não decisão automática de
         // uma regra específica — RegraAplicadaId fica nulo, igual AtribuirManualmente/PegarProtocolo.
         protocolo.AtribuirA(escolhido.Id, relogio.Agora);

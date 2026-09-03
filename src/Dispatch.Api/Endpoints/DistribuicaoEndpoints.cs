@@ -6,12 +6,6 @@ namespace Dispatch.Api.Endpoints;
 
 public static class DistribuicaoEndpoints
 {
-    // Seção 5 do requisito: as duas faixas do semáforo são configuração do sistema. Ainda não
-    // existe tabela de config (seção 8) — hardcoded aqui, com os mesmos valores de exemplo do
-    // próprio documento, até isso existir.
-    private static readonly TimeSpan FaixaAtencao = TimeSpan.FromHours(4);
-    private static readonly TimeSpan FaixaUrgente = TimeSpan.FromMinutes(60);
-
     public static void MapDistribuicaoEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/protocolos/distribuicao", async (
@@ -24,13 +18,14 @@ public static class DistribuicaoEndpoints
                 var agora = relogio.Agora;
 
                 return Results.Ok(new VisaoDistribuicaoResponse(
-                    visao.Pool.Select(p => ParaResumo(p, agora)).ToList(),
-                    visao.Atribuidos.Select(p => ParaResumo(p, agora)).ToList(),
-                    visao.EmConferencia.Select(p => ParaResumo(p, agora)).ToList(),
-                    visao.Concluidos.Select(p => ParaResumo(p, agora)).ToList(),
-                    visao.Excecoes.Select(p => ParaResumo(p, agora)).ToList(),
+                    visao.Pool.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    visao.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    visao.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    visao.Concluidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
+                    visao.Excecoes.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList(),
                     visao.PorConferente
-                        .Select(g => new GrupoPorConferenteResponse(g.ConferenteId, g.Protocolos.Select(p => ParaResumo(p, agora)).ToList()))
+                        .Select(g => new GrupoPorConferenteResponse(
+                            g.ConferenteId, g.Protocolos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora)).ToList()))
                         .ToList()));
             })
             .WithName("ObterVisaoDistribuicao")
@@ -39,25 +34,6 @@ public static class DistribuicaoEndpoints
             .Produces<VisaoDistribuicaoResponse>()
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
-
-    // RF-14: cada card leva protocolo/tipo/escrevente/etapa e o semáforo com o tempo restante.
-    // Equipe não vai aqui — dá pra achar cruzando EscreventeId com GET /escreventes, que já
-    // devolve o EquipeId de cada um; card não precisa repetir esse dado.
-    private static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
-        protocolo.Id,
-        protocolo.Numero,
-        protocolo.TipoAtoId,
-        protocolo.EscreventeId,
-        protocolo.Etapa,
-        protocolo.Prioridade,
-        protocolo.Status,
-        protocolo.DonoId,
-        protocolo.VencimentoEm,
-        protocolo.MotivoExcecao,
-        // RF-15: a observação do conferente aparece no card pra gestão.
-        protocolo.Observacao,
-        protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, FaixaAtencao, FaixaUrgente) : null,
-        protocolo.IniciadoEm);
 }
 
 public sealed record ProtocoloResumo(

@@ -115,7 +115,7 @@ public static class GeradorDeSugestoes
                 continue;
             }
 
-            var (equipeSugerida, dominanciaDaEquipe) = ModaGuidComForca(equipesNoMesmoLote);
+            var (equipeSugerida, dominanciaDaEquipe) = ModaComForca(equipesNoMesmoLote);
             candidatos.Add(new CandidatoSugestao(
                 $"escrevente-orfao:{orfao.Id}",
                 new PayloadSugestao.EscreventeOrfao(orfao.Id, equipeSugerida),
@@ -161,14 +161,10 @@ public static class GeradorDeSugestoes
 
     // Além do valor mais comum, devolve a força dele (contagem do grupo majoritário / total) —
     // é o sinal de confiança das sugestões TipoDesconhecido/EscreventeOrfao (ver
-    // CandidatoSugestao.IndiceConfianca).
-    private static (Nivel Valor, double Forca) ModaComForca(IReadOnlyCollection<Nivel> valores)
-    {
-        var grupo = valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
-        return (grupo.Key, (double)grupo.Count() / valores.Count);
-    }
-
-    private static (Guid Valor, double Forca) ModaGuidComForca(IReadOnlyCollection<Guid> valores)
+    // CandidatoSugestao.IndiceConfianca). Genérico desde uma auditoria de qualidade — antes
+    // existiam ModaComForca(Nivel) e ModaGuidComForca(Guid) como cópias do mesmo algoritmo,
+    // diferindo só no tipo do elemento.
+    private static (T Valor, double Forca) ModaComForca<T>(IReadOnlyCollection<T> valores) where T : notnull
     {
         var grupo = valores.GroupBy(v => v).OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
         return (grupo.Key, (double)grupo.Count() / valores.Count);

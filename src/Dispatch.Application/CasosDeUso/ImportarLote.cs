@@ -50,11 +50,16 @@ public sealed class ImportarLote(
             ? new LoteImportacao(Guid.NewGuid(), etapa, linhaDeCorte, agora, relevantes.Count)
             : null;
 
-        var escreventesConhecidos = (await escreventes.ObterTodosAsync(cancellationToken)).ToList();
+        // Dicionário por nome normalizado (não lista + FirstOrDefault por linha) — um lote pode
+        // ter centenas de linhas (ver dispatch-api/CLAUDE.md), então uma busca linear nos dois
+        // catálogos por linha é custo que cresce junto (achado numa auditoria de qualidade).
+        var escreventePorNome = (await escreventes.ObterTodosAsync(cancellationToken))
+            .ToDictionary(e => e.Nome, StringComparer.OrdinalIgnoreCase);
         var equipesTodas = await equipes.ObterTodasAsync(cancellationToken);
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
-        var catalogoTipos = (await tiposAto.ObterTodosAsync(cancellationToken)).ToList();
+        var tipoPorNome = (await tiposAto.ObterTodosAsync(cancellationToken))
+            .ToDictionary(t => t.Nome, StringComparer.OrdinalIgnoreCase);
 
         var novosEscreventes = new List<Escrevente>();
         var novosTipos = new List<TipoAto>();
@@ -79,22 +84,18 @@ public sealed class ImportarLote(
                 continue;
             }
 
-            var escrevente = escreventesConhecidos.FirstOrDefault(
-                e => string.Equals(e.Nome, linha.Escrevente, StringComparison.OrdinalIgnoreCase));
-            if (escrevente is null)
+            if (!escreventePorNome.TryGetValue(linha.Escrevente, out var escrevente))
             {
                 // RF-09: escrevente desconhecido nasce sem equipe — vira alocação manual
                 // depois, na Central de regras. Nome vem do relatório em caixa alta — normaliza
                 // antes de gravar (ninguém trata nome de gente assim na prática).
                 escrevente = new Escrevente(Guid.NewGuid(), NormalizadorDeTexto.ParaNomeProprio(linha.Escrevente), equipeId: null);
-                escreventesConhecidos.Add(escrevente);
+                escreventePorNome[escrevente.Nome] = escrevente;
                 novosEscreventes.Add(escrevente);
             }
 
-            var tipoAto = catalogoTipos.FirstOrDefault(
-                t => string.Equals(t.Nome, linha.TipoAto, StringComparison.OrdinalIgnoreCase));
-            var tipoJaExistia = tipoAto is not null;
-            if (tipoAto is null)
+            var tipoJaExistia = tipoPorNome.ContainsKey(linha.TipoAto);
+            if (!tipoPorNome.TryGetValue(linha.TipoAto, out var tipoAto))
             {
                 // Tipo de ato novo entra direto no catálogo (nome normalizado) — não fica
                 // esperando revisão humana como uma sugestão de aprendizado (RF-39/RF-40): sem
@@ -105,7 +106,7 @@ public sealed class ImportarLote(
                 // em si deixou de travar. `tiposDesconhecidos` continua sinalizando (RF-09),
                 // agora como "isso é novo, acabou de entrar no catálogo".
                 tipoAto = new TipoAto(Guid.NewGuid(), NormalizadorDeTexto.ParaNomeProprio(linha.TipoAto));
-                catalogoTipos.Add(tipoAto);
+                tipoPorNome[tipoAto.Nome] = tipoAto;
                 novosTipos.Add(tipoAto);
                 tiposDesconhecidos.Add(tipoAto.Nome);
             }
@@ -115,7 +116,7 @@ public sealed class ImportarLote(
                 loteImportacaoId: lote?.Id, tipoAtoNomeOriginal: linha.TipoAto);
 
             var resultado = AplicadorDeDistribuicao.Executar(
-                protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, catalogoTipos, agora,
+                protocolo, escrevente, equipesTodas, conferentesNaEscala, regrasAtivas, tipoPorNome.Values, agora,
                 out var resolucaoPrazo);
 
             if (resolucaoPrazo.SemEquipeSinalizado)

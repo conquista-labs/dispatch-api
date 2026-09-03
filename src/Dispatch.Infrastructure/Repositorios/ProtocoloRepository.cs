@@ -11,6 +11,9 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
     public async Task<Protocolo?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos.Where(p => ids.Contains(p.Id)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
         await dbContext.Protocolos
             .Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId)

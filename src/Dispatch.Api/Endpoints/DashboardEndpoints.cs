@@ -22,7 +22,7 @@ public static class DashboardEndpoints
                 Guid? conferenteRestritoId = null;
                 if (usuario.IsInRole(nameof(Papel.Conferente)))
                 {
-                    var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                    var usuarioId = usuario.ObterUsuarioId();
                     var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
                     if (conferente is null)
                     {

@@ -15,42 +15,6 @@ public static class ProtocoloEndpoints
 
     public static void MapProtocoloEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/protocolos/distribuir", async (
-                DistribuirProtocoloRequest request,
-                DistribuirProtocolo casoDeUso,
-                ITipoAtoRepository tiposAto,
-                IEscreventeRepository escreventes,
-                IRelogio relogio,
-                CancellationToken cancellationToken) =>
-            {
-                // Mesmo cuidado do ImportarLote: não confia cegamente que o TipoAtoId recebido
-                // existe — se não existir no catálogo, vira nulo (tipo desconhecido, RF-09),
-                // em vez de quebrar a FK na hora de gravar.
-                var tipoConhecido = (await tiposAto.ObterTodosAsync(cancellationToken)).Any(t => t.Id == request.TipoAtoId);
-                var tipoAtoId = tipoConhecido ? request.TipoAtoId : (Guid?)null;
-
-                // Cria sem equipe se for a primeira vez que esse escrevente aparece. Sem isso,
-                // EscreventeId apontaria pra uma linha que não existe (FK quebrada na hora de
-                // gravar o protocolo).
-                var escrevente = await ResolvedorDeEscreventePorNome.ResolverAsync(
-                    request.EscreventeNome, escreventes, adicionarSeNovo: true, cancellationToken);
-
-                // Endpoint avulso, sem relatório por trás — usa "agora" como o instante do
-                // andamento, já que não existe um de verdade vindo de importação nenhuma.
-                var protocolo = new Protocolo(
-                    Guid.NewGuid(), request.Numero, tipoAtoId, escrevente.Id, request.Etapa, relogio.Agora, request.Prioridade);
-
-                var resultado = await casoDeUso.ExecutarAsync(protocolo, escrevente, cancellationToken);
-
-                return Results.Ok(ParaResponse(protocolo.Id, protocolo.VencimentoEm, resultado));
-            })
-            .WithName("DistribuirProtocolo")
-            .WithSummary("Resolve o prazo do protocolo e decide o destino: atribuído, pool ou exceção.")
-            .WithTags(OpenApiTags.Protocolos)
-            .Produces<DistribuirProtocoloResponse>()
-            // Seção 3 do requisito: importação/distribuição é ação de gestão — só Distribuidora.
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
-
         app.MapPost("/protocolos/redistribuir-pool", async (RedistribuirPool casoDeUso, CancellationToken cancellationToken) =>
             {
                 var alterados = await casoDeUso.ExecutarAsync(cancellationToken);
@@ -89,7 +53,7 @@ public static class ProtocoloEndpoints
         app.MapPost("/protocolos/{id:guid}/descartar", async (Guid id, DescartarExcecao casoDeUso, CancellationToken cancellationToken) =>
             {
                 var encontrado = await casoDeUso.ExecutarAsync(id, cancellationToken);
-                return encontrado ? Results.NoContent() : Results.NotFound();
+                return encontrado ? Results.NoContent() : Results.NotFound(new { motivo = "protocolo não encontrado" });
             })
             .WithName("DescartarExcecaoProtocolo")
             .WithSummary("Descarta uma exceção sem resolver (RF-17). Só funciona em protocolo que está em exceção.")
@@ -112,7 +76,7 @@ public static class ProtocoloEndpoints
                 Guid? conferenteRestritoId = null;
                 if (usuario.IsInRole(nameof(Papel.Conferente)))
                 {
-                    var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                    var usuarioId = usuario.ObterUsuarioId();
                     var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
                     if (conferente is null)
                     {
@@ -195,7 +159,9 @@ public static class ProtocoloEndpoints
 
         app.MapPost("/protocolos/{id:guid}/definir-prioridade", async (
                 Guid id, DefinirPrioridadeRequest request, DefinirPrioridadeDoProtocolo casoDeUso, CancellationToken cancellationToken) =>
-                await casoDeUso.ExecutarAsync(id, request.Prioridade, cancellationToken) ? Results.NoContent() : Results.NotFound())
+                await casoDeUso.ExecutarAsync(id, request.Prioridade, cancellationToken)
+                    ? Results.NoContent()
+                    : Results.NotFound(new { motivo = "protocolo não encontrado" }))
             .WithName("DefinirPrioridadeDoProtocolo")
             .WithSummary("Marca/desmarca um protocolo como urgente — único jeito real de definir prioridade alta hoje (a importação nunca define).")
             .WithTags(OpenApiTags.Protocolos)
@@ -329,13 +295,14 @@ public static class ProtocoloEndpoints
     private static async Task<IResult> ExecutarDecisaoAsync(
         Guid pedidoId, bool aprovar, DecidirPedidoReabertura casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken)
     {
-        var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var usuarioId = usuario.ObterUsuarioId();
         var resultado = await casoDeUso.ExecutarAsync(pedidoId, aprovar, usuarioId, cancellationToken);
         return resultado switch
         {
             ResultadoDecidirPedidoReabertura.Sucesso => Results.NoContent(),
             ResultadoDecidirPedidoReabertura.NaoEncontrado => Results.NotFound(new { motivo = "pedido não encontrado" }),
             ResultadoDecidirPedidoReabertura.NaoEstaPendente => Results.Conflict(new { motivo = "pedido não está pendente" }),
+            ResultadoDecidirPedidoReabertura.StatusInvalido => Results.Conflict(new { motivo = "protocolo não está mais concluído" }),
             _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
         };
     }
@@ -375,13 +342,6 @@ public static class ProtocoloEndpoints
         _ => throw new InvalidOperationException($"Resultado de distribuição não mapeado: {resultado.GetType().Name}")
     };
 }
-
-public sealed record DistribuirProtocoloRequest(
-    string Numero,
-    Guid TipoAtoId,
-    Etapa Etapa,
-    Prioridade Prioridade,
-    string EscreventeNome);
 
 public sealed record DistribuirProtocoloResponse(
     Guid ProtocoloId,

@@ -262,14 +262,15 @@ public static class MinhaFilaEndpoints
     private static async Task<Conferente?> ResolverConferenteAsync(
         ClaimsPrincipal usuario, IConferenteRepository conferentes, CancellationToken cancellationToken)
     {
-        var usuarioId = Guid.Parse(usuario.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var usuarioId = usuario.ObterUsuarioId();
         return await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
     }
 
     // internal, não private: ConferenteEndpoints reaproveita (GET /conferentes/{id}/fila —
-    // Distribuidora vendo a fila de um conferente específico, em leitura) — é mapeamento de
-    // verdade (Protocolo → DTO), diferente das faixas hardcoded acima, que são config e por
-    // isso ficam duplicadas de propósito.
+    // Distribuidora vendo a fila de um conferente específico, em leitura) e DistribuicaoEndpoints
+    // também (RF-14 — antes tinha uma cópia própria, unificado numa auditoria de qualidade) —
+    // é mapeamento de verdade (Protocolo → DTO), diferente das faixas hardcoded acima, que são
+    // config e por isso ficam duplicadas de propósito.
     internal static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora) => new(
         protocolo.Id,
         protocolo.Numero,

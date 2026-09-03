@@ -42,7 +42,13 @@ public static class MotorDistribuicao
             return new ResultadoDistribuicao.EnviadoParaPool(elegiveis);
         }
 
-        var escolhido = elegiveis.OrderBy(a => a.Conferente.CargaAtual).First();
+        var escolhido = EscolherMenosCarregado(elegiveis, a => a.Conferente);
         return new ResultadoDistribuicao.Atribuido(escolhido.Conferente, escolhido, elegiveis);
     }
+
+    // Desempate único do motor ("menor carga vence") — extraído pra ser reaproveitado por
+    // AtribuirAoMenosCarregado (Application), que atribui na mão fora do caminho normal do
+    // motor mas precisa do mesmo critério, sem reimplementar a regra.
+    public static T EscolherMenosCarregado<T>(IReadOnlyCollection<T> candidatos, Func<T, Conferente> conferenteDe) =>
+        candidatos.OrderBy(c => conferenteDe(c).CargaAtual).First();
 }

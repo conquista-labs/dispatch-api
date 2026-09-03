@@ -6,6 +6,11 @@ public interface IProtocoloRepository
 {
     void Adicionar(Protocolo protocolo);
     Task<Protocolo?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken);
+
+    // Busca em lote, mesmo molde de IUsuarioRepository.ObterVariosPorIdsAsync — evita N+1 em
+    // leituras que resolvem vários protocolos por id de uma vez (ex.: pedidos de reabertura
+    // pendentes, achado numa auditoria de qualidade).
+    Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken);
 
     // RF-13: loteImportacaoId nulo = todos os protocolos (sem filtrar por lote).

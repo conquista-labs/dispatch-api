@@ -42,24 +42,18 @@ public static class ResolvedorAlcada
 
         var minhas = ativas.Where(r => r.Permissao != PermissaoRegra.Reserva && ValePara(r, conferente)).ToList();
 
-        ResultadoAlcada? veredito = null;
-        RegraAlcada? regraDecisiva = null;
-        Dimensao? dimensaoDecisiva = null;
-
-        foreach (var camada in OrdemDasCamadas)
+        // "A de baixo sobrescreve a de cima" — entre as camadas com opinião sobre o caso, a
+        // última (na ordem Nível → Equipe → Pessoa) decide.
+        var opinioes = CamadasComOpiniao(minhas, caso).ToList();
+        if (opinioes.Count == 0)
         {
-            var (resultado, regra, dimensao) = DecideCamada(minhas.Where(r => CamadaDe(r) == camada).ToList(), caso);
-            if (resultado is not null)
-            {
-                veredito = resultado;
-                regraDecisiva = regra;
-                dimensaoDecisiva = dimensao;
-            }
+            return new DecisaoAlcada(ResultadoAlcada.Permitido, null);
         }
 
-        return veredito == ResultadoAlcada.Negado
-            ? new DecisaoAlcada(ResultadoAlcada.Negado, regraDecisiva, dimensaoDecisiva is { } d ? MotivoDaDimensao(d) : MotivoAlcada.Geral)
-            : new DecisaoAlcada(ResultadoAlcada.Permitido, regraDecisiva);
+        var ultima = opinioes[^1];
+        return ultima.Resultado == ResultadoAlcada.Negado
+            ? new DecisaoAlcada(ResultadoAlcada.Negado, ultima.Regra, ultima.Dimensao is { } d ? MotivoDaDimensao(d) : MotivoAlcada.Geral)
+            : new DecisaoAlcada(ResultadoAlcada.Permitido, ultima.Regra);
     }
 
     // Trilha completa (uma entrada por camada com opinião, mais a reserva se houver) — só pra
@@ -82,6 +76,18 @@ public static class ResolvedorAlcada
         }
 
         var minhas = ativas.Where(r => r.Permissao != PermissaoRegra.Reserva && ValePara(r, conferente)).ToList();
+        passos.AddRange(CamadasComOpiniao(minhas, caso).Select(o => new PassoTrilha(NomeDaCamada(o.Camada), o.Resultado, o.Regra)));
+
+        return passos;
+    }
+
+    // Laço comum entre Resolver (reduz pra a última opinião) e Explicar (mostra todas) — cada
+    // camada com regra aplicável opina uma vez, na ordem Nível → Equipe → Pessoa; camada sem
+    // regra aplicável não entra (achado numa auditoria de qualidade — antes cada método
+    // percorria OrdemDasCamadas por conta própria, duplicando a mesma orquestração).
+    private static IEnumerable<(Camada Camada, ResultadoAlcada Resultado, RegraAlcada Regra, Dimensao? Dimensao)> CamadasComOpiniao(
+        IReadOnlyCollection<RegraAlcada> minhas, CasoAlcada caso)
+    {
         foreach (var camada in OrdemDasCamadas)
         {
             var doCamada = minhas.Where(r => CamadaDe(r) == camada).ToList();
@@ -90,16 +96,14 @@ public static class ResolvedorAlcada
                 continue;
             }
 
-            var (resultado, regra, _) = DecideCamada(doCamada, caso);
+            var (resultado, regra, dimensao) = DecideCamada(doCamada, caso);
             if (resultado is null)
             {
                 continue;
             }
 
-            passos.Add(new PassoTrilha(NomeDaCamada(camada), resultado.Value, regra));
+            yield return (camada, resultado.Value, regra!, dimensao);
         }
-
-        return passos;
     }
 
     private static RegraAlcada? ReservaQueBloqueia(Conferente conferente, CasoAlcada caso, IReadOnlyCollection<RegraAlcada> ativas)

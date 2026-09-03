@@ -29,46 +29,17 @@ public static class RegraAlcadaEndpoints
 
         grupo.MapPost("/", async (CriarRegraAlcadaRequest request, CriarRegraAlcada casoDeUso, CancellationToken cancellationToken) =>
             {
-                SujeitoAlcada sujeito;
-                if (request.SujeitoNivel is { } nivel && request.SujeitoConferenteId is null)
+                var (sujeito, erroSujeito) = TentarMontarSujeito(request);
+                if (sujeito is null)
                 {
-                    sujeito = new SujeitoAlcada.PorNivel(nivel);
-                }
-                else if (request.SujeitoConferenteId is { } conferenteId && request.SujeitoNivel is null)
-                {
-                    sujeito = new SujeitoAlcada.PorPessoa(conferenteId);
-                }
-                else
-                {
-                    return Results.BadRequest(new { motivo = "informe exatamente um entre sujeitoNivel e sujeitoConferenteId" });
+                    return Results.BadRequest(new { motivo = erroSujeito });
                 }
 
-                // "Equipe" aceita Guid? nulo como valor válido (RF-29a: "sem equipe" é alvo
-                // legítimo) — por isso o XOR usa um flag próprio (AlvoEhEquipe) em vez de só
-                // checar AlvoEquipeId != null, senão não daria pra diferenciar "regra de
-                // equipe = sem equipe" de "não é regra de equipe".
-                var camposDeAlvoInformados = new[]
-                    {
-                        request.AlvoEtapa is not null, request.AlvoTipoAtoId is not null, request.AlvoEhEquipe,
-                        request.AlvoTodosOsAtos, request.AlvoGrupo is not null
-                    }
-                    .Count(informado => informado);
-                if (camposDeAlvoInformados != 1)
+                var (alvo, erroAlvo) = TentarMontarAlvo(request);
+                if (alvo is null)
                 {
-                    return Results.BadRequest(new
-                    {
-                        motivo = "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe, alvoTodosOsAtos e alvoGrupo"
-                    });
+                    return Results.BadRequest(new { motivo = erroAlvo });
                 }
-
-                AlvoAlcada alvo = request switch
-                {
-                    { AlvoEtapa: { } etapa } => new AlvoAlcada.PorEtapa(etapa),
-                    { AlvoTipoAtoId: { } tipoAtoId } => new AlvoAlcada.PorTipoAto(tipoAtoId),
-                    { AlvoEhEquipe: true } => new AlvoAlcada.PorEquipeDeEscrevente(request.AlvoEquipeId),
-                    { AlvoGrupo: { } grupo } => new AlvoAlcada.PorGrupoTipoAto(grupo),
-                    _ => new AlvoAlcada.PorTodosOsAtos()
-                };
 
                 var resultado = await casoDeUso.ExecutarAsync(sujeito, request.Permissao, alvo, cancellationToken);
                 return resultado switch
@@ -137,6 +108,37 @@ public static class RegraAlcadaEndpoints
             .WithSummary("Simulador \"Testar\" da aba Alçada — quem pode/não pode conferir um caso hipotético e por quê.")
             .Produces<TestarAlcadaResponse>()
             .Produces(StatusCodes.Status404NotFound);
+    }
+
+    private static (SujeitoAlcada? Sujeito, string? Erro) TentarMontarSujeito(CriarRegraAlcadaRequest request) => request switch
+    {
+        { SujeitoNivel: { } nivel, SujeitoConferenteId: null } => (new SujeitoAlcada.PorNivel(nivel), null),
+        { SujeitoConferenteId: { } conferenteId, SujeitoNivel: null } => (new SujeitoAlcada.PorPessoa(conferenteId), null),
+        _ => (null, "informe exatamente um entre sujeitoNivel e sujeitoConferenteId")
+    };
+
+    // "Equipe" aceita Guid? nulo como valor válido (RF-29a: "sem equipe" é alvo legítimo) — por
+    // isso o XOR usa um flag próprio (AlvoEhEquipe) em vez de só checar AlvoEquipeId != null,
+    // senão não daria pra diferenciar "regra de equipe = sem equipe" de "não é regra de
+    // equipe". As 5 variantes de AlvoAlcada ficam num array só (contagem + construção juntas)
+    // pra não correr o risco de uma 6ª variante ser adicionada num lugar e esquecida no outro
+    // (achado numa auditoria de qualidade — antes eram um array de contagem e um switch de
+    // construção separados, cada um enumerando as mesmas 5 variantes por conta própria).
+    private static (AlvoAlcada? Alvo, string? Erro) TentarMontarAlvo(CriarRegraAlcadaRequest request)
+    {
+        (bool Informado, Func<AlvoAlcada> Criar)[] candidatos =
+        [
+            (request.AlvoEtapa is not null, () => new AlvoAlcada.PorEtapa(request.AlvoEtapa!.Value)),
+            (request.AlvoTipoAtoId is not null, () => new AlvoAlcada.PorTipoAto(request.AlvoTipoAtoId!.Value)),
+            (request.AlvoEhEquipe, () => new AlvoAlcada.PorEquipeDeEscrevente(request.AlvoEquipeId)),
+            (request.AlvoTodosOsAtos, () => new AlvoAlcada.PorTodosOsAtos()),
+            (request.AlvoGrupo is not null, () => new AlvoAlcada.PorGrupoTipoAto(request.AlvoGrupo!.Value))
+        ];
+
+        var informados = candidatos.Where(c => c.Informado).ToList();
+        return informados.Count == 1
+            ? (informados[0].Criar(), null)
+            : (null, "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe, alvoTodosOsAtos e alvoGrupo");
     }
 
     private static RegraAlcadaResponse ParaResponse(RegraAlcada regra, int usos) => new(

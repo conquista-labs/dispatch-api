@@ -27,12 +27,13 @@ public sealed class ListarPedidosReaberturaPendentes(
             .Select(c => c!.UsuarioId)
             .ToList();
         var usuarioPorId = (await usuarios.ObterVariosPorIdsAsync(usuarioIds, cancellationToken)).ToDictionary(u => u.Id);
+        var protocoloPorId = (await protocolos.ObterVariosPorIdsAsync(
+            pendentes.Select(p => p.ProtocoloId).ToList(), cancellationToken)).ToDictionary(p => p.Id);
 
         var resumos = new List<PedidoReaberturaResumo>();
         foreach (var pedido in pendentes)
         {
-            var protocolo = await protocolos.ObterPorIdAsync(pedido.ProtocoloId, cancellationToken);
-            if (protocolo is null)
+            if (!protocoloPorId.TryGetValue(pedido.ProtocoloId, out var protocolo))
             {
                 continue;
             }

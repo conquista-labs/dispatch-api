@@ -1565,3 +1565,70 @@ só precisa do `EquipeId` recebido, sem nome de verdade) e chama
 4 testes novos em `SimularAlcadaTests.cs` (não existia antes) cobrindo exatamente os 3
 cenários que provavam a diferença entre a inferência antiga (por contagem) e a regra real (por
 urgência) — 311 testes automatizados no total.
+
+## Auditoria de qualidade do back (endpoints + casos de uso)
+
+Mesma auditoria já feita no `dispatch-web`, agora no `dispatch-api` — 2 agentes em paralelo por
+cluster de endpoint mais verificação pessoal direta dos achados mais graves. 14 achados
+reportados; correção em fases, checando `dotnet build && dotnet test` (e `dotnet run` de
+verdade nas fases que mexem em `Program.cs`/DI/rota) entre cada uma.
+
+- **Bug real**: `DecidirPedidoReabertura` aprovava um pedido sem checar o status atual do
+  protocolo — diferente do `ReabrirConferencia` (ação direta), que já guardava isso. Um
+  protocolo excluído (soft-delete) com pedido de reabertura pendente podia ser forçado de volta
+  pra `Conferindo` só aprovando o pedido velho, por baixo do fluxo de
+  `RestaurarProtocolo`. Ganhou a mesma guarda (`ResultadoDecidirPedidoReabertura.StatusInvalido`,
+  409). Teste novo cobrindo o cenário exato (excluir → aprovar pedido velho → 409).
+- **`MotorDistribuicao` ganhou `EscolherMenosCarregado<T>`** — o desempate "menor carga vence"
+  que só existia inline em `Distribuir` agora é reaproveitado por `AtribuirAoMenosCarregado`
+  (Application), que reimplementava a mesma regra na mão fora do caminho normal do motor.
+- **Removido `POST /protocolos/distribuir`** (o primeiro endpoint do projeto) — zero
+  consumidor no `dispatch-web` (confirmado por grep), superado por `POST /protocolos/manual` e
+  `POST /protocolos/importar/confirmar`. `DistribuirProtocolo` (caso de uso) e
+  `DistribuirProtocoloResponse` continuam — `CriarProtocoloManual` reaproveita os dois.
+  `ResolvedorDeEscreventePorNome` voltou a ser `internal` (só o endpoint removido precisava que
+  fosse `public`).
+- **`RegraAlcadaEndpoints.cs`**: a validação de `POST /regras-alcada` (XOR de sujeito, XOR de
+  alvo + construção do `AlvoAlcada`) saiu de ~35 linhas soltas na lambda do endpoint pra dois
+  métodos privados (`TentarMontarSujeito`/`TentarMontarAlvo`). O XOR de alvo em particular
+  enumerava as 5 variantes de `AlvoAlcada` duas vezes (um array de contagem + um switch de
+  construção, separados) — virou um array só de `(bool, Func<AlvoAlcada>)`, uma 6ª variante
+  futura só precisa entrar num lugar.
+- **404 sem `motivo`**: `DescartarExcecao`/`DefinirPrioridadeDoProtocolo`
+  (`ProtocoloEndpoints.cs`) agora devolvem `{ motivo: "..." }` como todo o resto do arquivo, em
+  vez de `Results.NotFound()` vazio.
+- **`ClaimsPrincipalExtensions.ObterUsuarioId()`** (novo, `Dispatch.Api/`) — substitui
+  `Guid.Parse(FindFirstValue(ClaimTypes.NameIdentifier)!)` repetido em 8 lugares (7 endpoints +
+  `Program.cs`, `OnTokenValidated`).
+- **`ParaResumo` (Protocolo → `ProtocoloResumo`)** deixou de ter uma cópia em
+  `DistribuicaoEndpoints.cs` e outra em `MinhaFilaEndpoints.cs` — a segunda (já `internal`)
+  passou a ser reaproveitada pela primeira também, igual `ConferenteEndpoints` já fazia.
+- **`AuthEndpoints.cs` dividido em 3**: `AuthEndpoints.cs` (login/me), `TotpEndpoints.cs`
+  (registrar/confirmar), `RecuperacaoSenhaEndpoints.cs` (as 3 etapas de RF-01g) — só
+  reorganização de arquivo, nenhuma rota/comportamento mudou.
+- **`GeradorDeSugestoes`**: `ModaComForca(Nivel)` e `ModaGuidComForca(Guid)` (mesmo algoritmo,
+  tipos diferentes) viraram um `ModaComForca<T>` só.
+- **`ResolvedorAlcada.Resolver`/`Explicar`**: o laço de percorrer as 3 camadas (Nível → Equipe →
+  Pessoa) estava duplicado entre os dois métodos, cada um com sua própria cópia da orquestração
+  por cima do helper compartilhado `DecideCamada`. Extraído `CamadasComOpiniao` (iterator
+  privado) — `Resolver` reduz pra a última opinião (mesma semântica "a de baixo sobrescreve a
+  de cima"), `Explicar` mapeia todas pra `PassoTrilha`. O prelúdio de reserva ficou
+  deliberadamente de fora dessa unificação — formas de saída genuinamente diferentes (bloqueio
+  único vs. trilha auditável), e essa é a parte do motor que o próprio projeto já documentou
+  como historicamente propensa a erro (reescrita 2×). Suíte inteira rodada antes de seguir, não
+  só os testes de `ResolvedorAlcada`.
+- **`ListarPedidosReaberturaPendentes`**: N+1 (`ObterPorIdAsync` num loop) virou uma busca em
+  lote — `IProtocoloRepository` ganhou `ObterVariosPorIdsAsync`, mesmo molde do que
+  `IUsuarioRepository` já tinha (aliás usado 2 linhas acima, no mesmo método, sem que o padrão
+  tivesse sido replicado pro protocolo até agora).
+- **`ImportarLote`**: as duas buscas por linha (`escreventesConhecidos.FirstOrDefault`,
+  `catalogoTipos.FirstOrDefault`) — O(n×m) num lote que pode ter centenas de linhas — viraram
+  `Dictionary<string, T>` por nome normalizado, construídos uma vez antes do laço.
+- **`ServiceCollectionExtensions.cs`**: os ~65 `AddScoped<UseCase>()` (antes uma lista só, sem
+  estrutura) agora estão agrupados por arquivo de endpoint consumidor, com comentário por
+  grupo — mesmo objetivo de "não esquecer de registrar um caso de uso novo" (já mordeu o
+  projeto uma vez, ver "Motor de alçada v2" acima) só que por organização em vez de disciplina.
+
+Verificação de cada fase: `dotnet build && dotnet test` (312 testes, era 311 antes do teste
+novo da Fase 0) e `dotnet run` de verdade contra o Postgres local nas fases que mexeram em
+`Program.cs`/rotas/DI, com smoke test via curl cobrindo os endpoints tocados.

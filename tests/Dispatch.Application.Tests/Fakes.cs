@@ -137,6 +137,9 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
     public Task<Protocolo?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_protocolos.SingleOrDefault(p => p.Id == id));
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(_protocolos.Where(p => ids.Contains(p.Id)).ToList());
+
     public Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());

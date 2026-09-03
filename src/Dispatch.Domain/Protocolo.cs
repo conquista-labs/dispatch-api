@@ -20,8 +20,8 @@ public sealed class Protocolo
     // quando a importação rodou) — é o momentoDeReferencia usado pra calcular o vencimento, e
     // também a base da "linha de corte" que evita reimportar o que já foi processado.
     public DateTimeOffset AndamentoEm { get; }
-    // Nulo quando o protocolo nasce fora de um lote (o endpoint avulso /protocolos/distribuir,
-    // por exemplo) — RF-13 filtra "visão deste lote" por aqui.
+    // Nulo quando o protocolo nasce fora de um lote (POST /protocolos/manual, por exemplo) —
+    // RF-13 filtra "visão deste lote" por aqui.
     public Guid? LoteImportacaoId { get; }
     public Prazo? Prazo { get; private set; }
     public DateTimeOffset? VencimentoEm { get; private set; }
