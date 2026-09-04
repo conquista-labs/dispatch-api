@@ -12,6 +12,12 @@ public sealed record VisaoDistribuicao(
     IReadOnlyList<Protocolo> EmConferencia,
     IReadOnlyList<Protocolo> Concluidos,
     IReadOnlyList<Protocolo> Excecoes,
-    IReadOnlyList<GrupoPorConferente> PorConferente);
+    IReadOnlyList<GrupoPorConferente> PorConferente,
+    // "N feitos hoje" (card de conferente, aba "Por conferente") — diferente de Concluidos
+    // acima (todo o histórico, usado pela aba "Por status"), esta lista já vem filtrada por
+    // ConcluidoEm >= início do dia. Só entra quem tem pelo menos 1 concluído hoje.
+    IReadOnlyList<ConcluidosHojeDoConferente> ConcluidosHojePorConferente);
 
 public sealed record GrupoPorConferente(Guid ConferenteId, IReadOnlyList<Protocolo> Protocolos);
+
+public sealed record ConcluidosHojeDoConferente(Guid ConferenteId, int Total);

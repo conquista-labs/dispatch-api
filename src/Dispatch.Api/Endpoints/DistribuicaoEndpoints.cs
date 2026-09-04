@@ -28,6 +28,9 @@ public static class DistribuicaoEndpoints
                     visao.Excecoes.Select(ParaResumo).ToList(),
                     visao.PorConferente
                         .Select(g => new GrupoPorConferenteResponse(g.ConferenteId, g.Protocolos.Select(ParaResumo).ToList()))
+                        .ToList(),
+                    visao.ConcluidosHojePorConferente
+                        .Select(c => new ConcluidosHojePorConferenteResponse(c.ConferenteId, c.Total))
                         .ToList()));
             })
             .WithName("ObterVisaoDistribuicao")
@@ -53,9 +56,16 @@ public sealed record ProtocoloResumo(
     FaixaSemaforo? Semaforo,
     // RF-21: o front calcula o cronômetro ao vivo (agora - IniciadoEm) — só existe depois que
     // IniciarConferencia roda, por isso nulo em qualquer status antes de "Conferindo".
-    DateTimeOffset? IniciadoEm);
+    DateTimeOffset? IniciadoEm,
+    // "N feitos hoje"/tempo de conferência no card de conferente (aba "Por status" →
+    // Concluídos) — só existem depois de ConcluirConferencia, nulos em qualquer status antes
+    // disso (mesma regra de IniciadoEm acima).
+    DateTimeOffset? ConcluidoEm,
+    TimeSpan? Duracao);
 
 public sealed record GrupoPorConferenteResponse(Guid ConferenteId, IReadOnlyList<ProtocoloResumo> Protocolos);
+
+public sealed record ConcluidosHojePorConferenteResponse(Guid ConferenteId, int Total);
 
 public sealed record VisaoDistribuicaoResponse(
     IReadOnlyList<ProtocoloResumo> Pool,
@@ -63,4 +73,5 @@ public sealed record VisaoDistribuicaoResponse(
     IReadOnlyList<ProtocoloResumo> EmConferencia,
     IReadOnlyList<ProtocoloResumo> Concluidos,
     IReadOnlyList<ProtocoloResumo> Excecoes,
-    IReadOnlyList<GrupoPorConferenteResponse> PorConferente);
+    IReadOnlyList<GrupoPorConferenteResponse> PorConferente,
+    IReadOnlyList<ConcluidosHojePorConferenteResponse> ConcluidosHojePorConferente);

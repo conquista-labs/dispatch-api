@@ -281,7 +281,9 @@ public static class MinhaFilaEndpoints
         protocolo.MotivoExcecao,
         protocolo.Observacao,
         protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
-        protocolo.IniciadoEm);
+        protocolo.IniciadoEm,
+        protocolo.ConcluidoEm,
+        protocolo.Duracao);
 
     internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo, Guid? pedidoReaberturaPendenteId) => new(
         protocolo.Id,

@@ -30,7 +30,7 @@ public class ObterVisaoDistribuicaoTests
         var pool = NovoProtocolo(StatusProtocolo.Pool);
         var atribuido = NovoProtocolo(StatusProtocolo.Atribuido);
         var excecao = NovoProtocolo(StatusProtocolo.Excecao);
-        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([pool, atribuido, excecao]));
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([pool, atribuido, excecao]), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
 
@@ -48,7 +48,8 @@ public class ObterVisaoDistribuicaoTests
         var protocolo1 = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
         var protocolo2 = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
         var deOutraPessoa = NovoProtocolo(StatusProtocolo.Atribuido);
-        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([protocolo1, protocolo2, deOutraPessoa]));
+        var casoDeUso = new ObterVisaoDistribuicao(
+            new FakeProtocoloRepository([protocolo1, protocolo2, deOutraPessoa]), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
 
@@ -70,7 +71,8 @@ public class ObterVisaoDistribuicaoTests
 
         var semVencimento = NovoProtocolo(StatusProtocolo.Pool);
 
-        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]));
+        var casoDeUso = new ObterVisaoDistribuicao(
+            new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
 
@@ -83,10 +85,47 @@ public class ObterVisaoDistribuicaoTests
         var loteId = Guid.NewGuid();
         var doLote = NovoProtocolo(StatusProtocolo.Pool, loteImportacaoId: loteId);
         var deOutroLote = NovoProtocolo(StatusProtocolo.Pool, loteImportacaoId: Guid.NewGuid());
-        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([doLote, deOutroLote]));
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([doLote, deOutroLote]), new FakeRelogio(DateTimeOffset.UtcNow));
 
         var visao = await casoDeUso.ExecutarAsync(loteId);
 
         Assert.Equal([doLote], visao.Pool);
+    }
+
+    [Fact]
+    public async Task ContaSoConcluidosDeHojePorConferente()
+    {
+        var conferenteId = Guid.NewGuid();
+        var agora = new DateTimeOffset(2026, 3, 10, 15, 0, 0, TimeSpan.Zero);
+        var inicioDoDia = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero);
+
+        var protocolo1 = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        protocolo1.Aprovar(inicioDoDia.AddHours(9));
+        var protocolo2 = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        protocolo2.Reprovar(inicioDoDia.AddHours(10));
+        // Concluído ontem — não deve contar em "feitos hoje".
+        var protocoloOntem = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        protocoloOntem.Aprovar(inicioDoDia.AddHours(-1));
+
+        var casoDeUso = new ObterVisaoDistribuicao(
+            new FakeProtocoloRepository([protocolo1, protocolo2, protocoloOntem]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        var grupo = Assert.Single(visao.ConcluidosHojePorConferente);
+        Assert.Equal(conferenteId, grupo.ConferenteId);
+        Assert.Equal(2, grupo.Total);
+    }
+
+    [Fact]
+    public async Task ConferenteSemConcluidoHojeNaoAparece()
+    {
+        var conferenteId = Guid.NewGuid();
+        var atribuido = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([atribuido]), new FakeRelogio(DateTimeOffset.UtcNow));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Empty(visao.ConcluidosHojePorConferente);
     }
 }

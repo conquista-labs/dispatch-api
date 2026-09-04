@@ -1737,3 +1737,37 @@ valor inválido (`limiteDeAtosSimultaneos: 0`) devolvendo 400 com motivo; `GET
 /protocolos/distribuicao`/`/protocolos/importar/pre-visualizar` continuando normais com as
 faixas vindas do banco. 6 testes novos (`ObterConfiguracaoTests`, `AtualizarConfiguracaoTests`)
 — 341 testes automatizados no total.
+
+## "N feitos hoje" + tempo de conferência — fecha o gap do card de conferente em Distribuição
+
+Gap documentado desde a construção de Distribuição: o card de conferente na aba "Por
+conferente" não mostrava "N feitos hoje" no subtítulo, e o card "Concluídos" (aba "Por status")
+mostrava aprovado/não aprovado no canto em vez do tempo de conferência — a causa nos dois casos
+era `ProtocoloResumo` (DTO da visão de distribuição) não expor `ConcluidoEm`/`Duracao`, que já
+existem no domínio desde "Minha fila" (RF-19 a RF-24). Não precisou de campo novo no banco.
+
+- **`ProtocoloResumo`** (`DistribuicaoEndpoints.cs`) ganha `ConcluidoEm`/`Duracao` no fim do
+  record (mesma convenção de não quebrar quem desestrutura posicionalmente, já usada quando
+  `IniciadoEm` entrou). `MinhaFilaEndpoints.ParaResumo` (mapeamento compartilhado por
+  Distribuição/Minha fila/Conferentes) passa a preenchê-los a partir do `Protocolo`.
+- **`ObterVisaoDistribuicao`** ganha `IRelogio` injetado (mesmo padrão de `ObterConcluidosHoje`
+  — só o caso de uso decide o que "início do dia" significa) e um novo campo em
+  `VisaoDistribuicao`: `ConcluidosHojePorConferente` (`IReadOnlyList<ConcluidosHojeDoConferente>`,
+  `(ConferenteId, Total)`) — filtra `concluidos` (que já é todo o histórico, usado pela aba "Por
+  status") por `ConcluidoEm >= início do dia` e agrupa por `DonoId`. Quem não concluiu nada hoje
+  simplesmente não aparece na lista (front trata ausência como 0), em vez de vir com `Total: 0`
+  — mais simples de consumir e evita uma lista do tamanho de todos os conferentes cadastrados.
+- `VisaoDistribuicaoResponse`/`GET /protocolos/distribuicao` acompanham (`ConcluidosHojePorConferenteResponse`).
+- 2 testes novos em `ObterVisaoDistribuicaoTests.cs` (que já existia, só ganhou os construtores
+  atualizados com `IRelogio`): conferente com 2 concluídos hoje + 1 concluído ontem conta só 2;
+  conferente sem nenhum concluído hoje não aparece na lista. 343 testes automatizados no total.
+
+Testado ponta a ponta contra o Postgres local, fluxo real (não só fake): criou um protocolo
+manual, `pegar`/`iniciar`/`concluir` como conferente de teste, confirmou
+`concluidosHojePorConferente` com `total: 1` pro conferente certo e o protocolo concluído
+carregando `concluidoEm`/`duracao` no `GET /protocolos/distribuicao`.
+
+**Escopo desta rodada**: só o back. O front (subtítulo "N feitos hoje" em `AbaPorConferente`,
+canto do card trocando aprovado/não aprovado por tempo de conferência em
+`DistribuicaoProtocoloCard`) é fechado do lado do `dispatch-web` — ver `dispatch-web/CLAUDE.md`,
+mesma seção.

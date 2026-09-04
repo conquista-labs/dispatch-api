@@ -2,7 +2,7 @@ using Dispatch.Domain;
 
 namespace Dispatch.Application;
 
-public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos)
+public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos, IRelogio relogio)
 {
     public async Task<VisaoDistribuicao> ExecutarAsync(Guid? loteImportacaoId, CancellationToken cancellationToken = default)
     {
@@ -22,6 +22,16 @@ public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos)
             .Select(grupo => new GrupoPorConferente(grupo.Key, grupo.ToList()))
             .ToList();
 
-        return new VisaoDistribuicao(pool, atribuidos, emConferencia, concluidos, excecoes, porConferente);
+        // "N feitos hoje" (card de conferente) — "hoje" é local a este caso de uso, mesma
+        // decisão de ObterConcluidosHoje (Minha fila): só ele decide o que "início do dia"
+        // significa, via IRelogio.
+        var inicioDoDia = new DateTimeOffset(relogio.Agora.Date, relogio.Agora.Offset);
+        var concluidosHojePorConferente = concluidos
+            .Where(p => p.DonoId is not null && p.ConcluidoEm >= inicioDoDia)
+            .GroupBy(p => p.DonoId!.Value)
+            .Select(grupo => new ConcluidosHojeDoConferente(grupo.Key, grupo.Count()))
+            .ToList();
+
+        return new VisaoDistribuicao(pool, atribuidos, emConferencia, concluidos, excecoes, porConferente, concluidosHojePorConferente);
     }
 }
