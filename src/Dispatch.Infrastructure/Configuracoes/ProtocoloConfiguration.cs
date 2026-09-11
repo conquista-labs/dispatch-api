@@ -36,8 +36,14 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.ReabertoEm);
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
-        // travar via Restrict) a leitura de um protocolo antigo que a citou.
+        // travar via Restrict) a leitura de um protocolo antigo que a citou. Sem FK, essa coluna
+        // não ganha índice automático (diferente de DonoId/EscreventeId/TipoAtoId/
+        // LoteImportacaoId acima, que ganham de graça por serem chave estrangeira de verdade) —
+        // precisou de HasIndex explícito depois que ContarPorRegraAplicadaAsync (RF-33) foi
+        // flagrado fazendo sequential scan a cada chamada (achado investigando lentidão real em
+        // GET /regras-alcada, ver RegraAlcadaEndpoints.cs).
         builder.Property(p => p.RegraAplicadaId);
+        builder.HasIndex(p => p.RegraAplicadaId);
 
         builder.HasOne<TipoAto>()
             .WithMany()

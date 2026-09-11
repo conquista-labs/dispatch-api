@@ -1849,3 +1849,49 @@ acima, verificado via Playwright que criar a regra pela UI, consultá-la de volt
 caso em "Testar" batem entre si (frase, camada "Base por nível", veredito vermelho com motivo
 "equipe fora da alçada nesta etapa"). 348 testes automatizados no total (108 Domain + 240
 Application).
+
+## Fix de performance: N+1 em GET /regras-alcada
+
+Reportado pelo dono direto (não achado numa auditoria): "as requests da aba de Central de
+Regras tão demorando muito" em produção. Investigação (agente em background) confirmou um N+1
+clássico em `RegraAlcadaEndpoints.MapGet("/")` — o `foreach` que montava a resposta chamava
+`protocolos.ContarComRegraAplicadaAsync(regra.Id, ...)` **uma vez por regra** (RF-33, contador
+de "usos"), então 1 query pra listar + N queries pra contar, sequenciais, dentro de uma única
+chamada HTTP. Com ~95 regras em produção (número real, visto ao vivo numa sessão de teste),
+isso é ~96 round-trips síncronos contra o Neon — que tem latência de rede real, diferente do
+Postgres local. Piorado por um segundo achado: `Protocolo.RegraAplicadaId` nunca teve FK
+(decisão deliberada, é auditoria — RNF-02 — não dependência de verdade, ver seção acima), e
+sem FK o EF Core não cria índice automático nessa coluna como cria nas outras (`DonoId`/
+`EscreventeId`/`TipoAtoId`/`LoteImportacaoId`) — cada uma das N execuções do `COUNT` fazia
+sequential scan completo de `protocolos`.
+
+**Fix, dois lados**: `IProtocoloRepository.ContarComRegraAplicadaAsync(Guid, ...)` (uma regra
+por vez) virou `ContarPorRegraAplicadaAsync(...)` (todas de uma vez) — `GroupBy(RegraAplicadaId)`
++ `Count()`, 1 query só, independente de quantas regras existam. O endpoint monta um
+`Dictionary` a partir disso e faz `GetValueOrDefault(regra.Id)` (regra sem nenhum protocolo
+aplicado não aparece na coleção agregada — ausência tratada como 0). `ProtocoloConfiguration`
+ganhou `builder.HasIndex(p => p.RegraAplicadaId)` explícito — migration
+`AdicionaIndiceEmRegraAplicadaIdDeProtocolos`, só `CreateIndex`, nada de dado tocado.
+
+Mesma lição já registrada antes neste arquivo (Motor de alçada v2, "carga acumulada"): sempre
+que uma coluna de auditoria/leitura-derivada não tem FK de propósito, ela também não ganha
+índice de graça — se ela vira alvo de filtro/agregação (aqui, o `COUNT` de "usos"), precisa de
+`HasIndex` manual, não é automático como pra chave estrangeira.
+
+348 testes automatizados continuam passando (a fake do repositório em
+`Dispatch.Application.Tests/Fakes.cs` acompanhou a troca de assinatura). Sem mudança nenhuma no
+contrato JSON (`RegraAlcadaResponse.Usos` continua um `int` por regra) — o front não precisou
+de nenhuma alteração.
+
+## Sessão de 8 horas (Jwt:ExpiracaoMinutos)
+
+Reportado pelo dono junto com o item acima: "o token tá expirando muito rápido". O valor real
+em produção não é auditável pelo repo (é `Jwt__ExpiracaoMinutos` no dashboard do Render, nunca
+versionado — ver seção "Deploy — no ar"). Front não tem refresh nem aviso prévio de expiração
+(`http-client.ts`: qualquer 401 limpa a sessão na hora, best-effort mesmo) — então o valor de
+expiração *é* o tempo real de sessão sem reautenticar.
+
+Decidido com o dono: **8 horas (480 minutos)**, um expediente inteiro. `appsettings.Development.json`
+(`Jwt:ExpiracaoMinutos`) atualizado de `60` pra `480`, pro ambiente local bater com produção.
+**Pendente, fora do alcance de código**: atualizar a env var `Jwt__ExpiracaoMinutos=480` no
+dashboard do Render (produção) — só o dono tem acesso a esse painel.

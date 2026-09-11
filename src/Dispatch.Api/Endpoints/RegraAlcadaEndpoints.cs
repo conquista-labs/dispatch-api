@@ -15,12 +15,14 @@ public static class RegraAlcadaEndpoints
         grupo.MapGet("/", async (ListarRegrasAlcada casoDeUso, IProtocoloRepository protocolos, CancellationToken cancellationToken) =>
             {
                 var todas = await casoDeUso.ExecutarAsync(cancellationToken);
-                var respostas = new List<RegraAlcadaResponse>();
-                foreach (var regra in todas)
-                {
-                    var usos = await protocolos.ContarComRegraAplicadaAsync(regra.Id, cancellationToken);
-                    respostas.Add(ParaResponse(regra, usos));
-                }
+                // Antes: 1 query por regra dentro do foreach (N+1 — achado numa investigação de
+                // lentidão real em produção, ~96 round-trips sequenciais pra ~95 regras). Agora:
+                // 1 query agrupada, independente de N.
+                var usosPorRegraId = (await protocolos.ContarPorRegraAplicadaAsync(cancellationToken))
+                    .ToDictionary(c => c.RegraAlcadaId, c => c.Total);
+                var respostas = todas
+                    .Select(regra => ParaResponse(regra, usosPorRegraId.GetValueOrDefault(regra.Id)))
+                    .ToList();
                 return Results.Ok(respostas);
             })
             .WithName("ListarRegrasAlcada")

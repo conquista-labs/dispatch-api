@@ -69,6 +69,15 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
                 && p.ConcluidoEm >= desde && p.ConcluidoEm < ate)
             .ToListAsync(cancellationToken);
 
-    public async Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken) =>
-        await dbContext.Protocolos.CountAsync(p => p.RegraAplicadaId == regraAlcadaId, cancellationToken);
+    public async Task<IReadOnlyCollection<(Guid RegraAlcadaId, int Total)>> ContarPorRegraAplicadaAsync(
+        CancellationToken cancellationToken)
+    {
+        var contagens = await dbContext.Protocolos
+            .Where(p => p.RegraAplicadaId != null)
+            .GroupBy(p => p.RegraAplicadaId!.Value)
+            .Select(g => new { RegraAlcadaId = g.Key, Total = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return contagens.Select(c => (c.RegraAlcadaId, c.Total)).ToList();
+    }
 }

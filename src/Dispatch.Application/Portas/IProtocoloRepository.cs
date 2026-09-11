@@ -46,9 +46,13 @@ public interface IProtocoloRepository
     Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
         DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken);
 
-    // RF-33: "contador de aplicações" de uma regra de alçada — leitura agregada, igual
-    // CargaAtual/Semaforo, nunca persistida na própria regra.
-    Task<int> ContarComRegraAplicadaAsync(Guid regraAlcadaId, CancellationToken cancellationToken);
+    // RF-33: "contador de aplicações" de cada regra de alçada — leitura agregada, igual
+    // CargaAtual/Semaforo, nunca persistida na própria regra. Em lote (uma query agrupada, não
+    // uma por regra) — achado numa investigação de lentidão real em produção: GET
+    // /regras-alcada chamava a versão por-regra dentro de um foreach (N+1: 1 query pra listar
+    // + 1 por regra), ~96 round-trips sequenciais contra o Neon pra ~95 regras. Regra sem
+    // nenhum protocolo aplicado não aparece na coleção — quem lê trata ausência como 0.
+    Task<IReadOnlyCollection<(Guid RegraAlcadaId, int Total)>> ContarPorRegraAplicadaAsync(CancellationToken cancellationToken);
 
     // Continuidade de conferência + histórico do painel de detalhe: todas as linhas (qualquer
     // status/lote) com esses números. Numero não é único de propósito — um mesmo item pode ter
