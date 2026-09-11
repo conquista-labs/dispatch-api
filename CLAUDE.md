@@ -1771,3 +1771,81 @@ carregando `concluidoEm`/`duracao` no `GET /protocolos/distribuicao`.
 canto do card trocando aprovado/não aprovado por tempo de conferência em
 `DistribuicaoProtocoloCard`) é fechado do lado do `dispatch-web` — ver `dispatch-web/CLAUDE.md`,
 mesma seção.
+
+## Motor de alçada v4 — equipe inteira não passa por uma etapa
+
+Pedido de um conferente testando o sistema em produção pela primeira vez ("precisamos de uma
+forma de falar que a equipe Quinto Andar não passa por pré-conferência"). Confirmado com o
+dono: significa **ninguém tem alçada** pra conferir atos daquela etapa, pra aquela equipe —
+mesmo efeito que já existe pra pessoa específica ("Marina Witter não pode fazer
+pós-conferência"), só que precisa valer pra uma equipe inteira de uma vez. É regra de alçada
+nova (Central de Regras), não mudança de fluxo/importação.
+
+**Novo alvo, não novo sujeito.** Em vez de um sujeito "todos os níveis" (mudança maior, tocaria
+`ValePara`/discriminador de persistência do sujeito/seletor no front), a distribuidora expressa
+"ninguém" criando uma regra `Nega` por nível (Júnior/Pleno/Sênior) — mesmo trabalho manual que
+já existe hoje pra qualquer "Base por nível", não é regressão.
+
+- `Alcada/AlvoAlcada.cs` — nova variante `PorEquipeEEtapa(Guid? EquipeId, Etapa Etapa)`.
+  `EquipeId` nulo é "sem equipe" válido, mesmo padrão de `PorEquipeDeEscrevente` (RF-29a).
+- **Restrito a `Nega`** — validado na Api (`RegraAlcadaEndpoints`, 400 se vier com
+  `Permite`/`Reserva`). Motivo: se fosse permitido `Permite` com esse alvo, ele entraria na
+  "lista fechada por dimensão" do motor v2/v3 (mesma regra que já vale pra
+  Tipo/Grupo/Equipe/Etapa) e uma única regra desse tipo passaria a bloquear por omissão
+  qualquer combinação equipe+etapa não coberta por ela — efeito desproporcional pra uma
+  funcionalidade pensada só pra exceção pontual. `Nega` nunca participa da lista fechada
+  (resolve antes, por curto-circuito em `DecideCamada`), então a restrição elimina o risco.
+- `ResolvedorAlcada.cs`: `Dimensao` (enum interno) ganhou `EquipeEEtapa`, **deliberadamente fora
+  de `OrdemDasDimensoes`** (só existe pra `MotivoDaDimensao` conseguir mapear pra um
+  `MotivoAlcada` quando uma negação desse alvo decide o caso — nunca participa de lista
+  fechada). `AlvoBate` compara `EquipeId` e `Etapa` juntos. `CamadaDe` trata esse alvo como
+  `Camada.Equipe` quando o sujeito é pessoa (mesmo grupo de `PorEquipeDeEscrevente`) — na
+  prática o caso de uso real (sujeito nível) já cai em `Camada.Nivel` antes disso.
+- `MotivoAlcada` ganhou `EquipeEEtapa`. 5 testes novos em `ResolvedorAlcadaTests.cs` (nega bate
+  equipe+etapa exatos, etapa diferente permite, equipe diferente permite, "sem equipe" só bate
+  com "sem equipe", exceção pessoal sobrescreve a negação de nível).
+- Persistência: `AlvoTipoRegistro` ganhou `EquipeEEtapa` — **reaproveita as colunas
+  `alvo_etapa`/`alvo_equipe_id` que já existiam**, nenhuma coluna nova, só um valor a mais no
+  discriminador e um branch a mais no `CHECK` (`alvo_tipo = 'EquipeEEtapa' AND alvo_etapa IS
+  NOT NULL AND alvo_tipo_ato_id IS NULL AND alvo_grupo_tipo_ato IS NULL`). Migration
+  `AdicionaAlvoEquipeEEtapaEmRegrasAlcada` — só `DropCheckConstraint`/`AddCheckConstraint`, sem
+  `ALTER TABLE ADD COLUMN`.
+- Api: `CriarRegraAlcadaRequest`/`RegraAlcadaResponse` ganham `AlvoEhEquipeEEtapa` (reaproveita
+  `AlvoEtapa`/`AlvoEquipeId` que já existiam no request/response, mesmo truque que
+  `AlvoEhEquipe` já fazia sozinho com `AlvoEquipeId`). `TentarMontarAlvo` ganhou um candidato
+  novo, com dois cuidados encontrados em revisão de código antes de rodar (não por teste):
+  o candidato de `PorEtapa` precisou excluir `AlvoEhEquipeEEtapa` explicitamente (os dois
+  reaproveitam o mesmo campo `AlvoEtapa`, sem a exclusão os dois bateriam juntos e quebrariam o
+  XOR); e o candidato novo exige `AlvoEtapa is not null` na própria condição (não só dentro do
+  construtor), senão um request incompleto (`alvoEhEquipeEEtapa: true` sem `alvoEtapa`) geraria
+  `NullReferenceException` (500) em vez do 400 genérico.
+
+**Bug real achado testando de verdade pelo front, não pelos testes automatizados nem pelo
+`curl`**: `RegraAlcadaEndpoints.ParaResponse` (o `GET /regras-alcada`) montava `AlvoEtapa`/
+`AlvoEquipeId` da resposta só com `(regra.Alvo as AlvoAlcada.PorEtapa)?.Etapa` e `(regra.Alvo as
+AlvoAlcada.PorEquipeDeEscrevente)?.EquipeId` — pra uma regra `PorEquipeEEtapa`, os dois casts
+sempre davam null (tipo diferente), então a resposta HTTP saía com `alvoEtapa`/`alvoEquipeId`
+nulos **mesmo com a linha persistida certa no Postgres** (confirmado via `psql` direto: os dois
+campos gravados corretamente). O `curl` de smoke test logo depois de implementar não pegou isso
+porque eu só conferi que os campos apareciam na resposta, nunca que o valor de uma regra
+recém-criada especificamente batia; o `POST /regras-alcada/testar` também não pegou, porque
+esse endpoint resolve a partir de `ObterAtivasAsync`/`ParaDominio` (lê direto das colunas do
+registro), nunca da `RegraAlcadaResponse` — o bug era isolado à *leitura da lista*, não ao
+motor de decisão em si. Só apareceu construindo o front e vendo a frase virar "fazer undefined
+da equipe X" num teste Playwright de comportamento real. Corrigido trocando os dois casts por
+`switch` que também cobre `AlvoAlcada.PorEquipeEEtapa`. **Lição**: quando um alvo novo
+reaproveita as colunas físicas de um alvo antigo, todo `as AlvoAntigo` espalhado pela resposta
+precisa ser auditado — não é óbvio a partir da definição do record novo, só varrendo os pontos
+que fazem downcast pro tipo antigo.
+
+**Front (`dispatch-web`)**: construtor guiado (RF-32) ganhou o alvo "equipe não faz etapa…",
+travando a permissão em Nega assim que esse alvo é escolhido (mesmo raciocínio da restrição do
+back — evita o usuário bater no 400 sem entender por quê). Ver `dispatch-web/CLAUDE.md`, mesma
+seção, pro desenho do seletor (produto cartesiano equipe×etapa, valor composto).
+
+Testado ponta a ponta contra o Postgres local com `dotnet run` de verdade (não só
+`dotnet test`): 400 pra `Permite`+`alvoEhEquipeEEtapa`, 201 pra `Nega`; e, depois do fix do bug
+acima, verificado via Playwright que criar a regra pela UI, consultá-la de volta e simular o
+caso em "Testar" batem entre si (frase, camada "Base por nível", veredito vermelho com motivo
+"equipe fora da alçada nesta etapa"). 348 testes automatizados no total (108 Domain + 240
+Application).

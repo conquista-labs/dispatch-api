@@ -25,7 +25,11 @@ public static class ResolvedorAlcada
 {
     private enum Camada { Nivel, Equipe, Pessoa }
 
-    private enum Dimensao { Equipe, Etapa, Grupo, Tipo }
+    // EquipeEEtapa fica fora de OrdemDasDimensoes de propósito — esse alvo só é aceito com
+    // Nega (validado na Api), e Nega nunca participa da lista fechada por dimensão (resolve
+    // antes, por curto-circuito, em DecideCamada). O valor só existe pra DimensaoDoAlvo poder
+    // mapear pra um MotivoAlcada quando uma negação desse alvo é quem decide o caso.
+    private enum Dimensao { Equipe, Etapa, Grupo, Tipo, EquipeEEtapa }
 
     private static readonly Camada[] OrdemDasCamadas = [Camada.Nivel, Camada.Equipe, Camada.Pessoa];
     private static readonly Dimensao[] OrdemDasDimensoes = [Dimensao.Equipe, Dimensao.Etapa, Dimensao.Grupo, Dimensao.Tipo];
@@ -159,7 +163,7 @@ public static class ResolvedorAlcada
 
     private static Camada CamadaDe(RegraAlcada regra) =>
         regra.Sujeito is SujeitoAlcada.PorNivel ? Camada.Nivel :
-        regra.Alvo is AlvoAlcada.PorEquipeDeEscrevente ? Camada.Equipe :
+        regra.Alvo is AlvoAlcada.PorEquipeDeEscrevente or AlvoAlcada.PorEquipeEEtapa ? Camada.Equipe :
         Camada.Pessoa;
 
     private static bool AlvoBate(AlvoAlcada alvo, CasoAlcada caso) => alvo switch
@@ -169,6 +173,8 @@ public static class ResolvedorAlcada
         AlvoAlcada.PorTipoAto porTipo => porTipo.TipoAtoId == caso.TipoAto.Id,
         AlvoAlcada.PorGrupoTipoAto porGrupo => caso.TipoAto.Grupo == porGrupo.Grupo,
         AlvoAlcada.PorEquipeDeEscrevente porEquipe => porEquipe.EquipeId == caso.EquipeId,
+        AlvoAlcada.PorEquipeEEtapa porEquipeEEtapa =>
+            porEquipeEEtapa.EquipeId == caso.EquipeId && porEquipeEEtapa.Etapa == caso.Etapa,
         _ => throw new InvalidOperationException($"Alvo não mapeado: {alvo.GetType().Name}")
     };
 
@@ -178,6 +184,7 @@ public static class ResolvedorAlcada
         AlvoAlcada.PorTipoAto => Dimensao.Tipo,
         AlvoAlcada.PorGrupoTipoAto => Dimensao.Grupo,
         AlvoAlcada.PorEquipeDeEscrevente => Dimensao.Equipe,
+        AlvoAlcada.PorEquipeEEtapa => Dimensao.EquipeEEtapa,
         _ => throw new InvalidOperationException($"Alvo sem dimensão própria: {alvo.GetType().Name}")
     };
 
@@ -187,6 +194,7 @@ public static class ResolvedorAlcada
         Dimensao.Tipo => MotivoAlcada.Tipo,
         Dimensao.Grupo => MotivoAlcada.Grupo,
         Dimensao.Equipe => MotivoAlcada.Equipe,
+        Dimensao.EquipeEEtapa => MotivoAlcada.EquipeEEtapa,
         _ => MotivoAlcada.Geral
     };
 

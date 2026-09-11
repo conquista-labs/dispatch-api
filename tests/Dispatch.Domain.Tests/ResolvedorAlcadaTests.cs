@@ -215,4 +215,89 @@ public class ResolvedorAlcadaTests
         Assert.Equal(ResultadoAlcada.Permitido, decisaoDoGrupo.Resultado);
         Assert.Equal(ResultadoAlcada.Negado, decisaoForaDoGrupo.Resultado);
     }
+
+    [Fact]
+    public void EquipeEEtapa_NegaQuandoEquipeEEtapaBatemComOCaso()
+    {
+        // Motor v4 — "equipe X não passa pela etapa Y": ninguém do nível tem alçada.
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var equipeQuintoAndar = Guid.NewGuid();
+        var regra = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+
+        var decisao = ResolvedorAlcada.Resolver(conferente, Caso(Etapa.PreConferencia, equipeId: equipeQuintoAndar), [regra]);
+
+        Assert.Equal(ResultadoAlcada.Negado, decisao.Resultado);
+        Assert.Equal(regra, decisao.RegraAplicada);
+        Assert.Equal(MotivoAlcada.EquipeEEtapa, decisao.Motivo);
+    }
+
+    [Fact]
+    public void EquipeEEtapa_PermiteQuandoAEtapaDoCasoEhDiferente()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var equipeQuintoAndar = Guid.NewGuid();
+        var regra = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+
+        var decisao = ResolvedorAlcada.Resolver(conferente, Caso(Etapa.PosConferencia, equipeId: equipeQuintoAndar), [regra]);
+
+        Assert.Equal(ResultadoAlcada.Permitido, decisao.Resultado);
+    }
+
+    [Fact]
+    public void EquipeEEtapa_PermiteQuandoAEquipeDoCasoEhDiferente()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var equipeQuintoAndar = Guid.NewGuid();
+        var outraEquipe = Guid.NewGuid();
+        var regra = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+
+        var decisao = ResolvedorAlcada.Resolver(conferente, Caso(Etapa.PreConferencia, equipeId: outraEquipe), [regra]);
+
+        Assert.Equal(ResultadoAlcada.Permitido, decisao.Resultado);
+    }
+
+    [Fact]
+    public void EquipeEEtapa_SemEquipeSoBateQuandoOCasoTambemEhSemEquipe()
+    {
+        // RF-29a: "sem equipe" (EquipeId nulo) é um alvo válido, não "sem restrição".
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var regra = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(null, Etapa.PreConferencia));
+
+        var decisaoSemEquipe = ResolvedorAlcada.Resolver(conferente, Caso(Etapa.PreConferencia, equipeId: null), [regra]);
+        var decisaoComEquipe = ResolvedorAlcada.Resolver(conferente, Caso(Etapa.PreConferencia, equipeId: Guid.NewGuid()), [regra]);
+
+        Assert.Equal(ResultadoAlcada.Negado, decisaoSemEquipe.Resultado);
+        Assert.Equal(ResultadoAlcada.Permitido, decisaoComEquipe.Resultado);
+    }
+
+    [Fact]
+    public void EquipeEEtapa_ExcecaoPessoalSobrescreveANegacaoDeNivel()
+    {
+        // "a de baixo vence a de cima": uma exceção pessoal pode liberar um caso que a base
+        // por nível bloquearia com o alvo combinado novo, mesma regra de cascata já valendo
+        // pros outros alvos.
+        var conferenteId = Guid.NewGuid();
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
+        var equipeQuintoAndar = Guid.NewGuid();
+        var negaDeNivel = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+        var permitePessoal = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Permite,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+
+        var decisao = ResolvedorAlcada.Resolver(
+            conferente, Caso(Etapa.PreConferencia, equipeId: equipeQuintoAndar), [negaDeNivel, permitePessoal]);
+
+        Assert.Equal(ResultadoAlcada.Permitido, decisao.Resultado);
+        Assert.Equal(permitePessoal, decisao.RegraAplicada);
+    }
 }

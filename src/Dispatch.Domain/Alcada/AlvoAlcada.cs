@@ -21,4 +21,12 @@ public abstract record AlvoAlcada
     // Grupo de tipo de ato (Transmissões/Sucessões/Família/Garantias/Notariais — mesmo enum de
     // TipoAto.Grupo) — mira todos os tipos daquele grupo de uma vez, sem listar um por um.
     public sealed record PorGrupoTipoAto(GrupoTipoAto Grupo) : AlvoAlcada;
+
+    // Motor v4 — alvo combinado, pedido do dono ("equipe X não passa pela etapa Y" — ninguém
+    // tem alçada). Guid? EquipeId nulo é "sem equipe" (mesmo padrão de PorEquipeDeEscrevente).
+    // Só aceito com Permissao.Nega (validado na Api, não aqui — ver RegraAlcadaEndpoints):
+    // permitir Permite com esse alvo entraria na lista fechada por dimensão do resolvedor e uma
+    // regra desse tipo passaria a negar por omissão qualquer combinação equipe+etapa não
+    // coberta por ela, efeito desproporcional pra uma funcionalidade pensada só pra exceção.
+    public sealed record PorEquipeEEtapa(Guid? EquipeId, Etapa Etapa) : AlvoAlcada;
 }

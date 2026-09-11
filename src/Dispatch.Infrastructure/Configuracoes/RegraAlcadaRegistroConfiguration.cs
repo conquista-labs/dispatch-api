@@ -25,6 +25,7 @@ internal sealed class RegraAlcadaRegistroConfiguration : IEntityTypeConfiguratio
                 OR (alvo_tipo = 'Equipe' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
                 OR (alvo_tipo = 'TodosOsAtos' AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
                 OR (alvo_tipo = 'Grupo' AND alvo_grupo_tipo_ato IS NOT NULL AND alvo_etapa IS NULL AND alvo_tipo_ato_id IS NULL AND alvo_equipe_id IS NULL)
+                OR (alvo_tipo = 'EquipeEEtapa' AND alvo_etapa IS NOT NULL AND alvo_tipo_ato_id IS NULL AND alvo_grupo_tipo_ato IS NULL)
                 """);
         });
 

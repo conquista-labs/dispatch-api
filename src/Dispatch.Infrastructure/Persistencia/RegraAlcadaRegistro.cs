@@ -34,5 +34,9 @@ internal enum AlvoTipoRegistro
     TipoAto,
     Equipe,
     TodosOsAtos,
-    Grupo
+    Grupo,
+    // Motor v4 — reaproveita AlvoEtapa/AlvoEquipeId (já existem nas colunas Etapa/Equipe
+    // acima), nenhuma coluna nova. AlvoEquipeId nulo aqui também é "sem equipe" válido, mesmo
+    // padrão da variante Equipe.
+    EquipeEEtapa
 }

@@ -14,7 +14,8 @@ public enum MotivoAlcada
     Grupo,
     Equipe,
     Geral,
-    Reservado
+    Reservado,
+    EquipeEEtapa
 }
 
 // RegraAplicada nulo = decisão veio do padrão aberto (ausência de regra), não de uma regra
