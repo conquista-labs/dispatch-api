@@ -221,7 +221,8 @@ public static class ProtocoloEndpoints
                 SimularProtocoloManualRequest request, SimularProtocoloManual casoDeUso, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(
-                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, cancellationToken);
+                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade,
+                    request.AndamentoEm, cancellationToken);
                 return Results.Ok(new SimulacaoProtocoloManualResponse(
                     resultado.NumeroDisponivel, resultado.Grupo, resultado.EquipeNome, resultado.SemEquipeSinalizado,
                     resultado.Prazo, resultado.VencimentoEm, resultado.Destino, resultado.ConferenteId, resultado.Motivo));
@@ -236,7 +237,8 @@ public static class ProtocoloEndpoints
                 CriarProtocoloManualRequest request, CriarProtocoloManual casoDeUso, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(
-                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, request.Observacao, cancellationToken);
+                    request.Numero, request.TipoAtoId, request.EscreventeNome, request.Etapa, request.Prioridade, request.Observacao,
+                    request.AndamentoEm, cancellationToken);
                 return resultado switch
                 {
                     ResultadoCriarProtocoloManual.Sucesso sucesso => Results.Created(
@@ -354,7 +356,8 @@ public sealed record DistribuirProtocoloResponse(
 
 public sealed record RedistribuirPoolResponse(int Alterados);
 
-public sealed record SimularProtocoloManualRequest(string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade);
+public sealed record SimularProtocoloManualRequest(
+    string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, DateTimeOffset? AndamentoEm = null);
 
 public sealed record SimulacaoProtocoloManualResponse(
     bool NumeroDisponivel,
@@ -367,7 +370,9 @@ public sealed record SimulacaoProtocoloManualResponse(
     Guid? ConferenteId,
     string? Motivo);
 
-public sealed record CriarProtocoloManualRequest(string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, string? Observacao);
+public sealed record CriarProtocoloManualRequest(
+    string Numero, Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, string? Observacao,
+    DateTimeOffset? AndamentoEm = null);
 
 public sealed record EditarProtocoloManualRequest(Guid TipoAtoId, string EscreventeNome, Etapa Etapa, Prioridade Prioridade, string? Observacao);
 

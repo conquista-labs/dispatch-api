@@ -102,4 +102,31 @@ public class CriarProtocoloManualTests
 
         Assert.Equal("Cliente pediu urgência", protocolos.Todos.Single().Observacao);
     }
+
+    // "Hora de entrada": a distribuidora pode registrar um ato que chegou antes do momento em
+    // que está digitando (mesmo dado que a importação já lê do relatório) — sem isso o prazo
+    // (RF-38, referência = AndamentoEm) contaria a partir da hora errada.
+    [Fact]
+    public async Task ComAndamentoEmInformado_UsaComoReferenciaDeAndamento()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var (casoDeUso, protocolos, _) = NovoCasoDeUso([], [], [], [tipo], [], []);
+        var andamentoEm = Agora.AddHours(-3);
+
+        await casoDeUso.ExecutarAsync(
+            "999014", tipo.Id, "Fulano", Etapa.PosConferencia, Prioridade.Normal, observacao: null, andamentoEm: andamentoEm);
+
+        Assert.Equal(andamentoEm, protocolos.Todos.Single().AndamentoEm);
+    }
+
+    [Fact]
+    public async Task SemAndamentoEmInformado_UsaAgoraComoAntes()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var (casoDeUso, protocolos, _) = NovoCasoDeUso([], [], [], [tipo], [], []);
+
+        await casoDeUso.ExecutarAsync("999015", tipo.Id, "Fulano", Etapa.PosConferencia, Prioridade.Normal, observacao: null);
+
+        Assert.Equal(Agora, protocolos.Todos.Single().AndamentoEm);
+    }
 }

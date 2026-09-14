@@ -94,4 +94,21 @@ public class SimularProtocoloManualTests
         Assert.Null(resultado.EquipeNome);
         Assert.Equal(TipoPrazo.D1, resultado.Prazo);
     }
+
+    // "Hora de entrada": o vencimento previsto na prévia tem que refletir o AndamentoEm
+    // informado, não "agora" — senão o modal mostraria um vencimento diferente do que
+    // CriarProtocoloManual grava de verdade ao confirmar (RF-18f/RF-38, referência = AndamentoEm).
+    [Fact]
+    public async Task ComAndamentoEmInformado_VencimentoContaAPartirDele()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var casoDeUso = NovoCasoDeUso([], [], [], [tipo], [], []);
+        var andamentoEm = Agora.AddHours(-10);
+
+        var resultado = await casoDeUso.ExecutarAsync(
+            "999006", tipo.Id, "Escrevente Desconhecido", Etapa.PosConferencia, Prioridade.Normal, andamentoEm: andamentoEm);
+
+        // Sem equipe = prazo padrão D+1 (24h corridas), contadas a partir do AndamentoEm.
+        Assert.Equal(andamentoEm.AddDays(1), resultado.VencimentoEm);
+    }
 }

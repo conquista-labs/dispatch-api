@@ -18,6 +18,7 @@ public sealed class SimularProtocoloManual(
 {
     public async Task<ResultadoSimulacaoProtocolo> ExecutarAsync(
         string numero, Guid tipoAtoId, string escreventeNome, Etapa etapa, Prioridade prioridade,
+        DateTimeOffset? andamentoEm = null,
         CancellationToken cancellationToken = default)
     {
         // Mesmo fluxo de continuidade da importação/cadastro manual (ResolvedorDeContinuidade)
@@ -32,7 +33,7 @@ public sealed class SimularProtocoloManual(
             escreventeNome, escreventes, adicionarSeNovo: false, cancellationToken);
 
         var agora = relogio.Agora;
-        var protocolo = new Protocolo(Guid.NewGuid(), numero, tipoAto?.Id, escrevente.Id, etapa, agora, prioridade);
+        var protocolo = new Protocolo(Guid.NewGuid(), numero, tipoAto?.Id, escrevente.Id, etapa, andamentoEm ?? agora, prioridade);
 
         var donoDaPrimeiraConferenciaId = numeroDisponivel ? ResolvedorDeContinuidade.Resolver(historico, etapa) : null;
         var resultado = AplicadorDeDistribuicao.Executar(

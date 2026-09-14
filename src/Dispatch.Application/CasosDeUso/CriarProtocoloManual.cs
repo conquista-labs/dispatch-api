@@ -17,6 +17,12 @@ public sealed class CriarProtocoloManual(
 {
     public async Task<ResultadoCriarProtocoloManual> ExecutarAsync(
         string numero, Guid tipoAtoId, string escreventeNome, Etapa etapa, Prioridade prioridade, string? observacao,
+        // "Hora de entrada" (achado real: a importação tem esse dado vindo do relatório, mas o
+        // cadastro manual sempre assumia "agora" — a distribuidora não tinha como registrar um
+        // ato que chegou antes da hora em que está digitando). Nulo preserva o comportamento
+        // antigo (agora). Só afeta AndamentoEm (a referência do prazo, RF-38) — AtribuirA
+        // continua usando o instante real da ação (via DistribuirProtocolo/IRelogio).
+        DateTimeOffset? andamentoEm = null,
         CancellationToken cancellationToken = default)
     {
         var historico = await protocolos.ObterPorNumerosAsync([numero], cancellationToken);
@@ -34,7 +40,7 @@ public sealed class CriarProtocoloManual(
             escreventeNome, escreventes, adicionarSeNovo: true, cancellationToken);
 
         var protocolo = new Protocolo(
-            Guid.NewGuid(), numero, tipoConhecido ? tipoAtoId : null, escrevente.Id, etapa, relogio.Agora, prioridade);
+            Guid.NewGuid(), numero, tipoConhecido ? tipoAtoId : null, escrevente.Id, etapa, andamentoEm ?? relogio.Agora, prioridade);
         // RF-15/18f: observação é opcional já na criação — o protótipo aprovado tem esse campo
         // no mesmo modal ("o conferente vê isso no card").
         protocolo.DefinirObservacao(observacao);
