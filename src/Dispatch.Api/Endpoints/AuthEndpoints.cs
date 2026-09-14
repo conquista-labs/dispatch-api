@@ -10,11 +10,12 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/login", async (
+                HttpContext httpContext,
                 LoginRequest request,
                 Autenticar autenticar,
                 CancellationToken cancellationToken) =>
             {
-                var resultado = await autenticar.ExecutarAsync(request.Email, request.Senha, cancellationToken);
+                var resultado = await autenticar.ExecutarAsync(request.Email, request.Senha, httpContext.ObterOrigem(), cancellationToken);
 
                 return resultado switch
                 {

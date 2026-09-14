@@ -12,7 +12,8 @@ public sealed class ConfirmarRegistroTotp(
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
-    public async Task<ResultadoConfirmarTotp> ExecutarAsync(Guid usuarioId, string codigo, CancellationToken cancellationToken = default)
+    public async Task<ResultadoConfirmarTotp> ExecutarAsync(
+        Guid usuarioId, string codigo, string? origem = null, CancellationToken cancellationToken = default)
     {
         var usuarioTotp = await usuariosTotp.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
         if (usuarioTotp is null)
@@ -27,7 +28,7 @@ public sealed class ConfirmarRegistroTotp(
         }
 
         usuarioTotp.ConfirmarRegistro(contador, relogio.Agora);
-        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.RegistroTotpConfirmado, relogio.Agora));
+        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.RegistroTotpConfirmado, relogio.Agora, origem));
         await unitOfWork.SalvarAsync(cancellationToken);
 
         return ResultadoConfirmarTotp.Sucesso;

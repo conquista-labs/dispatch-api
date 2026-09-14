@@ -13,7 +13,8 @@ public sealed class RegistrarTotp(
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
-    public async Task<ResultadoRegistrarTotp?> ExecutarAsync(Guid usuarioId, CancellationToken cancellationToken = default)
+    public async Task<ResultadoRegistrarTotp?> ExecutarAsync(
+        Guid usuarioId, string? origem = null, CancellationToken cancellationToken = default)
     {
         var usuario = await usuarios.ObterPorIdAsync(usuarioId, cancellationToken);
         if (usuario is null)
@@ -34,7 +35,7 @@ public sealed class RegistrarTotp(
             existente.IniciarRegistro(segredoCifrado);
         }
 
-        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.RegistroTotpIniciado, relogio.Agora));
+        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.RegistroTotpIniciado, relogio.Agora, origem));
         await unitOfWork.SalvarAsync(cancellationToken);
 
         return new ResultadoRegistrarTotp(totp.CodificarBase32(segredo), totp.MontarUriOtpAuth(segredo, usuario.Email));

@@ -15,6 +15,11 @@ public sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
         builder.Property(u => u.SenhaHash).IsRequired();
         builder.Property(u => u.Papel).HasConversion<string>().HasMaxLength(20);
         builder.Property(u => u.Ativo);
+        // Explícito de propósito — mesma armadilha já documentada (propriedade só-com-setter-
+        // privado falha o constructor binding do EF Core em tempo de design se não declarada
+        // aqui, mesmo padrão de Ativo acima).
+        builder.Property(u => u.TentativasLoginFalhas);
+        builder.Property(u => u.BloqueadoAte);
 
         builder.HasIndex(u => u.Email).IsUnique();
     }

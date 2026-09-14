@@ -10,5 +10,9 @@ public enum TipoEventoAutenticacao
     RecuperacaoCodigoValidado,
     RecuperacaoCodigoFalhou,
     RecuperacaoContaBloqueada,
-    SenhaRedefinida
+    SenhaRedefinida,
+    // Login por senha (POST /auth/login) — não existia rastro nenhum de tentativa errada até
+    // aqui (achado na mesma auditoria que trouxe Origem acima).
+    LoginFalhou,
+    LoginBloqueado
 }

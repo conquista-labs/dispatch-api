@@ -15,6 +15,13 @@ public sealed class Usuario
     // isso. Só passa a importar de verdade depois da primeira troca de senha.
     public DateTimeOffset SessoesValidasApartirDe { get; private set; } = DateTimeOffset.MinValue;
 
+    // Bloqueio de login por senha errada — mesmo mecanismo já usado pro código TOTP
+    // (UsuarioTotp.TentativasFalhas/BloqueadoAte, RF-01i), só que aqui vale pra QUALQUER
+    // usuário (login por senha não depende de ter registrado autenticador) — por isso mora em
+    // Usuario, não em UsuarioTotp (que só existe depois de RegistrarTotp rodar).
+    public int TentativasLoginFalhas { get; private set; }
+    public DateTimeOffset? BloqueadoAte { get; private set; }
+
     public Usuario(Guid id, string nome, string email, string senhaHash, Papel papel, bool ativo = true)
     {
         Id = id;
@@ -46,5 +53,24 @@ public sealed class Usuario
     {
         SenhaHash = novoHash;
         SessoesValidasApartirDe = agora.AddTicks(-(agora.Ticks % TimeSpan.TicksPerSecond));
+    }
+
+    public bool EstaBloqueado(DateTimeOffset agora) => BloqueadoAte is { } ate && ate > agora;
+
+    // 5 tentativas erradas bloqueiam por 15 minutos — mesmos números de RF-01i (código TOTP),
+    // mesmo raciocínio de segurança, agora pro login em si.
+    public void RegistrarTentativaLoginFalha(DateTimeOffset agora)
+    {
+        TentativasLoginFalhas++;
+        if (TentativasLoginFalhas >= 5)
+        {
+            BloqueadoAte = agora.AddMinutes(15);
+        }
+    }
+
+    public void RegistrarLoginComSucesso()
+    {
+        TentativasLoginFalhas = 0;
+        BloqueadoAte = null;
     }
 }

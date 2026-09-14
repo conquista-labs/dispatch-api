@@ -12,6 +12,7 @@ public sealed class EventoAutenticacaoConfiguration : IEntityTypeConfiguration<E
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Tipo).HasConversion<string>().HasMaxLength(30);
         builder.Property(e => e.CriadoEm);
+        builder.Property(e => e.Origem).HasMaxLength(64);
 
         builder.HasOne<Usuario>()
             .WithMany()

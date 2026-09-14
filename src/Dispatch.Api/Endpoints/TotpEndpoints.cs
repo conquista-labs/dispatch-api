@@ -12,12 +12,13 @@ public static class TotpEndpoints
     public static void MapTotpEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/totp/registrar", async (
+                HttpContext httpContext,
                 ClaimsPrincipal principal,
                 RegistrarTotp registrar,
                 CancellationToken cancellationToken) =>
             {
                 var usuarioId = principal.ObterUsuarioId();
-                var resultado = await registrar.ExecutarAsync(usuarioId, cancellationToken);
+                var resultado = await registrar.ExecutarAsync(usuarioId, httpContext.ObterOrigem(), cancellationToken);
                 return resultado is null
                     ? Results.NotFound()
                     : Results.Ok(new RegistrarTotpResponse(resultado.ChaveBase32, resultado.UriOtpAuth));
@@ -29,13 +30,14 @@ public static class TotpEndpoints
             .RequireAuthorization();
 
         app.MapPost("/auth/totp/confirmar", async (
+                HttpContext httpContext,
                 ClaimsPrincipal principal,
                 ConfirmarTotpRequest request,
                 ConfirmarRegistroTotp confirmar,
                 CancellationToken cancellationToken) =>
             {
                 var usuarioId = principal.ObterUsuarioId();
-                var resultado = await confirmar.ExecutarAsync(usuarioId, request.Codigo, cancellationToken);
+                var resultado = await confirmar.ExecutarAsync(usuarioId, request.Codigo, httpContext.ObterOrigem(), cancellationToken);
                 return resultado switch
                 {
                     ResultadoConfirmarTotp.Sucesso => Results.NoContent(),

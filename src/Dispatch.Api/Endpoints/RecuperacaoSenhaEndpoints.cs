@@ -10,11 +10,12 @@ public static class RecuperacaoSenhaEndpoints
     public static void MapRecuperacaoSenhaEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/recuperar/iniciar", async (
+                HttpContext httpContext,
                 IniciarRecuperacaoRequest request,
                 IniciarRecuperacaoSenha iniciar,
                 CancellationToken cancellationToken) =>
             {
-                await iniciar.ExecutarAsync(request.Email, cancellationToken);
+                await iniciar.ExecutarAsync(request.Email, httpContext.ObterOrigem(), cancellationToken);
                 return Results.Ok();
             })
             .WithName("IniciarRecuperacaoSenha")
@@ -24,11 +25,12 @@ public static class RecuperacaoSenhaEndpoints
             .AllowAnonymous();
 
         app.MapPost("/auth/recuperar/validar-codigo", async (
+                HttpContext httpContext,
                 ValidarCodigoRecuperacaoRequest request,
                 ValidarCodigoRecuperacao validar,
                 CancellationToken cancellationToken) =>
             {
-                var resultado = await validar.ExecutarAsync(request.Email, request.Codigo, cancellationToken);
+                var resultado = await validar.ExecutarAsync(request.Email, request.Codigo, httpContext.ObterOrigem(), cancellationToken);
                 return resultado switch
                 {
                     ResultadoValidarCodigoRecuperacao.TokenEmitido emitido => Results.Ok(new ValidarCodigoRecuperacaoResponse(emitido.Token)),
@@ -46,11 +48,12 @@ public static class RecuperacaoSenhaEndpoints
             .AllowAnonymous();
 
         app.MapPost("/auth/recuperar/redefinir-senha", async (
+                HttpContext httpContext,
                 RedefinirSenhaRequest request,
                 RedefinirSenha redefinir,
                 CancellationToken cancellationToken) =>
             {
-                var resultado = await redefinir.ExecutarAsync(request.TokenRecuperacao, request.NovaSenha, cancellationToken);
+                var resultado = await redefinir.ExecutarAsync(request.TokenRecuperacao, request.NovaSenha, httpContext.ObterOrigem(), cancellationToken);
                 return resultado switch
                 {
                     ResultadoRedefinirSenha.Sucesso => Results.NoContent(),

@@ -9,11 +9,17 @@ public sealed class EventoAutenticacao
     public TipoEventoAutenticacao Tipo { get; }
     public DateTimeOffset CriadoEm { get; }
 
-    public EventoAutenticacao(Guid id, Guid usuarioId, TipoEventoAutenticacao tipo, DateTimeOffset criadoEm)
+    // RNF-16: "autor, origem e horário" — faltava a origem (achado numa auditoria de
+    // fidelidade contra o protótipo reexportado). IP do request, nulo quando não dá pra saber
+    // (ex.: nunca deveria acontecer via HTTP real, mas o Domain não assume que sempre vem).
+    public string? Origem { get; }
+
+    public EventoAutenticacao(Guid id, Guid usuarioId, TipoEventoAutenticacao tipo, DateTimeOffset criadoEm, string? origem = null)
     {
         Id = id;
         UsuarioId = usuarioId;
         Tipo = tipo;
         CriadoEm = criadoEm;
+        Origem = origem;
     }
 }

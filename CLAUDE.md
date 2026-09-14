@@ -1897,6 +1897,49 @@ testes automatizados no total (108 Domain + 242 Application).
 Testado ponta a ponta contra o Postgres local: `PUT /config` com `faixaUrgenteMinutos` igual a
 `faixaAtencaoMinutos` devolve 400 com o motivo certo.
 
+## Bloqueio de tentativas de login por senha + origem no evento de auditoria
+
+O dono reexportou o protótipo com um fluxo de "Configuração do sistema" e TOTP mais detalhado;
+o gap-analysis contra a v2 do documento de requisitos achou dois furos reais: **não existia
+nenhum bloqueio de tentativas erradas de login por senha** (RF-01i já cobria isso pro código
+TOTP, mas o login normal por e-mail+senha ficava sem limite nenhum de tentativa) e
+`EventoAutenticacao` não guardava "origem" (RNF-16: "autor, origem e horário" — só tinha autor
+e horário).
+
+- **`Usuario`** ganhou `TentativasLoginFalhas`/`BloqueadoAte` + `EstaBloqueado(agora)`/
+  `RegistrarTentativaLoginFalha(agora)`/`RegistrarLoginComSucesso()` — mesmo mecanismo e mesmos
+  números do bloqueio de TOTP já existente (`UsuarioTotp.TentativasFalhas`/`BloqueadoAte`, 5
+  tentativas → 15 minutos), só que no `Usuario` em vez do `UsuarioTotp`, porque login por senha
+  vale pra qualquer usuário, com ou sem autenticador registrado.
+- **`Autenticar`** (Application) reescrito: se o usuário existe e está bloqueado, rejeita e
+  audita (`LoginBloqueado`) sem nem checar a senha; senha errada incrementa o contador e audita
+  (`LoginFalhou`); sucesso zera o contador. **RF-01h (anti-enumeração) estendido pro bloqueio**:
+  conta bloqueada e senha errada devolvem o mesmíssimo `ResultadoAutenticacao.Rejeitado()` → 401
+  genérico — o cliente HTTP nunca sabe se foi "senha errada" ou "conta bloqueada".
+- **`EventoAutenticacao`** ganhou `Origem` (`string?`) — todo `ExecutarAsync` que grava um evento
+  de auditoria (`Autenticar`, `RegistrarTotp`, `ConfirmarRegistroTotp`, `IniciarRecuperacaoSenha`,
+  `ValidarCodigoRecuperacao`, `RedefinirSenha`) ganhou o parâmetro `string? origem` (posicional,
+  antes do `CancellationToken` de sempre — usado deliberadamente pra forçar erro de compilação
+  em todo call site antigo e não deixar nenhum passar batido sem thread-ar o valor). A Api
+  resolve o valor via `HttpContextExtensions.ObterOrigem()` (novo) — `X-Forwarded-For` primeiro
+  (é o cabeçalho que um proxy real, ex.: Render, preenche), `Connection.RemoteIpAddress` como
+  fallback.
+- **Duas armadilhas de EF Core de novo** (mesma categoria já documentada nesta seção, "propriedade
+  só-com-setter-privado"): `Usuario.TentativasLoginFalhas`/`BloqueadoAte` e
+  `EventoAutenticacao.Origem` precisaram de `builder.Property(...)` explícito em
+  `UsuarioConfiguration`/`EventoAutenticacaoConfiguration` antes da migration rodar limpa.
+
+Migration `AdicionaBloqueioDeLoginEOrigemEmEventosAutenticacao` — 3 colunas novas
+(`usuarios.tentativas_login_falhas` `NOT NULL DEFAULT 0`, `usuarios.bloqueado_ate` nullable,
+`eventos_autenticacao.origem` nullable, `varchar(64)` — cabe IPv4/IPv6 e a lista separada por
+vírgula que `X-Forwarded-For` pode carregar), nenhum backfill necessário.
+
+Testado ponta a ponta contra o Postgres local com `dotnet run` de verdade: 5 tentativas de
+login com senha errada, a 6ª (mesmo com a senha certa) continua 401; confirmado via `psql` que
+`tentativas_login_falhas`/`bloqueado_ate` gravaram certo e os eventos `LoginFalhou`/
+`LoginBloqueado` carregam `origem` (o IP de loopback do teste local). 356 testes automatizados
+no total (111 Domain + 245 Application).
+
 ## Sessão de 8 horas (Jwt:ExpiracaoMinutos)
 
 Reportado pelo dono junto com o item acima: "o token tá expirando muito rápido". O valor real

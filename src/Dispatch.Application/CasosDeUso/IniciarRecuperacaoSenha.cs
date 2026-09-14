@@ -12,7 +12,7 @@ public sealed class IniciarRecuperacaoSenha(
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
-    public async Task ExecutarAsync(string email, CancellationToken cancellationToken = default)
+    public async Task ExecutarAsync(string email, string? origem = null, CancellationToken cancellationToken = default)
     {
         var usuario = await usuarios.ObterPorEmailAsync(email, cancellationToken);
         if (usuario is null)
@@ -20,7 +20,7 @@ public sealed class IniciarRecuperacaoSenha(
             return;
         }
 
-        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, TipoEventoAutenticacao.RecuperacaoIniciada, relogio.Agora));
+        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, TipoEventoAutenticacao.RecuperacaoIniciada, relogio.Agora, origem));
         await unitOfWork.SalvarAsync(cancellationToken);
     }
 }

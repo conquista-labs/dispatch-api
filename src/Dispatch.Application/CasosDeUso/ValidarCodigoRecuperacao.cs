@@ -16,7 +16,8 @@ public sealed class ValidarCodigoRecuperacao(
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
-    public async Task<ResultadoValidarCodigoRecuperacao> ExecutarAsync(string email, string codigo, CancellationToken cancellationToken = default)
+    public async Task<ResultadoValidarCodigoRecuperacao> ExecutarAsync(
+        string email, string codigo, string? origem = null, CancellationToken cancellationToken = default)
     {
         var usuario = await usuarios.ObterPorEmailAsync(email, cancellationToken);
         var usuarioTotp = usuario is null ? null : await usuariosTotp.ObterPorUsuarioIdAsync(usuario.Id, cancellationToken);
@@ -38,7 +39,7 @@ public sealed class ValidarCodigoRecuperacao(
             var tipoEvento = usuarioTotp.BloqueadoAte is not null
                 ? TipoEventoAutenticacao.RecuperacaoContaBloqueada
                 : TipoEventoAutenticacao.RecuperacaoCodigoFalhou;
-            eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, tipoEvento, relogio.Agora));
+            eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, tipoEvento, relogio.Agora, origem));
             await unitOfWork.SalvarAsync(cancellationToken);
 
             return usuarioTotp.BloqueadoAte is { } novoBloqueio
@@ -50,7 +51,7 @@ public sealed class ValidarCodigoRecuperacao(
         usuarioTotp.RegistrarSucesso(contador);
         usuarioTotp.EmitirTokenRecuperacao(hashDeSenha.Hash(tokenBruto), relogio.Agora.AddMinutes(10));
 
-        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, TipoEventoAutenticacao.RecuperacaoCodigoValidado, relogio.Agora));
+        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuario.Id, TipoEventoAutenticacao.RecuperacaoCodigoValidado, relogio.Agora, origem));
         await unitOfWork.SalvarAsync(cancellationToken);
 
         // Token opaco pro cliente = usuarioId + segredo aleatório — dá pra achar o UsuarioTotp

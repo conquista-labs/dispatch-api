@@ -16,7 +16,8 @@ public sealed class RedefinirSenha(
     IUnitOfWork unitOfWork,
     IRelogio relogio)
 {
-    public async Task<ResultadoRedefinirSenha> ExecutarAsync(string tokenRecuperacao, string novaSenha, CancellationToken cancellationToken = default)
+    public async Task<ResultadoRedefinirSenha> ExecutarAsync(
+        string tokenRecuperacao, string novaSenha, string? origem = null, CancellationToken cancellationToken = default)
     {
         var partes = tokenRecuperacao.Split('.', 2);
         if (partes.Length != 2 || !Guid.TryParse(partes[0], out var usuarioId))
@@ -53,7 +54,7 @@ public sealed class RedefinirSenha(
             }
         }
 
-        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.SenhaRedefinida, relogio.Agora));
+        eventos.Adicionar(new EventoAutenticacao(Guid.NewGuid(), usuarioId, TipoEventoAutenticacao.SenhaRedefinida, relogio.Agora, origem));
         await unitOfWork.SalvarAsync(cancellationToken);
 
         return ResultadoRedefinirSenha.Sucesso;
