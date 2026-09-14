@@ -11,6 +11,11 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.ToTable("protocolos");
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Numero).IsRequired().HasMaxLength(50);
+        // Não único de propósito (RF-07 — reprocessamento/reimportação), mas é filtrado com
+        // frequência: ObterPorNumerosAsync roda a cada importação de lote e a cada abertura do
+        // painel de detalhe (continuidade de conferência) — sem índice, sequential scan da
+        // tabela inteira (achado numa auditoria de performance/índices).
+        builder.HasIndex(p => p.Numero);
         builder.Property(p => p.Etapa).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.Prioridade).HasConversion<string>().HasMaxLength(20);
         builder.Property(p => p.AndamentoEm);
@@ -24,7 +29,17 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
             .HasColumnName("prazo_tipo")
             .HasMaxLength(20);
 
+        // Filtro mais repetido da tabela mais quente (ObterPoolAsync/ObterSemDonoAsync/
+        // ObterParaDistribuicaoAsync/ObterConcluidosNoPeriodoAsync) — sustenta o caminho mais
+        // quente do sistema (Minha fila, toda tela de todo conferente). Sem índice, cada
+        // leitura varria a tabela inteira (achado na mesma auditoria do índice de Numero acima).
         builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        builder.HasIndex(p => p.Status);
+        // Composto pro Dashboard (ObterConcluidosNoPeriodoAsync: Status IN (Aprovado,
+        // Reprovado) AND ConcluidoEm dentro do período) — sem isso, mesmo com o índice simples
+        // de Status acima, o filtro por período ainda variava a tabela inteira de protocolos
+        // com esse status, em vez de já vir estreitado pelas duas colunas juntas.
+        builder.HasIndex(p => new { p.Status, p.ConcluidoEm });
         // RF-18i/j — explícito de propósito (mesma armadilha já documentada no CLAUDE.md:
         // propriedade só-com-getter sem declaração aqui falha o constructor binding do EF Core
         // em tempo de design, mesmo existindo de verdade).

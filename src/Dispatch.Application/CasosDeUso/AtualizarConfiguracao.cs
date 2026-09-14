@@ -24,12 +24,16 @@ public sealed class AtualizarConfiguracao(IConfiguracaoRepository configuracao, 
             return new ResultadoAtualizarConfiguracao.ValorInvalido(motivo);
         }
 
-        var atual = await configuracao.ObterAsync(cancellationToken);
+        // ObterParaEdicaoAsync, não ObterAsync: precisa da instância de verdade, rastreada pelo
+        // DbContext atual — ObterAsync pode devolver um objeto cacheado de uma requisição
+        // anterior, que mutar+salvar aqui não persistiria (ver IConfiguracaoRepository).
+        var atual = await configuracao.ObterParaEdicaoAsync(cancellationToken);
         atual.AtualizarValores(
             faixaAtencao, faixaUrgente, limiteDeAtosSimultaneos, janelaDeCorrecao, diasDeMemoriaDescarte, tempoMedioPorAtoMinutos,
             limiarTipoDesconhecido, limiarPrazoIrrealCasos, limiarPrazoIrrealEstouro, limiarEscreventeOrfao, limiarRiscoQualidadeCasos,
             limiarRiscoQualidadeReprovacao);
         await unitOfWork.SalvarAsync(cancellationToken);
+        configuracao.InvalidarCache();
 
         return new ResultadoAtualizarConfiguracao.Sucesso();
     }

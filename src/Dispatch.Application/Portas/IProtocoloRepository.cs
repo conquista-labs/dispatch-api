@@ -58,4 +58,9 @@ public interface IProtocoloRepository
     // status/lote) com esses números. Numero não é único de propósito — um mesmo item pode ter
     // várias linhas ao longo do tempo (reprocessamento, RF-07).
     Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken);
+
+    // RF-30: "tipos em circulação" pro aviso de cobertura de alçada — só os TipoAtoId distintos,
+    // resolvido como SELECT DISTINCT no banco em vez de carregar a tabela protocolos inteira
+    // pra memória só pra extrair isso (achado na mesma auditoria de performance dos índices).
+    Task<IReadOnlyCollection<Guid>> ObterTipoAtoIdsDistintosAsync(CancellationToken cancellationToken);
 }

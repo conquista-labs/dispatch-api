@@ -3,6 +3,7 @@ using System;
 using Dispatch.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Dispatch.Infrastructure.Migrations
 {
     [DbContext(typeof(DispatchDbContext))]
-    partial class DispatchDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914122622_AdicionaIndicesEmStatusENumeroDeProtocolos")]
+    partial class AdicionaIndicesEmStatusENumeroDeProtocolos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -410,9 +413,6 @@ namespace Dispatch.Infrastructure.Migrations
 
                     b.HasIndex("TipoAtoId")
                         .HasDatabaseName("ix_protocolos_tipo_ato_id");
-
-                    b.HasIndex("Status", "ConcluidoEm")
-                        .HasDatabaseName("ix_protocolos_status_concluido_em");
 
                     b.ToTable("protocolos", (string)null);
                 });

@@ -13,8 +13,18 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<DispatchDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DispatchDb"))
+            options.UseNpgsql(
+                    configuration.GetConnectionString("DispatchDb"),
+                    // O Neon (produção) é serverless e pode hibernar por inatividade — sem
+                    // retry, uma falha transitória de conexão (cold start, blip de rede) subia
+                    // como exceção não tratada até o cliente, 500 puro, sem nenhuma tentativa
+                    // automática de recuperação (achado numa auditoria de performance/resiliência).
+                    npgsqlOptions => npgsqlOptions.EnableRetryOnFailure())
                 .UseSnakeCaseNamingConvention());
+
+        // Usado por ConfiguracaoRepository pra cachear a linha única de config (ver comentário
+        // lá — TTL curto, invalidado explicitamente em AtualizarConfiguracao).
+        services.AddMemoryCache();
 
         services.AddScoped<IConferenteRepository, ConferenteRepository>();
         services.AddScoped<IEquipeRepository, EquipeRepository>();

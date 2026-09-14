@@ -1895,3 +1895,97 @@ Decidido com o dono: **8 horas (480 minutos)**, um expediente inteiro. `appsetti
 (`Jwt:ExpiracaoMinutos`) atualizado de `60` pra `480`, pro ambiente local bater com produção.
 **Pendente, fora do alcance de código**: atualizar a env var `Jwt__ExpiracaoMinutos=480` no
 dashboard do Render (produção) — só o dono tem acesso a esse painel.
+
+## Auditoria de performance/índices do banco — três correções
+
+Pedido explícito do dono ("uma análise muito boa do banco, lentidão, índices etc"), feito com
+um agente em background depois do fix do N+1 acima. Achados confirmados e corrigidos:
+
+- **Índice em `protocolos.status`** — o filtro mais repetido da tabela mais quente, sustenta o
+  caminho mais quente do sistema (`ObterPoolAsync` → `GET /minha-fila`, carregado por todo
+  conferente toda vez que abre a própria fila). Sem índice, cada leitura varria a tabela
+  inteira. Mesmo padrão do índice de `RegraAplicadaId` já corrigido.
+- **Índice em `protocolos.numero`** — não é único de propósito (RF-07: reprocessamento/
+  reimportação de um protocolo reprovado gera nova linha com o mesmo número), mas é filtrado
+  com frequência real: `ObterPorNumerosAsync` roda a cada importação de lote (checagem de
+  continuidade) e a cada abertura do painel de detalhe de um protocolo (histórico de
+  conferências). Índice não-único resolve sem contradizer a decisão de nunca torná-lo único.
+- **`EnableRetryOnFailure()` no `UseNpgsql`** (`ServiceCollectionExtensions.cs`) — o Neon é
+  serverless e pode hibernar por inatividade; sem retry, uma falha transitória de conexão
+  (cold start, blip de rede) subia como exceção não tratada até o cliente, 500 puro, sem
+  nenhuma tentativa automática de recuperação. Confirmado antes de ligar que o projeto não usa
+  transação explícita em lugar nenhum (`BeginTransactionAsync`) — `EnableRetryOnFailure` exige
+  que operações multi-passo rodem dentro de uma "execution strategy" própria, e como todo
+  código aqui já é uma chamada só a `SaveChangesAsync` por vez, não precisou de nenhuma mudança
+  de padrão pra ligar isso com segurança.
+
+Migration `AdicionaIndicesEmStatusENumeroDeProtocolos` — só 2 `CreateIndex`, nada de dado
+tocado. Testado ponta a ponta contra o Postgres local depois de reiniciar a API de verdade
+(`dotnet run`, não só `dotnet test`): leitura (`GET /regras-alcada`, `GET
+/protocolos/distribuicao`) e escrita (criar+remover um tipo de ato) respondendo normal com a
+policy de retry ativa. 348 testes automatizados continuam passando.
+
+**Achados da mesma auditoria, registrados mas não corrigidos ainda (hipótese/observação, não
+incêndio hoje)**: `GET /protocolos/distribuicao` sem filtro de lote carrega todo o histórico
+que já existiu, sem paginação — por desenho do requisito (RF-13, "mesma massa de dados, visões
+diferentes"), não é bug pontual de índice, é uma decisão de arquitetura que precisaria de
+paginação/corte de data se algum dia doer de verdade. Nenhum outro endpoint pagina nada hoje —
+aceitável pras tabelas de cadastro (pequenas por natureza do domínio), mas
+`/protocolos/distribuicao` é quem mais vai doer conforme a base cresce.
+
+## Segunda rodada da auditoria — os 4 itens restantes, todos implementados
+
+O dono pediu pra fechar tudo que tinha ficado como "hipótese/observação" na rodada anterior,
+mais dois achados novos de resiliência.
+
+- **Índice composto `(status, concluido_em)`** — migration
+  `AdicionaIndiceCompostoStatusConcluidoEmDeProtocolos`. Sustenta `ObterConcluidosNoPeriodoAsync`
+  (RF-46, Dashboard): antes, mesmo com o índice simples de `status`, o filtro por período ainda
+  precisava varrer toda a fatia já filtrada por status procurando as linhas do intervalo — com
+  o composto, as duas condições já vêm estreitadas juntas.
+- **N+1 em `GerarSugestoes.cs`** — mesmo formato do já corrigido em `GET /regras-alcada`: um
+  `foreach` chamando `ISugestaoRepository.ObterPorChaveAtivaAsync(chave, ...)` uma vez por
+  candidato. Virou `ObterMaisRecentesPorChavesAsync` (uma query só, `WHERE chave IN (...)`
+  agrupada por chave em memória, pegando a mais recente de cada grupo — mesma semântica que a
+  versão antiga garantia por chave individual). Volume baixo hoje (dezenas de candidatos por
+  rodada), mas é a mesma classe de risco que já mordeu o projeto uma vez.
+- **`ObterCoberturaDeAlcada` carregava a tabela `protocolos` inteira** só pra extrair
+  `TipoAtoId` distintos em memória. Novo método `IProtocoloRepository.ObterTipoAtoIdsDistintosAsync`
+  — `SELECT DISTINCT tipo_ato_id FROM protocolos WHERE tipo_ato_id IS NOT NULL`, direto no
+  banco, nenhuma linha de protocolo trafega pra aplicação.
+- **`/health/db`, novo** — `/health` (o `healthCheckPath` do `render.yaml`, usado pelo Render
+  pra decidir se o container está roteável) nunca verificava o banco, só respondia
+  `{"status":"ok"}` sempre — nada detectava "app de pé, Postgres inacessível". Decisão
+  deliberada: **não** fazer o `/health` em si tocar o banco — um cold start do Neon derrubaria
+  o health check e o Render poderia parar de rotear pro serviço (ou reiniciar o container) por
+  causa de uma lentidão transitória do banco, tirando tráfego bem na hora que a conexão mais
+  precisaria de uma chamada real pra "acordar". `/health/db` é a checagem de verdade
+  (`dbContext.Database.CanConnectAsync()`, 503 se falhar), separada, pra diagnóstico manual/
+  monitoramento externo — não ligada ao roteamento do Render.
+- **Cache da tabela `configuracao`** — linha única, quase nunca muda, mas era lida do banco em
+  toda chamada por ~6 consumidores diferentes por request (`GET /config` + as faixas do
+  semáforo/limiares usados por `IniciarConferencia`, `CorrigirResultado`, `ListarConferentes`,
+  `DescartarSugestao`, `GerarSugestoes`, e os 4+ endpoints que montam `ProtocoloResumo`/
+  `DetalheProtocoloResponse`). `ConfiguracaoRepository.ObterAsync` agora cacheia em
+  `IMemoryCache` (TTL de 5 min, rede de segurança). **Cuidado que isso exigiu**:
+  `AtualizarConfiguracao` (o `PUT /config`) não pode ler pelo caminho cacheado — um objeto
+  cacheado pode ter vindo do `DbContext` (scoped) de uma requisição *anterior*, já finalizado;
+  mutar esse objeto e chamar `SaveChangesAsync` no `DbContext` da requisição *atual* não
+  persistiria nada, porque o change tracker atual nunca viu aquele objeto (mesma armadilha de
+  "objeto desconectado do change tracker" já documentada pra `RegraAlcada`/`Sugestao`, agora
+  também batendo em `Configuracao` por causa do cache novo). Corrigido com
+  `IConfiguracaoRepository.ObterParaEdicaoAsync` (sempre fresco, sem cache, só usado por
+  `AtualizarConfiguracao`) + `InvalidarCache()` chamado depois do `SaveChangesAsync` bem-sucedido.
+  `services.AddMemoryCache()` registrado em `ServiceCollectionExtensions`.
+- **`render.yaml`**: `Jwt__ExpiracaoMinutos` corrigido de `"60"` pra `"480"` (8h — decisão já
+  tomada e aplicada no `appsettings.Development.json`, mas o Blueprint tinha ficado
+  desatualizado). Aplicar em produção continua exigindo o dono confirmar/ajustar a env var no
+  dashboard do Render diretamente (Blueprint sync no `git push` não é garantido pra serviço já
+  criado) — o valor no repo agora pelo menos documenta a intenção corretamente.
+
+Testado ponta a ponta contra o Postgres local, `dotnet run` de verdade: `/health` responde sem
+tocar o banco; `/health/db` responde `{"status":"ok"}` com o banco de pé; `POST
+/sugestoes/gerar` e `GET /conferentes/cobertura` funcionando normalmente depois das mudanças;
+`GET /config` → `PUT /config` (mudando `limiteDeAtosSimultaneos`) → `GET /config` de novo
+confirma que o valor novo aparece na hora, não o cacheado (`InvalidarCache` funcionando).
+348 testes automatizados continuam passando.

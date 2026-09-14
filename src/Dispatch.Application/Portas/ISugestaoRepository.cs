@@ -13,8 +13,12 @@ public interface ISugestaoRepository
 
     // GerarSugestoes usa isso pro dedup (seção 7: "chave única por proposta") — chave não é
     // única na tabela (o histórico guarda uma linha por ciclo de vida), então isso devolve
-    // sempre a mais recente pra decidir se atualiza, ignora (memória de descarte) ou cria outra.
-    Task<Sugestao?> ObterPorChaveAtivaAsync(string chave, CancellationToken cancellationToken);
+    // sempre a mais recente de cada chave pedida (pra decidir se atualiza, ignora — memória de
+    // descarte — ou cria outra). Em lote (uma query só, não uma por candidato) — achado numa
+    // auditoria de performance: era chamado dentro de um foreach, um N+1 do mesmo formato do já
+    // corrigido em GET /regras-alcada. Chave sem sugestão nenhuma não aparece no dicionário.
+    Task<IReadOnlyDictionary<string, Sugestao>> ObterMaisRecentesPorChavesAsync(
+        IReadOnlyCollection<string> chaves, CancellationToken cancellationToken);
 
     void Adicionar(Sugestao sugestao);
 

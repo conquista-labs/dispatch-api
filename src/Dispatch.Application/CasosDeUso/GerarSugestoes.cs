@@ -34,9 +34,15 @@ public sealed class GerarSugestoes(
         var agora = relogio.Agora;
         var novas = 0;
 
+        // Uma query só pra todas as chaves dos candidatos, não uma por candidato dentro do
+        // foreach (achado numa auditoria de performance — mesmo formato de N+1 já corrigido em
+        // GET /regras-alcada).
+        var maisRecentesPorChave = await sugestoes.ObterMaisRecentesPorChavesAsync(
+            candidatos.Select(c => c.Chave).Distinct().ToList(), cancellationToken);
+
         foreach (var candidato in candidatos)
         {
-            var existente = await sugestoes.ObterPorChaveAtivaAsync(candidato.Chave, cancellationToken);
+            maisRecentesPorChave.TryGetValue(candidato.Chave, out var existente);
 
             // Não achou, ou a última com essa chave foi descartada e a janela de memória já
             // passou: nasce uma proposta nova. Pendente: só atualiza ocorrências/evidência

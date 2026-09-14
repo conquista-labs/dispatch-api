@@ -25,13 +25,19 @@ public sealed class SugestaoRepository(DispatchDbContext dbContext) : ISugestaoR
         return registro is null ? null : ParaDominio(registro);
     }
 
-    public async Task<Sugestao?> ObterPorChaveAtivaAsync(string chave, CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<string, Sugestao>> ObterMaisRecentesPorChavesAsync(
+        IReadOnlyCollection<string> chaves, CancellationToken cancellationToken)
     {
-        var registro = await dbContext.Sugestoes
-            .Where(s => s.Chave == chave)
+        var registros = await dbContext.Sugestoes
+            .Where(s => chaves.Contains(s.Chave))
             .OrderByDescending(s => s.CriadaEm)
-            .FirstOrDefaultAsync(cancellationToken);
-        return registro is null ? null : ParaDominio(registro);
+            .ToListAsync(cancellationToken);
+
+        // Registros já vêm ordenados por mais recente primeiro — o primeiro de cada grupo por
+        // chave é o que ObterPorChaveAtivaAsync (versão antiga, uma query por chave) devolvia.
+        return registros
+            .GroupBy(r => r.Chave)
+            .ToDictionary(g => g.Key, g => ParaDominio(g.First()));
     }
 
     public void Adicionar(Sugestao sugestao) => dbContext.Sugestoes.Add(ParaRegistro(sugestao));

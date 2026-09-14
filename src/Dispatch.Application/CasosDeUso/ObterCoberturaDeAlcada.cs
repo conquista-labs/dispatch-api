@@ -14,12 +14,9 @@ public sealed class ObterCoberturaDeAlcada(
 {
     public async Task<CoberturaAlcada> ExecutarAsync(CancellationToken cancellationToken = default)
     {
-        var todosProtocolos = await protocolos.ObterParaDistribuicaoAsync(loteImportacaoId: null, cancellationToken);
-        var tiposEmJogoIds = todosProtocolos
-            .Where(p => p.TipoAtoId is not null)
-            .Select(p => p.TipoAtoId!.Value)
-            .Distinct()
-            .ToList();
+        // SELECT DISTINCT no banco em vez de carregar a tabela protocolos inteira pra memória
+        // só pra extrair os tipos em jogo (achado numa auditoria de performance).
+        var tiposEmJogoIds = await protocolos.ObterTipoAtoIdsDistintosAsync(cancellationToken);
 
         if (tiposEmJogoIds.Count == 0)
         {

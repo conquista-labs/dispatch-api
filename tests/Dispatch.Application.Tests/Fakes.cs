@@ -36,6 +36,8 @@ internal sealed class FakeConfiguracaoRepository : IConfiguracaoRepository
             30, 18, 5, 8, 0.6, 3, 6, 0.5);
 
     public Task<Configuracao> ObterAsync(CancellationToken cancellationToken) => Task.FromResult(_configuracao);
+    public Task<Configuracao> ObterParaEdicaoAsync(CancellationToken cancellationToken) => Task.FromResult(_configuracao);
+    public void InvalidarCache() { }
 }
 
 internal sealed class FakeEquipeRepository : IEquipeRepository
@@ -211,6 +213,10 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
                 .Select(g => (g.Key, g.Count()))
                 .ToList());
 
+    public Task<IReadOnlyCollection<Guid>> ObterTipoAtoIdsDistintosAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Guid>>(
+            _protocolos.Where(p => p.TipoAtoId is not null).Select(p => p.TipoAtoId!.Value).Distinct().ToList());
+
     public int Quantidade => _protocolos.Count;
     public IReadOnlyList<Protocolo> Todos => _protocolos;
 }
@@ -291,8 +297,14 @@ internal sealed class FakeSugestaoRepository : ISugestaoRepository
     public Task<Sugestao?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_sugestoes.SingleOrDefault(s => s.Id == id));
 
-    public Task<Sugestao?> ObterPorChaveAtivaAsync(string chave, CancellationToken cancellationToken) =>
-        Task.FromResult(_sugestoes.Where(s => s.Chave == chave).OrderByDescending(s => s.CriadaEm).FirstOrDefault());
+    public Task<IReadOnlyDictionary<string, Sugestao>> ObterMaisRecentesPorChavesAsync(
+        IReadOnlyCollection<string> chaves, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<string, Sugestao>>(
+            _sugestoes
+                .Where(s => chaves.Contains(s.Chave))
+                .OrderByDescending(s => s.CriadaEm)
+                .GroupBy(s => s.Chave)
+                .ToDictionary(g => g.Key, g => g.First()));
 
     public void Adicionar(Sugestao sugestao) => _sugestoes.Add(sugestao);
 

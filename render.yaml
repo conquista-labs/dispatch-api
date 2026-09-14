@@ -29,6 +29,6 @@ services:
       - key: Jwt__Audiencia
         value: dispatch-clientes
       - key: Jwt__ExpiracaoMinutos
-        value: "60"
+        value: "480"
       - key: Cors__AllowedOrigin
         value: https://lab-dispatch-web.netlify.app

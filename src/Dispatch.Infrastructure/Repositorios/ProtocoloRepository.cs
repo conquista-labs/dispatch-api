@@ -80,4 +80,11 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
 
         return contagens.Select(c => (c.RegraAlcadaId, c.Total)).ToList();
     }
+
+    public async Task<IReadOnlyCollection<Guid>> ObterTipoAtoIdsDistintosAsync(CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => p.TipoAtoId != null)
+            .Select(p => p.TipoAtoId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
 }

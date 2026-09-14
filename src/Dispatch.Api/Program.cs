@@ -105,7 +105,24 @@ app.UseCors(CorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Liveness pura — é o healthCheckPath do render.yaml, decide se o Render considera o
+// container de pé/roteável. De propósito NUNCA toca o banco: se checasse o Neon aqui, um cold
+// start/hibernação momentânea do Neon derrubaria o health check e o Render poderia parar de
+// rotear pro serviço (ou até reiniciar o container) por causa de uma lentidão transitória do
+// banco, não da app em si — o container ficaria sem tráfego bem quando mais precisaria dele
+// pra "acordar" a própria conexão.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .WithTags(OpenApiTags.Sistema)
+    .AllowAnonymous();
+
+// Readiness — checa o banco de verdade (achado numa auditoria de resiliência: nada detectava
+// "app de pé, Postgres inacessível"). Separado do /health de propósito (ver comentário acima);
+// não é usado pelo healthCheckPath do Render, é pra diagnóstico manual/monitoramento externo.
+app.MapGet("/health/db", async (DispatchDbContext dbContext, CancellationToken cancellationToken) =>
+    {
+        var conectado = await dbContext.Database.CanConnectAsync(cancellationToken);
+        return conectado ? Results.Ok(new { status = "ok" }) : Results.Json(new { status = "erro" }, statusCode: 503);
+    })
     .WithTags(OpenApiTags.Sistema)
     .AllowAnonymous();
 app.MapAuthEndpoints();
