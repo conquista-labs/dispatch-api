@@ -28,6 +28,8 @@ public class AtualizarConfiguracaoTests
     [InlineData(240, 60, 0, 15, 30, 18.0, 5, 8, 0.6, 3, 6, 0.5)] // limiteDeAtosSimultaneos < 1
     [InlineData(240, 60, 1, 15, -1, 18.0, 5, 8, 0.6, 3, 6, 0.5)] // diasDeMemoriaDescarte negativo
     [InlineData(240, 60, 1, 15, 30, 18.0, 5, 8, 1.5, 3, 6, 0.5)] // limiarPrazoIrrealEstouro fora de 0-1
+    [InlineData(60, 60, 1, 15, 30, 18.0, 5, 8, 0.6, 3, 6, 0.5)] // faixaUrgente igual a faixaAtencao
+    [InlineData(60, 240, 1, 15, 30, 18.0, 5, 8, 0.6, 3, 6, 0.5)] // faixaUrgente maior que faixaAtencao
     public async Task ValorInvalido_RejeitaSemAlterarNada(
         int faixaAtencaoMinutos, int faixaUrgenteMinutos, int limiteDeAtosSimultaneos, int janelaDeCorrecaoMinutos,
         int diasDeMemoriaDescarte, double tempoMedioPorAtoMinutos, int limiarTipoDesconhecido, int limiarPrazoIrrealCasos,

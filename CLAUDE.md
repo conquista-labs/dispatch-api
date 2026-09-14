@@ -1883,6 +1883,20 @@ que uma coluna de auditoria/leitura-derivada não tem FK de propósito, ela tamb
 contrato JSON (`RegraAlcadaResponse.Usos` continua um `int` por regra) — o front não precisou
 de nenhuma alteração.
 
+## Validação cruzada urgência < atenção — fecha o gap do protótipo reexportado
+
+O dono reexportou o protótipo com uma tela de "Configuração do sistema" de verdade (seção 8),
+incluindo uma validação que o próprio requisito nunca especificou explicitamente: as duas
+faixas do semáforo contam pra trás a partir do vencimento, então se `faixaUrgente >=
+faixaAtencao`, o card pula direto de amarelo pra vermelho e a faixa de urgência (laranja) nunca
+aparece na prática. `AtualizarConfiguracao.Validar` ganhou esse cruzamento (só depois de
+confirmar que os dois campos individualmente já são > 0, pra não dar dois erros ao mesmo
+tempo). 2 testes novos (`ValorInvalido_RejeitaSemAlterarNada`, casos "igual" e "maior"). 350
+testes automatizados no total (108 Domain + 242 Application).
+
+Testado ponta a ponta contra o Postgres local: `PUT /config` com `faixaUrgenteMinutos` igual a
+`faixaAtencaoMinutos` devolve 400 com o motivo certo.
+
 ## Sessão de 8 horas (Jwt:ExpiracaoMinutos)
 
 Reportado pelo dono junto com o item acima: "o token tá expirando muito rápido". O valor real

@@ -45,6 +45,10 @@ public sealed class AtualizarConfiguracao(IConfiguracaoRepository configuracao, 
     {
         if (faixaAtencao <= TimeSpan.Zero) return "faixaAtencao precisa ser maior que zero";
         if (faixaUrgente <= TimeSpan.Zero) return "faixaUrgente precisa ser maior que zero";
+        // Regra nova (protótipo reexportado, seção 8) — as faixas contam pra trás a partir do
+        // vencimento; se urgente >= atenção, o card pula direto de amarelo pra vermelho e a
+        // faixa laranja (crítico) nunca aparece na prática.
+        if (faixaUrgente >= faixaAtencao) return "faixaUrgente precisa ser menor que faixaAtencao — senão a faixa de urgência nunca aparece";
         if (limiteDeAtosSimultaneos < 1) return "limiteDeAtosSimultaneos precisa ser pelo menos 1";
         if (janelaDeCorrecao <= TimeSpan.Zero) return "janelaDeCorrecao precisa ser maior que zero";
         if (diasDeMemoriaDescarte < 0) return "diasDeMemoriaDescarte não pode ser negativo";
