@@ -128,4 +128,80 @@ public class ObterVisaoDistribuicaoTests
 
         Assert.Empty(visao.ConcluidosHojePorConferente);
     }
+
+    [Fact]
+    public async Task ConcluidoDentroDaJanelaAparece()
+    {
+        var agora = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+        var protocolo = NovoProtocolo(StatusProtocolo.Atribuido);
+        protocolo.Aprovar(agora.AddDays(-5));
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([protocolo]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Equal([protocolo], visao.Concluidos);
+    }
+
+    [Fact]
+    public async Task ConcluidoForaDaJanelaNaoAparece()
+    {
+        var agora = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+        var protocolo = NovoProtocolo(StatusProtocolo.Atribuido);
+        protocolo.Aprovar(agora.AddDays(-40));
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([protocolo]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Empty(visao.Concluidos);
+        Assert.Empty(visao.ConcluidosHojePorConferente);
+    }
+
+    [Fact]
+    public async Task ProtocoloEmAndamentoApareceMesmoAntigo()
+    {
+        // Pool/Atribuído/Conferindo/Exceção nunca sofrem corte por data — só ConcluidoEm importa,
+        // e nenhum desses status tem ConcluidoEm preenchido.
+        var agora = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+        var excecaoAntiga = NovoProtocolo(StatusProtocolo.Excecao);
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([excecaoAntiga]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Equal([excecaoAntiga], visao.Excecoes);
+    }
+
+    [Fact]
+    public async Task LoteEspecificoIgnoraJanelaPadrao()
+    {
+        var agora = new DateTimeOffset(2026, 3, 10, 12, 0, 0, TimeSpan.Zero);
+        var loteId = Guid.NewGuid();
+        var protocolo = NovoProtocolo(StatusProtocolo.Atribuido, loteImportacaoId: loteId);
+        protocolo.Aprovar(agora.AddDays(-90));
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([protocolo]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: loteId);
+
+        Assert.Equal([protocolo], visao.Concluidos);
+    }
+
+    [Fact]
+    public async Task DescartadoNuncaAparece()
+    {
+        var descartado = NovoProtocolo(StatusProtocolo.Excecao);
+        descartado.Descartar();
+
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([descartado]), new FakeRelogio(DateTimeOffset.UtcNow));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Empty(visao.Pool);
+        Assert.Empty(visao.Atribuidos);
+        Assert.Empty(visao.EmConferencia);
+        Assert.Empty(visao.Concluidos);
+        Assert.Empty(visao.Excecoes);
+    }
 }

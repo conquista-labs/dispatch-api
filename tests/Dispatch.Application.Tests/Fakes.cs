@@ -168,6 +168,16 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status != StatusProtocolo.Excluido && (loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId)).ToList());
 
+    public Task<IReadOnlyCollection<Protocolo>> ObterParaVisaoDistribuicaoAsync(
+        Guid? loteImportacaoId, DateTimeOffset concluidosDesde, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Protocolo>>(
+            _protocolos.Where(p => p.Status != StatusProtocolo.Excluido && p.Status != StatusProtocolo.Descartado)
+                .Where(p => loteImportacaoId == null || p.LoteImportacaoId == loteImportacaoId)
+                .Where(p => loteImportacaoId != null
+                    || p.Status != StatusProtocolo.Aprovado && p.Status != StatusProtocolo.Reprovado
+                    || p.ConcluidoEm >= concluidosDesde)
+                .ToList());
+
     public Task<IReadOnlyCollection<Protocolo>> ObterSemDonoAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status is StatusProtocolo.Pool or StatusProtocolo.Excecao).ToList());

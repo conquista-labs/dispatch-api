@@ -13,8 +13,21 @@ public interface IProtocoloRepository
     Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken);
 
-    // RF-13: loteImportacaoId nulo = todos os protocolos (sem filtrar por lote).
+    // RF-13: loteImportacaoId nulo = todos os protocolos (sem filtrar por lote). Usado por
+    // GerarSugestoes (precisa do histórico completo pros cálculos de moda/percentil) e
+    // ListarTiposAtoComUso (contagem de uso real) — nenhum corte de data aqui, de propósito.
     Task<IReadOnlyCollection<Protocolo>> ObterParaDistribuicaoAsync(Guid? loteImportacaoId, CancellationToken cancellationToken);
+
+    // RF-13 (visão de Distribuição): mesma pergunta de ObterParaDistribuicaoAsync, mas com uma
+    // janela de data aplicada só aos status terminais (Aprovado/Reprovado) quando nenhum lote
+    // específico é pedido — Pool/Atribuído/Conferindo/Exceção (trabalho em andamento) sempre
+    // voltam por inteiro, independente da idade, porque ficam pequenos por natureza. Descartado
+    // nunca aparece em bucket nenhum desta tela e sai da consulta. Método dedicado — não
+    // reaproveita ObterParaDistribuicaoAsync porque esse também alimenta GerarSugestoes e
+    // ListarTiposAtoComUso (ver comentário acima) — nenhum dos dois pode ter o resultado
+    // silenciosamente cortado por uma janela pensada só pra esta tela.
+    Task<IReadOnlyCollection<Protocolo>> ObterParaVisaoDistribuicaoAsync(
+        Guid? loteImportacaoId, DateTimeOffset concluidosDesde, CancellationToken cancellationToken);
 
     // RF-16: "sem dono" é Pool ou Exceção — não filtra só por DonoId nulo porque Descartado
     // também tem DonoId nulo, e esse não deve voltar a ser redistribuído.

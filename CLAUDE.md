@@ -1897,6 +1897,79 @@ testes automatizados no total (108 Domain + 242 Application).
 Testado ponta a ponta contra o Postgres local: `PUT /config` com `faixaUrgenteMinutos` igual a
 `faixaAtencaoMinutos` devolve 400 com o motivo certo.
 
+## "Hora de entrada" no cadastro manual de protocolo (RF-18f)
+
+Reportado pelo dono: a importação de lote já lê a hora real do andamento do relatório
+(`dataHoraAndamento` no CSV), mas o cadastro manual (`POST /protocolos/manual`) sempre assumia
+`IRelogio.Agora` — sem jeito de registrar um ato que chegou antes do momento em que a
+distribuidora está digitando.
+
+`CriarProtocoloManual.ExecutarAsync`/`SimularProtocoloManual.ExecutarAsync` ganharam
+`DateTimeOffset? andamentoEm = null` (posicional, antes do `CancellationToken` — mesmo truque
+de sempre pra forçar todo call site a passar pelo compilador; nenhum call site existente
+quebrou, porque nenhum passava `cancellationToken` posicionalmente depois de `observacao`/
+`prioridade`). `null` preserva o comportamento antigo (`andamentoEm ?? relogio.Agora`/`agora`).
+**Só `Protocolo.AndamentoEm` muda** — o `agora` usado por `AplicadorDeDistribuicao.Executar`
+pra `AtribuirA` (RNF-16, quando a atribuição de fato aconteceu) continua sendo o instante real
+da chamada, nunca o valor retroativo informado.
+
+`CriarProtocoloManualRequest`/`SimularProtocoloManualRequest` ganharam `DateTimeOffset?
+AndamentoEm = null`. 3 testes novos (valor informado é respeitado nos dois casos de uso;
+ausência mantém o comportamento antigo). 364 testes automatizados no total (111 Domain + 253
+Application).
+
+## Corte de data no bucket "concluídos" de GET /protocolos/distribuicao
+
+Reportado pelo dono direto: a preocupação já registrada na auditoria anterior ("sem paginação,
+cresce sem limite conforme a base cresce") virou prioridade real. Investigação confirmou que o
+crescimento sem limite vem de **um lugar só**: o bucket `concluidos` (Aprovado+Reprovado) nunca
+encolhe — todo protocolo que termina conferência fica ali pra sempre. Os outros 4 buckets por
+status (`pool`/`atribuidos`/`emConferencia`/`excecoes`) são trabalho em andamento, ficam
+pequenos por natureza (o sistema existe pra resolver esse trabalho e tirá-lo desses status).
+`Descartado` era buscado mas não aparece em nenhum bucket — desperdício puro de leitura.
+
+**Decisão**: janela de **30 dias**, aplicada só a `concluidos`, como **constante hardcoded**
+(`ObterVisaoDistribuicao.DiasHistoricoDeConcluidos`) — não um 13º campo em `Configuracao`, pra
+entregar rápido, mesmo padrão que vários outros limiares do projeto tiveram antes de virar
+config. Quando um `loteImportacaoId` específico é pedido, a janela não se aplica (o lote já é
+naturalmente pequeno, e o pedido é explicitamente por aquele histórico).
+
+**Achado que mudou o desenho, antes de escrever qualquer código**: `ObterParaDistribuicaoAsync`
+(o método que ia ganhar o corte) **não é exclusivo desta tela** — também alimenta
+`GerarSugestoes` (aprendizado precisa do histórico completo pros cálculos de moda/percentil) e
+`ListarTiposAtoComUso` (contagem de uso real de cada tipo de ato). Aplicar a janela ali dentro
+cortaria os dois silenciosamente — degradando a qualidade das sugestões e mentindo sobre
+"quantos protocolos usam este tipo", sem nenhum aviso. Por isso a solução é um método **novo e
+dedicado**, `IProtocoloRepository.ObterParaVisaoDistribuicaoAsync(loteImportacaoId,
+concluidosDesde, ct)` — `ObterParaDistribuicaoAsync` continua exatamente como estava, sem corte
+nenhum, servindo só quem já o usava.
+
+`ObterParaVisaoDistribuicaoAsync` exclui `Excluido`/`Descartado` sempre; sem `loteImportacaoId`,
+só deixa passar `Aprovado`/`Reprovado` com `ConcluidoEm >= concluidosDesde` — as demais status
+(trabalho em andamento) passam direto, independente da idade. O índice composto
+`(status, concluido_em)` **já existia** (criado antes pra `ObterConcluidosNoPeriodoAsync` do
+Dashboard) — sustenta essa consulta sem precisar de migration nova.
+
+Sem mudança de schema, sem mudança na assinatura pública de `ObterVisaoDistribuicao.ExecutarAsync`
+nem no endpoint (`IRelogio` já estava injetado, usado por `concluidosHojePorConferente`). 5
+testes novos em `ObterVisaoDistribuicaoTests.cs` (dentro/fora da janela, trabalho em andamento
+sempre aparece, lote específico ignora a janela, `Descartado` nunca aparece).
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): backdated um protocolo
+concluído real pra 40 dias atrás via `psql` — sumiu de `GET /protocolos/distribuicao` (bucket
+`concluidos`), mas continuou aparecendo normalmente em `GET /tipos-ato/com-uso` (contagem de uso
+do seu tipo) e `POST /sugestoes/gerar` continuou respondendo 200 normalmente — confirma que o
+corte não vazou pros dois consumidores que precisam do histórico completo. 361 testes
+automatizados no total (111 Domain + 250 Application).
+
+**Fora de escopo desta rodada, decisão consciente**: sem parâmetro de override pra "ver
+histórico completo" (se precisar um dia, é um acréscimo pequeno, mesmo padrão de
+`loteImportacaoId` opcional); sem `ORDER BY` nos buckets além de `pool` (gap conhecido à parte);
+sem promover o valor de 30 dias pra `Configuracao` por ora. Nenhuma mudança no `dispatch-web` —
+o front já trata a resposta como "a lista completa que existe" (filtros client-side, contagens
+"N de M", sheet "ver mais"), então o comportamento visível muda só no volume de histórico
+mostrado por padrão na aba "Concluídos", sem exigir nenhum ajuste de código.
+
 ## Bloqueio de tentativas de login por senha + origem no evento de auditoria
 
 O dono reexportou o protótipo com um fluxo de "Configuração do sistema" e TOTP mais detalhado;

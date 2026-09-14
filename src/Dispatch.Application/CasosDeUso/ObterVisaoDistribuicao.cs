@@ -4,9 +4,16 @@ namespace Dispatch.Application;
 
 public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos, IRelogio relogio)
 {
+    // Só concluídos (Aprovado/Reprovado) sofrem corte por data nesta tela — os outros buckets
+    // são trabalho em andamento, ficam pequenos por natureza. Sem isso, GET
+    // /protocolos/distribuicao cresce sem limite pra sempre (achado numa auditoria de
+    // performance — ver dispatch-api/CLAUDE.md, "Corte de data no bucket concluídos").
+    public const int DiasHistoricoDeConcluidos = 30;
+
     public async Task<VisaoDistribuicao> ExecutarAsync(Guid? loteImportacaoId, CancellationToken cancellationToken = default)
     {
-        var todos = await protocolos.ObterParaDistribuicaoAsync(loteImportacaoId, cancellationToken);
+        var concluidosDesde = relogio.Agora.AddDays(-DiasHistoricoDeConcluidos);
+        var todos = await protocolos.ObterParaVisaoDistribuicaoAsync(loteImportacaoId, concluidosDesde, cancellationToken);
 
         // Quem tá vencendo primeiro fica no topo — sem isso a ordem é a do banco, que não é
         // garantida sem ORDER BY (mesma armadilha já documentada em ListarConferentes).
