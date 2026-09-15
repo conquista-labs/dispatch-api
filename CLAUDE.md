@@ -2131,4 +2131,35 @@ tinha esse campo. Campo novo (`DateTimeOffset AndamentoEm`, sempre preenchido �
 mudança de lógica — só um campo a mais na leitura. 364 testes automatizados continuam passando
 (nenhum teste novo — é passagem direta de um campo já existente do domínio, sem branch de
 lógica pra cobrir).
-348 testes automatizados continuam passando.
+
+## `AtribuirManualmente` deixa de ser exclusivo de exceção — "mandar um ato pra alguém"
+
+Pedido do dono: uma opção pra distribuidora mandar um ato manualmente pra um conferente
+escolhido, não só pra resolver exceção (RF-17, o único caso que existia até aqui). A guarda de
+status de `AtribuirManualmente` (Application) mudou de `Status == Excecao` (única opção antes)
+pra `Status is Pool or Excecao or Atribuido` — cobre "protocolo ainda sem dono" (Pool) e
+"redirecionar pra outra pessoa direto, sem devolver ao pool antes" (Atribuido), além do caso já
+existente. **Deliberadamente não inclui `Conferindo`** — reatribuir um ato que já está sendo
+conferido interromperia trabalho em andamento; isso fica de fora até (e se) virar um pedido
+explícito. Enum `ProtocoloNaoEstaEmExcecao` renomeado pra `ProtocoloNaoElegivel` (motivo do 409
+atualizado de acordo).
+
+**Sem validação de alçada** — decisão consciente, confirmada com o dono: a distribuidora pode
+escolher qualquer conferente cadastrado, mesmo sem alçada pra aquele tipo/etapa, igual já
+acontecia pra resolver exceção. É decisão humana deliberada; RNF-02 só exige que fique
+auditável (`AtribuirA` já grava o carimbo de quando foi feito), não que passe pelo motor.
+
+`Protocolo.AtribuirA` (Domain) não precisou de mudança nenhuma — já era uma transição
+incondicional (sem guarda de status prévio), então funciona igual em cima de um protocolo já
+`Atribuido` (só sobrescreve `DonoId`/`AtribuidoEm`, limpa `MotivoExcecao` que já era nulo).
+3 testes novos em `AtribuirManualmenteTests.cs` (Pool com sucesso, redireciona de um dono pra
+outro sem passar pelo pool, rejeita em Conferindo) — 366 testes automatizados no total (111
+Domain + 255 Application).
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): criado protocolo manual
+(nasce no Pool) → atribuído à distribuidora manualmente (204) → reatribuído direto a um segundo
+conferente sem devolver ao pool (204, dono trocou) → forçado `Status = Conferindo` via SQL →
+nova tentativa de atribuir manualmente devolve 409 com o motivo certo.
+
+Front (botão "Atribuir a…"/"Reatribuir a…" no painel de detalhe do protocolo) implementado na
+mesma rodada — ver `dispatch-web/CLAUDE.md`, mesma seção.

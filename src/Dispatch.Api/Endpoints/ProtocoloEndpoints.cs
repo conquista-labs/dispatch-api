@@ -32,12 +32,13 @@ public static class ProtocoloEndpoints
                     ResultadoAtribuirManualmente.Sucesso => Results.NoContent(),
                     ResultadoAtribuirManualmente.ProtocoloNaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
                     ResultadoAtribuirManualmente.ConferenteNaoEncontrado => Results.NotFound(new { motivo = "conferente não encontrado" }),
-                    ResultadoAtribuirManualmente.ProtocoloNaoEstaEmExcecao => Results.Conflict(new { motivo = "protocolo não está em exceção" }),
+                    ResultadoAtribuirManualmente.ProtocoloNaoElegivel => Results.Conflict(
+                        new { motivo = "protocolo precisa estar no pool, em exceção ou já atribuído" }),
                     _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
                 };
             })
             .WithName("AtribuirProtocoloManualmente")
-            .WithSummary("Resolve uma exceção atribuindo na mão, sem passar pelo motor (RF-17).")
+            .WithSummary("Atribui na mão, sem passar pelo motor — pool, exceção (RF-17) ou já atribuído a outra pessoa.")
             .WithTags(OpenApiTags.Protocolos)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)

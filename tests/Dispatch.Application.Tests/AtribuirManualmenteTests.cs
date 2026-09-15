@@ -21,7 +21,7 @@ public class AtribuirManualmenteTests
     }
 
     [Fact]
-    public async Task ProtocoloNaoEstaEmExcecao_Rejeita()
+    public async Task ProtocoloNoPool_AtribuiComSucesso()
     {
         var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
         var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
@@ -30,7 +30,40 @@ public class AtribuirManualmenteTests
 
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente.Id);
 
-        Assert.Equal(ResultadoAtribuirManualmente.ProtocoloNaoEstaEmExcecao, resultado);
+        Assert.Equal(ResultadoAtribuirManualmente.Sucesso, resultado);
+        Assert.Equal(conferente.Id, protocolo.DonoId);
+    }
+
+    [Fact]
+    public async Task ProtocoloJaAtribuido_RedirecionaParaOutroConferenteSemPassarPeloPool()
+    {
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var donoAntigo = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var donoNovo = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        protocolo.AtribuirA(donoAntigo.Id, DateTimeOffset.UtcNow);
+        var casoDeUso = new AtribuirManualmente(
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([donoAntigo, donoNovo]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
+
+        var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, donoNovo.Id);
+
+        Assert.Equal(ResultadoAtribuirManualmente.Sucesso, resultado);
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
+        Assert.Equal(donoNovo.Id, protocolo.DonoId);
+    }
+
+    [Fact]
+    public async Task ProtocoloEmConferencia_Rejeita()
+    {
+        var protocolo = new Protocolo(Guid.NewGuid(), "123", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
+        protocolo.IniciarConferencia(DateTimeOffset.UtcNow);
+        var casoDeUso = new AtribuirManualmente(
+            new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork(), new FakeRelogio(DateTimeOffset.UtcNow));
+
+        var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente.Id);
+
+        Assert.Equal(ResultadoAtribuirManualmente.ProtocoloNaoElegivel, resultado);
     }
 
     [Fact]
