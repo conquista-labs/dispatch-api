@@ -2118,4 +2118,17 @@ tocar o banco; `/health/db` responde `{"status":"ok"}` com o banco de pé; `POST
 /sugestoes/gerar` e `GET /conferentes/cobertura` funcionando normalmente depois das mudanças;
 `GET /config` → `PUT /config` (mudando `limiteDeAtosSimultaneos`) → `GET /config` de novo
 confirma que o valor novo aparece na hora, não o cacheado (`InvalidarCache` funcionando).
+
+## `ProtocoloResumo` ganha `AndamentoEm` — "data de entrada" no card
+
+Pedido do dono: mostrar a data de entrada do ato (RF-18f) direto no card do protocolo (Minha
+fila e Distribuição), não só no painel de detalhe. `DetalheProtocoloResponse` já carregava
+`AndamentoEm` (usado na linha do tempo) — `ProtocoloResumo` (o DTO mais "magro" usado pelos
+cards, compartilhado entre `MinhaFilaEndpoints`/`DistribuicaoEndpoints` via `ParaResumo`) nunca
+tinha esse campo. Campo novo (`DateTimeOffset AndamentoEm`, sempre preenchido — diferente de
+`IniciadoEm`/`ConcluidoEm`, que são opcionais) adicionado no fim do record, mapeado direto de
+`Protocolo.AndamentoEm` (já existe no domínio desde a importação de lote). Sem migration, sem
+mudança de lógica — só um campo a mais na leitura. 364 testes automatizados continuam passando
+(nenhum teste novo — é passagem direta de um campo já existente do domínio, sem branch de
+lógica pra cobrir).
 348 testes automatizados continuam passando.

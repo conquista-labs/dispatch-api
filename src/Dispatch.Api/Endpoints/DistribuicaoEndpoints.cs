@@ -61,7 +61,10 @@ public sealed record ProtocoloResumo(
     // Concluídos) — só existem depois de ConcluirConferencia, nulos em qualquer status antes
     // disso (mesma regra de IniciadoEm acima).
     DateTimeOffset? ConcluidoEm,
-    TimeSpan? Duracao);
+    TimeSpan? Duracao,
+    // "Data de entrada" (RF-18f) — quando o ato chegou de verdade, pedido pelo dono pra
+    // aparecer no card, não só no painel de detalhe (DetalheProtocoloResponse já tinha isso).
+    DateTimeOffset AndamentoEm);
 
 public sealed record GrupoPorConferenteResponse(Guid ConferenteId, IReadOnlyList<ProtocoloResumo> Protocolos);
 
