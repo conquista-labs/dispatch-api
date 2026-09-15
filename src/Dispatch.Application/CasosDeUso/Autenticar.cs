@@ -4,6 +4,7 @@ namespace Dispatch.Application;
 
 public sealed class Autenticar(
     IUsuarioRepository usuarios,
+    IConferenteRepository conferentes,
     IHashDeSenha hashDeSenha,
     IEmissorDeToken emissorDeToken,
     IEventoAutenticacaoRepository eventos,
@@ -40,7 +41,8 @@ public sealed class Autenticar(
         usuario.RegistrarLoginComSucesso();
         await unitOfWork.SalvarAsync(cancellationToken);
 
+        var papeis = await PapeisEfetivos.ObterAsync(usuario, conferentes, cancellationToken);
         return new ResultadoAutenticacao.Autenticado(
-            emissorDeToken.EmitirToken(usuario), usuario.Id, usuario.Nome, usuario.Email, usuario.Papel);
+            emissorDeToken.EmitirToken(usuario, papeis), usuario.Id, usuario.Nome, usuario.Email, papeis);
     }
 }

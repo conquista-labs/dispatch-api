@@ -75,6 +75,7 @@ public static class ServiceCollectionExtensions
 
         // Conferente (ConferenteEndpoints)
         services.AddScoped<CadastrarConferente>();
+        services.AddScoped<VincularConferenteAUsuario>();
         services.AddScoped<EditarNivelEJornada>();
         services.AddScoped<EditarPerfilConferente>();
         services.AddScoped<MarcarPresenca>();

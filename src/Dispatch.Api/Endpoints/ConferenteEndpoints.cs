@@ -40,6 +40,31 @@ public static class ConferenteEndpoints
             .Produces<CadastrarConferenteResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict);
 
+        grupo.MapPost("/vincular", async (
+                VincularConferenteRequest request,
+                VincularConferenteAUsuario casoDeUso,
+                CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(
+                    request.Email, request.Nivel, request.JornadaHoras, cancellationToken);
+
+                return resultado switch
+                {
+                    ResultadoVincularConferente.Sucesso sucesso =>
+                        Results.Created($"/conferentes/{sucesso.ConferenteId}", new CadastrarConferenteResponse(sucesso.ConferenteId)),
+                    ResultadoVincularConferente.UsuarioNaoEncontrado =>
+                        Results.NotFound(new { motivo = "usuário não encontrado" }),
+                    ResultadoVincularConferente.JaEhConferente =>
+                        Results.Conflict(new { motivo = "esse usuário já é conferente" }),
+                    _ => throw new InvalidOperationException($"Resultado de vínculo não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("VincularConferenteAUsuario")
+            .WithSummary("Dá a capacidade de conferente a uma conta já existente (ex.: uma distribuidora que também confere) — busca por e-mail, não cria usuário novo.")
+            .Produces<CadastrarConferenteResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         grupo.MapPut("/{id:guid}/perfil", async (
                 Guid id,
                 EditarPerfilConferenteRequest request,
@@ -173,6 +198,8 @@ public static class ConferenteEndpoints
 }
 
 public sealed record CadastrarConferenteRequest(string Nome, string Email, string Senha, Nivel Nivel, double JornadaHoras);
+
+public sealed record VincularConferenteRequest(string Email, Nivel Nivel, double JornadaHoras);
 
 public sealed record CadastrarConferenteResponse(Guid ConferenteId);
 

@@ -10,7 +10,7 @@ internal sealed class FakeHashDeSenha : IHashDeSenha
 
 internal sealed class FakeEmissorDeToken : IEmissorDeToken
 {
-    public string EmitirToken(Usuario usuario) => $"token-para:{usuario.Email}";
+    public string EmitirToken(Usuario usuario, IReadOnlyCollection<Papel> papeis) => $"token-para:{usuario.Email}";
 }
 
 public class AutenticarTests
@@ -18,11 +18,13 @@ public class AutenticarTests
     private static readonly FakeHashDeSenha HashDeSenha = new();
     private static readonly DateTimeOffset Agora = new(2026, 3, 5, 10, 0, 0, TimeSpan.Zero);
 
-    private static Autenticar NovoCasoDeUso(IReadOnlyCollection<Usuario> usuarios, out FakeEventoAutenticacaoRepository eventos)
+    private static Autenticar NovoCasoDeUso(
+        IReadOnlyCollection<Usuario> usuarios, out FakeEventoAutenticacaoRepository eventos, IReadOnlyCollection<Conferente>? conferentes = null)
     {
         eventos = new FakeEventoAutenticacaoRepository();
         return new Autenticar(
-            new FakeUsuarioRepository(usuarios), HashDeSenha, new FakeEmissorDeToken(), eventos, new FakeUnitOfWork(), new FakeRelogio(Agora));
+            new FakeUsuarioRepository(usuarios), new FakeConferenteRepository(conferentes ?? []), HashDeSenha, new FakeEmissorDeToken(),
+            eventos, new FakeUnitOfWork(), new FakeRelogio(Agora));
     }
 
     [Fact]
@@ -38,7 +40,34 @@ public class AutenticarTests
         Assert.Equal(usuario.Id, autenticado.UsuarioId);
         Assert.Equal("Fulano", autenticado.Nome);
         Assert.Equal("fulano@cartorio.com", autenticado.Email);
-        Assert.Equal(Papel.Distribuidora, autenticado.Papel);
+        Assert.Equal([Papel.Distribuidora], autenticado.Papeis);
+    }
+
+    // Pedido do dono: distribuidora que também confere — PapeisEfetivos soma Conferente quando
+    // existe um Conferente vinculado ao Usuario, mesmo com Papel != Conferente.
+    [Fact]
+    public async Task DistribuidoraComConferenteVinculado_PapeisIncluiOsDois()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Maria", "maria@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Distribuidora);
+        var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var autenticar = NovoCasoDeUso([usuario], out _, [conferente]);
+
+        var resultado = await autenticar.ExecutarAsync("maria@cartorio.com", "senha-correta", origem: null);
+
+        var autenticado = Assert.IsType<ResultadoAutenticacao.Autenticado>(resultado);
+        Assert.Equal([Papel.Distribuidora, Papel.Conferente], autenticado.Papeis);
+    }
+
+    [Fact]
+    public async Task DistribuidoraSemConferenteVinculado_PapeisSoTemDistribuidora()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Distribuidora);
+        var autenticar = NovoCasoDeUso([usuario], out _);
+
+        var resultado = await autenticar.ExecutarAsync("fulano@cartorio.com", "senha-correta", origem: null);
+
+        var autenticado = Assert.IsType<ResultadoAutenticacao.Autenticado>(resultado);
+        Assert.Equal([Papel.Distribuidora], autenticado.Papeis);
     }
 
     [Fact]

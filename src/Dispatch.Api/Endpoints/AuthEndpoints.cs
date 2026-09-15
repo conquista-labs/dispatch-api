@@ -21,7 +21,7 @@ public static class AuthEndpoints
                 {
                     ResultadoAutenticacao.Autenticado autenticado => Results.Ok(new LoginResponse(
                         autenticado.Token,
-                        new UsuarioResponse(autenticado.UsuarioId, autenticado.Nome, autenticado.Email, autenticado.Papel))),
+                        new UsuarioResponse(autenticado.UsuarioId, autenticado.Nome, autenticado.Email, autenticado.Papeis))),
                     _ => Results.Unauthorized()
                 };
             })
@@ -41,7 +41,7 @@ public static class AuthEndpoints
                 var usuario = await casoDeUso.ExecutarAsync(usuarioId, cancellationToken);
                 return usuario is null
                     ? Results.NotFound()
-                    : Results.Ok(new UsuarioResponse(usuario.Id, usuario.Nome, usuario.Email, usuario.Papel));
+                    : Results.Ok(new UsuarioResponse(usuario.Id, usuario.Nome, usuario.Email, usuario.Papeis));
             })
             .WithName("ObterUsuarioAtual")
             .WithSummary("Devolve quem está logado, a partir do token — o front usa isso pra reidratar a sessão no boot, sem decodificar o JWT.")
@@ -56,4 +56,6 @@ public sealed record LoginRequest(string Email, string Senha);
 
 public sealed record LoginResponse(string Token, UsuarioResponse Usuario);
 
-public sealed record UsuarioResponse(Guid Id, string Nome, string Email, Papel Papel);
+// Papeis (não Papel) — pode ter mais de um (distribuidora que também confere, ver
+// PapeisEfetivos no back). O front reflete isso como Usuario.papeis: Papel[].
+public sealed record UsuarioResponse(Guid Id, string Nome, string Email, IReadOnlyList<Papel> Papeis);

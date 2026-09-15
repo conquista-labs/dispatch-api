@@ -67,9 +67,10 @@ public static class ProtocoloEndpoints
             {
                 // RF-15 (Distribuidora, sem restrição) e RF-23 (o próprio conferente dono,
                 // restrito) são o mesmo endpoint — o papel do token decide se conferenteRestritoId
-                // vai preenchido ou nulo.
+                // vai preenchido ou nulo. "&& !Distribuidora": quem também é distribuidora nunca
+                // fica restrito, mesmo tendo papel Conferente também — ver DashboardEndpoints.cs.
                 Guid? conferenteRestritoId = null;
-                if (usuario.IsInRole(nameof(Papel.Conferente)))
+                if (usuario.IsInRole(nameof(Papel.Conferente)) && !usuario.IsInRole(nameof(Papel.Distribuidora)))
                 {
                     var usuarioId = usuario.ObterUsuarioId();
                     var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);

@@ -2163,3 +2163,62 @@ nova tentativa de atribuir manualmente devolve 409 com o motivo certo.
 
 Front (botão "Atribuir a…"/"Reatribuir a…" no painel de detalhe do protocolo) implementado na
 mesma rodada — ver `dispatch-web/CLAUDE.md`, mesma seção.
+
+## Uma conta com os dois papéis — distribuidora que também confere
+
+Pedido do dono: a esposa dele, Maria Vittoria, é a distribuidora do cartório mas também confere
+atos pessoalmente às vezes — hoje `Papel` (Distribuidora/Conferente) é tratado como exclusivo em
+todo o sistema, o que a forçaria a ter duas contas separadas (login/logout pra trocar de
+"chapéu"). Pedido: permitir que a MESMA conta acumule os dois papéis.
+
+**Decisão de design (a que menos invade o sistema): `Usuario.Papel` continua exatamente como
+era — um valor único, sem migration, sem mudança de schema em `usuarios`.** A capacidade de
+"também é conferente" é **derivada** de já existir um `Conferente` vinculado àquele `UsuarioId`
+— o mesmo dado que o sistema já usa em todo canto (alçada, fila, dashboard restrito) pra saber
+"essa pessoa confere". A tabela `conferentes` já tinha tudo que precisava: FK + índice único em
+`UsuarioId` (`ConferenteConfiguration.cs`) — nada no schema jamais impediu um `Conferente`
+apontar pra um `Usuario` com `Papel = Distribuidora`; só faltava um caminho de escrita que
+fizesse isso (`CadastrarConferente` sempre cria um `Usuario` novo, nunca vincula a um
+existente). **Zero migration nesta rodada.**
+
+- **`PapeisEfetivos`** (helper interno novo, `Dispatch.Application/CasosDeUso/`, mesmo molde de
+  `VerificadorDeAlcada`): `usuario.Papel == Conferente` → `[Conferente]`; senão, busca um
+  `Conferente` vinculado ao `UsuarioId` — se existir, `[usuario.Papel, Conferente]`, senão só
+  `[usuario.Papel]`.
+- **`VincularConferenteAUsuario`** (novo caso de uso) — único jeito de dar a capacidade de
+  conferente a uma conta já existente. Busca por **e-mail** (não por lista — não existe `GET
+  /usuarios` hoje, e não precisa existir só pra isso: um cartório tem poucas contas de
+  distribuidora). Rejeita se já existe um `Conferente` vinculado ao `UsuarioId` (cobre sozinho o
+  caso de tentar vincular alguém que já é `Papel.Conferente`, sem checagem de papel à parte —
+  `CadastrarConferente` sempre cria o `Conferente` junto). `POST /conferentes/vincular`
+  (`RequireRole(Distribuidora)`, mesmo grupo de `POST /conferentes`), corpo `{ email, nivel,
+  jornadaHoras }`, 201 (reaproveita `CadastrarConferenteResponse`) / 404 "usuário não
+  encontrado" / 409 "esse usuário já é conferente".
+- **`IEmissorDeToken.EmitirToken`** ganha `IReadOnlyCollection<Papel> papeis` — `EmissorDeTokenJwt`
+  monta uma claim `ClaimTypes.Role` **por papel da lista** (JWT/`ClaimsIdentity` já suportam
+  múltiplas claims do mesmo tipo nativamente, sem mudança nenhuma de biblioteca).
+  `ResultadoAutenticacao.Autenticado`/`ObterUsuarioAtual.UsuarioAtual` trocam `Papel Papel` por
+  `IReadOnlyList<Papel> Papeis` (calculado via `PapeisEfetivos` em `Autenticar` e em `GET
+  /auth/me`); `UsuarioResponse` (`AuthEndpoints.cs`) acompanha.
+- **Distribuidora sempre tem prioridade na visão restrita** (confirmado com o dono: ter o papel
+  Distribuidora dá acesso à visão completa de gestão sempre — ser também Conferente só soma
+  capacidade, nunca reduz o que ela já via como gestora). As duas checagens que existiam (`if
+  (usuario.IsInRole(Conferente))` — `DashboardEndpoints.cs` visão restrita, `ProtocoloEndpoints.cs`
+  `PUT /observacao` restrição por dono) passam a ser `if (usuario.IsInRole(Conferente) &&
+  !usuario.IsInRole(Distribuidora))`. `RequireRole`/`IsInRole` já leem qualquer claim de role
+  presente (nativo do ASP.NET Core) — `RequireRole(Distribuidora)` continua batendo,
+  `RequireRole(Conferente)` também, porque a pessoa carrega as duas claims — nenhuma mudança de
+  policy em grupo de endpoint algum.
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): `POST
+/conferentes/vincular` numa conta Distribuidora de teste → login de novo → `papeis:
+["Distribuidora", "Conferente"]` no JWT/`/auth/me` → `GET /minha-fila` (rota Conferente-only)
+responde 200 pro mesmo token → `GET /dashboard` continua mostrando a visão de gestão completa
+(`porTipoAto` populado, `mediaDaCasa` nulo, `desempenho` com várias linhas — não a restrita de
+um só conferente). 6 testes novos (`AutenticarTests`/`ObterUsuarioAtualTests`: papéis com/sem
+Conferente vinculado; `VincularConferenteAUsuarioTests`: sucesso, usuário não encontrado, já é
+conferente) — 372 testes automatizados no total (111 Domain + 261 Application).
+
+Front (`dispatch-web`) implementado na mesma rodada — nav mesclada pra quem tem os dois papéis,
+sidebar mostrando os dois, e um botão novo em Conferentes pra vincular uma conta existente — ver
+`dispatch-web/CLAUDE.md`, mesma seção.

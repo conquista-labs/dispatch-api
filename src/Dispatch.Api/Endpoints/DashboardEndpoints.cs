@@ -19,8 +19,12 @@ public static class DashboardEndpoints
                 // RF-45/RNF: Conferente só vê os próprios números + a média da casa, nunca a
                 // lista com nome de colegas — mesmo padrão de PUT /protocolos/{id}/observacao,
                 // a restrição decide por dentro conforme o papel do token, não por rota separada.
+                // "&& !Distribuidora": alguém com os dois papéis (distribuidora que também
+                // confere) vê a visão de gestão completa sempre — o papel Conferente aqui só
+                // soma a capacidade de conferir, nunca reduz o que ela já vê como distribuidora
+                // (decisão confirmada com o dono).
                 Guid? conferenteRestritoId = null;
-                if (usuario.IsInRole(nameof(Papel.Conferente)))
+                if (usuario.IsInRole(nameof(Papel.Conferente)) && !usuario.IsInRole(nameof(Papel.Distribuidora)))
                 {
                     var usuarioId = usuario.ObterUsuarioId();
                     var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);

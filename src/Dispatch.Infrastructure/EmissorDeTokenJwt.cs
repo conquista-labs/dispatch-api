@@ -10,7 +10,7 @@ namespace Dispatch.Infrastructure;
 
 public sealed class EmissorDeTokenJwt(IOptions<JwtOptions> opcoes) : IEmissorDeToken
 {
-    public string EmitirToken(Usuario usuario)
+    public string EmitirToken(Usuario usuario, IReadOnlyCollection<Papel> papeis)
     {
         var jwt = opcoes.Value;
         var chave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.ChaveDeAssinatura));
@@ -24,14 +24,18 @@ public sealed class EmissorDeTokenJwt(IOptions<JwtOptions> opcoes) : IEmissorDeT
         // (dotnet build/test não notam ausência de claim). RF-01k (encerrar sessões antigas na
         // troca de senha, Program.cs OnTokenValidated) depende de IssuedAt ser real.
         var agora = DateTimeOffset.UtcNow;
-        Claim[] claims =
-        [
+        // Uma claim ClaimTypes.Role por papel efetivo — ClaimsIdentity/JwtSecurityToken já
+        // suportam múltiplas claims do mesmo tipo sem nada especial; RequireRole/IsInRole
+        // enxergam qualquer uma delas (é assim que alguém com os dois papéis passa tanto por
+        // RequireRole(Distribuidora) quanto por RequireRole(Conferente) com o mesmo token).
+        var claims = new List<Claim>
+        {
             new(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
             new(ClaimTypes.Email, usuario.Email),
             new(ClaimTypes.Name, usuario.Nome),
-            new(ClaimTypes.Role, usuario.Papel.ToString()),
-            new(JwtRegisteredClaimNames.Iat, agora.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
-        ];
+            new(JwtRegisteredClaimNames.Iat, agora.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+        };
+        claims.AddRange(papeis.Select(papel => new Claim(ClaimTypes.Role, papel.ToString())));
 
         var token = new JwtSecurityToken(
             issuer: jwt.Emissor,
