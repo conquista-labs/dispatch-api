@@ -2301,3 +2301,27 @@ design original**: o primeiro corte só resetava senha/bloqueio, não nome — r
 clone de verdade, um spec que espera "Distribuidora Teste" na tela quebrou porque a conta já
 existia com o nome real de quem a possui (renomeado só o e-mail antes, não o nome). Corrigido
 chamando `Usuario.AtualizarPerfil(nome, email)` também no caminho de "já existe".
+
+## Cadastro manual de escrevente
+
+Pedido do dono, junto com uma pergunta maior sobre um futuro papel "Subscritor" (ver
+`dispatch-web/CLAUDE.md`, mesma seção, pro porquê de não mexer nisso agora — não existe em
+lugar nenhum do documento de requisitos, só como comentário-âncora no front antecipando um
+papel futuro). O cadastro de escrevente em si é independente disso e de baixo risco.
+
+Até aqui, `Escrevente` só nascia como efeito colateral de importar um lote (RF-09) ou de criar/
+editar um protocolo manual com nome novo (`ResolvedorDeEscreventePorNome`, que resolve
+silenciosamente pra um já existente pelo nome). **`CriarEscrevente`** (novo caso de uso) é o
+primeiro caminho deliberado — igual `CriarTipoAto`, nome duplicado (case-insensitive, depois de
+normalizado por `NormalizadorDeTexto.ParaNomeProprio`) é 409, não reaproveitamento silencioso;
+equipe é opcional na criação, validada contra `IEquipeRepository` se informada (404 se não
+existir). `POST /escreventes` (`EquipeEndpoints.cs`, mesmo grupo dos outros endpoints de
+escrevente, `RequireRole(Distribuidora)`).
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): criar sem equipe
+(201), criar duplicado com caixa diferente (409, motivo certo), criar com equipe inexistente
+(404 "equipe não encontrada"). 4 testes novos (`CriarEscreventeTests`) — 379 testes
+automatizados no total (111 Domain + 268 Application).
+
+Front (`dispatch-web`) na mesma rodada — botão "Novo escrevente" na aba Prazos por equipe,
+mesmo padrão visual de "Novo tipo de ato" — ver `dispatch-web/CLAUDE.md`, mesma seção.

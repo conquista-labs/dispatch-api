@@ -65,6 +65,25 @@ public static class EquipeEndpoints
             .Produces<IReadOnlyList<EscreventeResponse>>()
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
 
+        escreventesGrupo.MapPost("/", async (CriarEscreventeRequest request, CriarEscrevente casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(request.Nome, request.EquipeId, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoCriarEscrevente.Sucesso sucesso =>
+                        Results.Created($"/escreventes/{sucesso.EscreventeId}", new CriarEscreventeResponse(sucesso.EscreventeId)),
+                    ResultadoCriarEscrevente.JaExiste => Results.Conflict(new { motivo = "já existe um escrevente com esse nome" }),
+                    ResultadoCriarEscrevente.EquipeNaoEncontrada => Results.NotFound(new { motivo = "equipe não encontrada" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("CriarEscrevente")
+            .WithSummary("Cadastro manual — complementa o cadastro automático que a importação/criação de protocolo já fazem (nome sai normalizado).")
+            .Produces<CriarEscreventeResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
         escreventesGrupo.MapPost("/{id:guid}/mover", async (
                 Guid id, MoverEscreventeRequest request, MoverEscreventeParaEquipe casoDeUso, CancellationToken cancellationToken) =>
             {
@@ -102,3 +121,7 @@ public sealed record EquipeResponse(Guid Id, string Nome, TipoPrazo PrazoPreConf
 public sealed record MoverEscreventeRequest(Guid? EquipeId);
 
 public sealed record EscreventeResponse(Guid Id, string Nome, Guid? EquipeId);
+
+public sealed record CriarEscreventeRequest(string Nome, Guid? EquipeId);
+
+public sealed record CriarEscreventeResponse(Guid EscreventeId);
