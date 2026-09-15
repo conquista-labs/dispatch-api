@@ -37,11 +37,16 @@ public static class TipoAtoEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.CentralDeRegras);
 
-        grupo.MapGet("/com-uso", async (ListarTiposAtoComUso casoDeUso, CancellationToken cancellationToken) =>
-                Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaComUsoResponse).ToList()))
+        grupo.MapGet("/com-uso", async (
+                ListarTiposAtoComUso casoDeUso, CancellationToken cancellationToken,
+                string? busca = null, int pagina = 1, int tamanhoPagina = ListarTiposAtoComUso.TamanhoDePaginaPadrao) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(busca, pagina, tamanhoPagina, cancellationToken);
+                return Results.Ok(new PaginaDeTipoAtoComUsoResponse(resultado.Itens.Select(ParaComUsoResponse).ToList(), resultado.Total));
+            })
             .WithName("ListarTiposAtoComUso")
-            .WithSummary("Catálogo com volume e cobertura de alçada, pra tabela da aba Tipos de ato (RF-34a).")
-            .Produces<IReadOnlyList<TipoAtoComUsoResponse>>();
+            .WithSummary("Catálogo com volume e cobertura de alçada, paginado, pra tabela da aba Tipos de ato (RF-34a).")
+            .Produces<PaginaDeTipoAtoComUsoResponse>();
 
         grupo.MapPut("/{id:guid}", async (Guid id, RenomearTipoAtoRequest request, RenomearTipoAto casoDeUso, CancellationToken cancellationToken) =>
             {
@@ -126,3 +131,5 @@ public sealed record DefinirGrupoRequest(GrupoTipoAto? Grupo);
 
 public sealed record TipoAtoComUsoResponse(
     Guid Id, string Nome, bool Ativo, int PesoComplexidade, GrupoTipoAto? Grupo, int Volume, int ConferentesComAlcada);
+
+public sealed record PaginaDeTipoAtoComUsoResponse(IReadOnlyList<TipoAtoComUsoResponse> Itens, int Total);

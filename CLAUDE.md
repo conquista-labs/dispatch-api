@@ -2222,3 +2222,37 @@ conferente) — 372 testes automatizados no total (111 Domain + 261 Application)
 Front (`dispatch-web`) implementado na mesma rodada — nav mesclada pra quem tem os dois papéis,
 sidebar mostrando os dois, e um botão novo em Conferentes pra vincular uma conta existente — ver
 `dispatch-web/CLAUDE.md`, mesma seção.
+
+## Primeira paginação de verdade do sistema — GET /tipos-ato/com-uso
+
+O dono, olhando a lista de Tipos de ato em produção, pediu duas coisas: tirar o seletor de
+grupo por linha (poluía a tela — ver `dispatch-web/CLAUDE.md`, decisão de manter o conceito de
+grupo intacto no resto do sistema, só remover esse seletor específico) e paginação de verdade
+pra essa lista. Primeira vez que um endpoint deste sistema pagina — todo o resto continua com
+"busca + rolagem contida" no front (mitigação client-side, decisão já registrada na auditoria de
+listagens anterior).
+
+- **`Paginado<T>`** (novo, `Dispatch.Application/CasosDeUso/Paginado.cs`) — record genérico
+  mínimo (`Itens`, `Total`), sem cursor nem metadata que nenhum consumidor precisa ainda.
+- **`ListarTiposAtoComUso.ExecutarAsync`** ganha `string? busca, int pagina = 1, int
+tamanhoPagina = 20`. Busca filtra por nome (case-insensitive, `Contains`) **antes** de paginar
+  — senão "página 2" nunca bateria com o que a busca do usuário esperava ver. `pagina`/
+  `tamanhoPagina` clampados (`Math.Max(1, ...)`, `Math.Clamp(1, 100)`) em vez de rejeitar com
+  400 — parâmetro de leitura fora do intervalo esperado é mais barato de tolerar (corrige
+  sozinho pro valor mais próximo válido) do que de validar com erro, diferente de `PUT /config`
+  (edição deliberada, onde um valor fora do range é bug de digitação que vale a pena avisar).
+- **`GET /tipos-ato/com-uso`** ganha os 3 query params (`busca`, `pagina`, `tamanhoPagina`, todos
+  opcionais com default) — resposta muda de array solto pra `PaginaDeTipoAtoComUsoResponse
+{ Itens, Total }`. Primeira mudança de shape de resposta (array → objeto paginado) no
+  sistema — qualquer paginação futura deveria seguir o mesmo formato, não inventar um novo.
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): `?pagina=2&tamanhoPagina=5`
+devolvendo os 5 itens seguintes com `total: 24`; `?busca=venda` devolvendo `total: 2` com os dois
+nomes certos ("Escritura de Compra e Venda", "Venda e Compra"). 2 testes novos
+(`Busca_FiltraPorNomeAntesDePaginar`, `Pagina2_DevolveOsItensSeguintesEOTotalReal`) — 374 testes
+automatizados no total (111 Domain + 263 Application).
+
+Front (`dispatch-web`) na mesma rodada — busca com debounce, componente de paginação do
+shadcn, e uma regressão real achada rodando a suíte e2e inteira (specs que dependiam do rótulo
+antigo de nav "Minha fila" pra uma conta que virou combo) — ver `dispatch-web/CLAUDE.md`, mesma
+seção.

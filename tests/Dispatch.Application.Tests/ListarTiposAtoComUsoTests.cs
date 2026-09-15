@@ -28,9 +28,10 @@ public class ListarTiposAtoComUsoTests
         var casoDeUso = NovoCasoDeUso(
             [tipo], protocolos: [NovoProtocolo(tipo.Id), NovoProtocolo(tipo.Id)], conferentes: [conferente], regras: []);
 
-        var lista = await casoDeUso.ExecutarAsync();
+        var pagina = await casoDeUso.ExecutarAsync();
 
-        var item = Assert.Single(lista);
+        Assert.Equal(1, pagina.Total);
+        var item = Assert.Single(pagina.Itens);
         Assert.Equal(tipo.Id, item.Id);
         Assert.Equal(2, item.Volume);
         Assert.Equal(1, item.ConferentesComAlcada);
@@ -46,9 +47,9 @@ public class ListarTiposAtoComUsoTests
         var regraNegando = new RegraAlcada(Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Junior), PermissaoRegra.Nega, new AlvoAlcada.PorTipoAto(tipo.Id));
         var casoDeUso = NovoCasoDeUso([tipo], protocolos: [], conferentes: [conferente], regras: [regraNegando]);
 
-        var lista = await casoDeUso.ExecutarAsync();
+        var pagina = await casoDeUso.ExecutarAsync();
 
-        Assert.Equal(0, Assert.Single(lista).ConferentesComAlcada);
+        Assert.Equal(0, Assert.Single(pagina.Itens).ConferentesComAlcada);
     }
 
     [Fact]
@@ -58,9 +59,9 @@ public class ListarTiposAtoComUsoTests
         var conferenteAusente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: false, cargaAtual: 0);
         var casoDeUso = NovoCasoDeUso([tipo], protocolos: [], conferentes: [conferenteAusente], regras: []);
 
-        var lista = await casoDeUso.ExecutarAsync();
+        var pagina = await casoDeUso.ExecutarAsync();
 
-        Assert.Equal(0, Assert.Single(lista).ConferentesComAlcada);
+        Assert.Equal(0, Assert.Single(pagina.Itens).ConferentesComAlcada);
     }
 
     [Fact]
@@ -69,8 +70,37 @@ public class ListarTiposAtoComUsoTests
         var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
         var casoDeUso = NovoCasoDeUso([tipo], protocolos: [], conferentes: [], regras: []);
 
-        var lista = await casoDeUso.ExecutarAsync();
+        var pagina = await casoDeUso.ExecutarAsync();
 
-        Assert.Equal(0, Assert.Single(lista).Volume);
+        Assert.Equal(0, Assert.Single(pagina.Itens).Volume);
+    }
+
+    [Fact]
+    public async Task Busca_FiltraPorNomeAntesDePaginar()
+    {
+        var tipoVenda = new TipoAto(Guid.NewGuid(), "Venda e Compra");
+        var tipoDoacao = new TipoAto(Guid.NewGuid(), "Doação");
+        var casoDeUso = NovoCasoDeUso([tipoVenda, tipoDoacao], protocolos: [], conferentes: [], regras: []);
+
+        var pagina = await casoDeUso.ExecutarAsync(busca: "venda");
+
+        Assert.Equal(1, pagina.Total);
+        Assert.Equal(tipoVenda.Id, Assert.Single(pagina.Itens).Id);
+    }
+
+    [Fact]
+    public async Task Pagina2_DevolveOsItensSeguintesEOTotalReal()
+    {
+        var tipos = Enumerable.Range(0, 5).Select(i => new TipoAto(Guid.NewGuid(), $"Tipo {i}")).ToList();
+        var casoDeUso = NovoCasoDeUso(tipos, protocolos: [], conferentes: [], regras: []);
+
+        var pagina1 = await casoDeUso.ExecutarAsync(pagina: 1, tamanhoPagina: 2);
+        var pagina2 = await casoDeUso.ExecutarAsync(pagina: 2, tamanhoPagina: 2);
+
+        Assert.Equal(5, pagina1.Total);
+        Assert.Equal(2, pagina1.Itens.Count);
+        Assert.Equal(5, pagina2.Total);
+        Assert.Equal(2, pagina2.Itens.Count);
+        Assert.NotEqual(pagina1.Itens[0].Id, pagina2.Itens[0].Id);
     }
 }
