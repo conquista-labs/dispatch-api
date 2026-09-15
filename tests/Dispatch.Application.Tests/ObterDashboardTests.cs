@@ -137,6 +137,35 @@ public class ObterDashboardTests
         Assert.Null(resultado.MediaDaCasa!.Nome);
         Assert.Null(resultado.MediaDaCasa.Faixa);
         Assert.Empty(resultado.PorTipoAto);
+        // Achado em uso real: os KPIs do topo (RF-42) contavam TODO MUNDO (2), não só o próprio
+        // conferente (1) — a linha de desempenho logo abaixo já mostrava o número certo, os dois
+        // pareciam dados desencontrados na mesma tela.
+        Assert.Equal(1, resultado.Kpis.AtosConferidos);
+    }
+
+    [Fact]
+    public async Task VisaoRestrita_KpisRefletemSoOProprioConferente_NaoOTotalDaOperacao()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id);
+        var conferenteB = NovoConferente(usuarioB.Id);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 1);
+        // Ana: 1 aprovado. Bruno: 3 reprovados — se o total vazasse pra visão restrita de Ana,
+        // ela veria 4 atos conferidos e 25% de aprovação, em vez dos próprios 1 e 100%.
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, tipo.Id, Agora.AddDays(-1), aprovado: true),
+            NovoProtocoloConcluido(conferenteB.Id, tipo.Id, Agora.AddDays(-1), aprovado: false),
+            NovoProtocoloConcluido(conferenteB.Id, tipo.Id, Agora.AddDays(-1), aprovado: false),
+            NovoProtocoloConcluido(conferenteB.Id, tipo.Id, Agora.AddDays(-1), aprovado: false),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [tipo], [usuarioA, usuarioB]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: conferenteA.Id);
+
+        Assert.Equal(1, resultado.Kpis.AtosConferidos);
+        Assert.Equal(1.0, resultado.Kpis.PercentualAprovado);
     }
 
     [Fact]

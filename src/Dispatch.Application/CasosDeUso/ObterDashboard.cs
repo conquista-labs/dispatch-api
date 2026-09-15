@@ -39,7 +39,13 @@ public sealed class ObterDashboard(
             .GroupBy(p => p.DonoId!.Value)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var kpis = CalcularKpis(concluidosNoPeriodo);
+        // RF-45: os KPIs do topo também são "os números dele", não o total da operação — sem
+        // isso, um conferente via "atos conferidos" contando o trabalho de todo mundo, com a
+        // linha de desempenho logo abaixo mostrando só a dele (achado real: os dois pareciam
+        // dados desencontrados, cada um lendo uma fonte diferente).
+        var kpis = conferenteRestritoId is { } idRestrito
+            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []))
+            : CalcularKpis(concluidosNoPeriodo);
 
         var maxVolume = porDono.Count == 0 ? 0 : porDono.Values.Max(lista => lista.Count);
         var maxComplexidadeMedia = porDono.Count == 0

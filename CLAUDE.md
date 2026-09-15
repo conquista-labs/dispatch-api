@@ -2325,3 +2325,37 @@ automatizados no total (111 Domain + 268 Application).
 
 Front (`dispatch-web`) na mesma rodada — botão "Novo escrevente" na aba Prazos por equipe,
 mesmo padrão visual de "Novo tipo de ato" — ver `dispatch-web/CLAUDE.md`, mesma seção.
+
+## Bug real: KPIs do Dashboard vazavam o total da operação pra visão restrita do conferente
+
+Relatado pelo dono usando o app de verdade: "na visão do conferente ele deveria ver só os
+números dele, não o total geral". `ObterDashboard.ExecutarAsync` calculava `kpis` (os 4 números
+do topo — Atos conferidos/Dentro do prazo/Aprovados/Tempo médio) **antes** de qualquer branch de
+restrição, sempre sobre `concluidosNoPeriodo` inteiro (todos os conferentes) — a restrição por
+`conferenteRestritoId` (RF-45) só filtrava `Desempenho`/`MediaDaCasa`/`PorTipoAto`/
+`CumprimentoPrazoEquipe`, nunca `Kpis`. Resultado: um conferente via, por exemplo, "3 atos
+conferidos" no topo (o total de todo mundo) enquanto a própria linha de desempenho logo abaixo
+mostrava volume 1 ou 2 — os dois pareciam dados desencontrados na mesma tela, quando na verdade
+o de baixo estava certo e o de cima errado.
+
+**Fix, uma linha**: `kpis` passa a ser calculado sobre `porDono.GetValueOrDefault(conferenteRestritoId.Value, [])`
+quando a visão é restrita — reaproveita o mesmo agrupamento por dono que `Desempenho` já usava
+(`porDono`, calculado antes disso no método), sem duplicar lógica nem tocar `CalcularKpis` em si
+(já era agnóstica de "quem", só operava sobre a coleção que recebesse).
+
+**Achado que evitou o mesmo bug reaparecer**: o teste já existente
+(`VisaoRestrita_SoMostraOProprioDesempenhoESemFaixa`) nunca checava `resultado.Kpis` — só
+`Desempenho`/`MediaDaCasa`/`PorTipoAto`. Isso é exatamente o tipo de buraco de cobertura que deixa
+um bug deste tipo passar despercebido por testes automatizados: a lista de asserções parecia
+completa (nome certo, sem faixa, sem nome na média da casa, sem tipo de ato) mas nunca perguntou
+"o KPI do topo é meu ou é de todo mundo?". Ganhou a asserção que faltava, mais um teste dedicado
+novo (`VisaoRestrita_KpisRefletemSoOProprioConferente_NaoOTotalDaOperacao`, com Ana aprovada e
+Bruno reprovado 3x — se o total vazasse, Ana veria 4 atos/25% aprovação em vez dos próprios
+1 ato/100%) — 381 testes automatizados no total (111 Domain + 270 Application).
+
+Testado ponta a ponta contra o clone de produção anonimizado no Postgres local: visão de gestão
+mostrando `atosConferidos: 3` (2 de um conferente + 1 da distribuidora combo); o mesmo conferente
+logado, visão restrita, mostrando `atosConferidos: 2` — batendo com o volume da própria linha de
+desempenho, não mais o total. Sem mudança nenhuma no front — ele só exibe `dashboard.kpis` tal
+como a API manda (confirmado lendo `VisaoConferente.tsx`/`VisaoGestao.tsx`, os dois consomem o
+mesmo campo sem filtragem client-side).
