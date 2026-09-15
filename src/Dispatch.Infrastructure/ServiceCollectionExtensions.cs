@@ -73,6 +73,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ObterConfiguracao>();
         services.AddScoped<AtualizarConfiguracao>();
 
+        // Dev-only (DevSeedEndpoints) — registrado sempre (barato, sem custo), só o endpoint
+        // em si é que fica atrás de IsDevelopment() no Program.cs.
+        services.AddScoped<SemearContasE2E>();
+
         // Conferente (ConferenteEndpoints)
         services.AddScoped<CadastrarConferente>();
         services.AddScoped<VincularConferenteAUsuario>();

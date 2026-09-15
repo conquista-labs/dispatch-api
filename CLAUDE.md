@@ -2256,3 +2256,48 @@ Front (`dispatch-web`) na mesma rodada — busca com debounce, componente de pag
 shadcn, e uma regressão real achada rodando a suíte e2e inteira (specs que dependiam do rótulo
 antigo de nav "Minha fila" pra uma conta que virou combo) — ver `dispatch-web/CLAUDE.md`, mesma
 seção.
+
+## Clone de produção pra dev — achado real: a suíte e2e dependia de dado que só "por acaso" existia
+
+Pedido do dono: clonar a base de produção (Neon) pro Postgres local, pra analisar visualmente o
+tanto de coisa acumulada na Central de Regras (candidata a revisão de design). Feito via
+`pg_dump`/`pg_restore` num container `postgres:18` avulso (mesmo mismatch de versão já
+documentado no Motor de alçada v2 — cliente local é 17.x, Neon roda 18.x), contra
+`host.docker.internal` pra alcançar o Postgres local a partir do container. Nomes/e-mails reais
+de funcionários foram anonimizados no clone local antes de qualquer análise (produção em si
+nunca foi tocada — só leitura via `pg_dump`).
+
+**Isso expôs um problema real, não hipotético**: a suíte e2e do `dispatch-web` inteira parou de
+funcionar, porque quase todo spec loga com contas seed fixas (`distribuidora@cartorio.com`,
+`conferente-rf27@cartorio.com`, `conferente-visual@cartorio.com`) que só existiam porque
+alguém as criou à mão numa sessão anterior — o clone de produção não tem essas contas (tem
+gente de verdade, com e-mail de verdade). O dono comentou: "um bom teste não depende de dado
+local, a não ser que o dado seja criado pelo teste e depois apagado". A parte de "criar e
+apagar dado próprio" já valia pra maioria dos specs (protocolo, conferente extra, equipe — cada
+um cria e limpa via API); o que faltava era exatamente a identidade de login, que ninguém
+automatizava.
+
+- **`SemearContasE2E`** (novo caso de uso) — garante as 3 contas fixas com senha e estado
+  conhecidos (`Senha123!`), idempotente: cria quem não existe, **reseta** (senha, nome, e-mail,
+  bloqueio de login) quem já existe — não bastava só resetar senha, o clone de produção tinha
+  essas contas com nome de gente de verdade, e um teste que espera "Distribuidora Teste" na
+  tela quebraria mesmo com o login funcionando. Conferente também garante o `Conferente`
+  vinculado (cria se faltar) e marca presença na escala (`MarcarPresenca(true)`) — não pode
+  ficar refém do que um spec anterior fez com a mesma conta (ex.: marcou ausente).
+- **`POST /dev/seed-e2e`** (`DevSeedEndpoints.cs`) — só mapeado quando
+  `app.Environment.IsDevelopment()` (gate no próprio `Program.cs`, não no endpoint em si) —
+  nunca existe em produção, então "senha previsível" não é risco de segurança lá. Anônimo (não
+  precisa de token — é chamado antes de qualquer login existir).
+- Front (`dispatch-web`) chama esse endpoint uma vez, antes da suíte inteira rodar
+  (`playwright.config.ts` → `globalSetup`) — ver `dispatch-web/CLAUDE.md`, mesma seção.
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade, contra o clone
+anonimizado): `POST /dev/seed-e2e` cria as 3 contas na primeira chamada (banco não tinha
+nenhuma com esses e-mails), reseta senha/nome/bloqueio na segunda chamada sem duplicar (mesmo
+Id) quando já existem. 2 testes novos (`SemearContasE2ETests`: banco vazio cria as 3; contas já
+existentes — inclusive bloqueada e com nome/senha antigos — resetam sem duplicar) — 375 testes
+automatizados no total (111 Domain + 264 Application). **Achado corrigindo, não previsto no
+design original**: o primeiro corte só resetava senha/bloqueio, não nome — rodando contra o
+clone de verdade, um spec que espera "Distribuidora Teste" na tela quebrou porque a conta já
+existia com o nome real de quem a possui (renomeado só o e-mail antes, não o nome). Corrigido
+chamando `Usuario.AtualizarPerfil(nome, email)` também no caminho de "já existe".

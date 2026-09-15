@@ -140,4 +140,10 @@ app.MapTipoAtoEndpoints();
 app.MapDashboardEndpoints();
 app.MapConfiguracaoEndpoints();
 
+// Só em Development — ver DevSeedEndpoints.cs. Nunca registrado em produção.
+if (app.Environment.IsDevelopment())
+{
+    app.MapDevSeedEndpoints();
+}
+
 app.Run();
