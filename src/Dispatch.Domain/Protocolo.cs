@@ -51,6 +51,14 @@ public sealed class Protocolo
     // direta no painel de detalhe).
     public DateTimeOffset? ReabertoEm { get; private set; }
 
+    // Achado em uso real (produção): antes de existir este campo, reabrir um protocolo já
+    // concluído sobrescrevia `IniciadoEm`/`ConcluidoEm` na hora — a duração final só refletia o
+    // último ciclo (ex.: 5 min da reabertura), perdendo o tempo da conferência original inteira.
+    // Guarda a soma de todo ciclo de conferência já encerrado antes do atual (zero se nunca
+    // reaberto) — `ReabrirConferencia` soma o ciclo que está terminando aqui, antes de zerar
+    // `IniciadoEm`/`ConcluidoEm` pro próximo.
+    public TimeSpan TempoAcumuladoAnterior { get; private set; } = TimeSpan.Zero;
+
     // RF-18i/j: só tem valor quando Status == Excluido — guarda o que era antes, pra
     // Restaurar() devolver exato (mesmo vencimento/dono/histórico, nada mais muda).
     public StatusProtocolo? StatusAntesDeExcluir { get; private set; }
@@ -61,8 +69,12 @@ public sealed class Protocolo
     // vem de algum lugar automaticamente.
     public void DefinirPrioridade(Prioridade prioridade) => Prioridade = prioridade;
 
-    // RF-24: "duração" do ato — só existe depois de concluído.
-    public TimeSpan? Duracao => IniciadoEm is { } inicio && ConcluidoEm is { } fim ? fim - inicio : null;
+    // RF-24: "duração" do ato — só existe depois de concluído. Soma o tempo do ciclo atual com
+    // o de qualquer reabertura anterior (TempoAcumuladoAnterior) — sem isso, um protocolo
+    // reaberto mostraria só a duração da última rodada, escondendo o tempo real que ficou em
+    // conferência desde o início.
+    public TimeSpan? Duracao =>
+        IniciadoEm is { } inicio && ConcluidoEm is { } fim ? TempoAcumuladoAnterior + (fim - inicio) : null;
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
@@ -192,6 +204,13 @@ public sealed class Protocolo
     // direta "reabrir conferência" no painel de detalhe.
     public void ReabrirConferencia(DateTimeOffset agora)
     {
+        // Acumula o ciclo que está terminando agora antes de zerá-lo — sem isso, o tempo da
+        // conferência original (antes desta reabertura) desaparecia da Duracao final.
+        if (IniciadoEm is { } inicioDoCiclo && ConcluidoEm is { } fimDoCiclo)
+        {
+            TempoAcumuladoAnterior += fimDoCiclo - inicioDoCiclo;
+        }
+
         Status = StatusProtocolo.Conferindo;
         IniciadoEm = agora;
         ConcluidoEm = null;

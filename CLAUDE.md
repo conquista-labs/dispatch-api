@@ -2359,3 +2359,42 @@ logado, visão restrita, mostrando `atosConferidos: 2` — batendo com o volume 
 desempenho, não mais o total. Sem mudança nenhuma no front — ele só exibe `dashboard.kpis` tal
 como a API manda (confirmado lendo `VisaoConferente.tsx`/`VisaoGestao.tsx`, os dois consomem o
 mesmo campo sem filtragem client-side).
+
+## Bug real: Duracao de um protocolo reaberto perdia o tempo do ciclo anterior
+
+Relatado pelo dono com um protocolo real de produção (nº 264137): reprovado errado, reaberto,
+conferido de novo — o card mostrava só a duração do **segundo** ciclo (uns 5 min), não o total
+de tempo que o ato ficou de fato em conferência (primeiro ciclo + reabertura).
+
+**Causa**: `Protocolo.Duracao` sempre foi `ConcluidoEm - IniciadoEm`, um intervalo só.
+`ReabrirConferencia` (RF-24c) reatribui `IniciadoEm`/`ConcluidoEm` na hora — não existia lugar
+nenhum, no domínio ou na persistência, guardando o tempo do ciclo que acabou de ser sobrescrito.
+Não era só "não mostrado na tela": o dado já não existia mais depois da reabertura.
+
+**Fix**: `Protocolo` ganha `TempoAcumuladoAnterior` (`TimeSpan`, `private set`, default
+`TimeSpan.Zero`) — `ReabrirConferencia` soma o ciclo que está terminando (`ConcluidoEm -
+IniciadoEm`) nesse acumulador **antes** de zerar os dois campos; `Duracao` passa a ser
+`TempoAcumuladoAnterior + (ConcluidoEm - IniciadoEm)`. Cobre qualquer número de reaberturas
+(cada uma soma o ciclo anterior de novo). Migration `AdicionaTempoAcumuladoAnteriorEmProtocolos`
+— 1 coluna nova (`interval`, `NOT NULL DEFAULT '00:00:00'`), sem backfill possível (protocolos
+já reabertos antes deste fix já perderam o dado do primeiro ciclo pra sempre — não tem como
+recuperar retroativamente; o fix vale só daqui pra frente).
+
+**Achado no caminho, de cobertura de teste**: o teste já existente de `ReabrirConferencia`
+(`ReabrirConferencia_VoltaPraConferindoComCronometroDoZero`) só checava o estado imediatamente
+depois de reabrir (`Duracao` nulo, correto) — nunca chegou a concluir de novo pra ver se o
+total batia. 2 testes novos (`ReabrirConferenciaEConcluirDeNovo_DuracaoSomaOsDoisCiclos`,
+`ReabrirConferenciaDuasVezes_AcumulaOsTresCiclos` — três ciclos seguidos, prova que acumula, não
+só substitui) — 383 testes automatizados no total (113 Domain + 270 Application).
+
+**Migration aplicada em produção (Neon) na hora, não só local** — sem isso, o deploy do código
+novo quebraria toda leitura de `Protocolo` em produção (coluna nova referenciada pelo EF Core,
+inexistente no banco real). Confirmado com o dono antes de rodar (`dotnet ef database update
+--connection "..."` contra o Neon), migration aditiva/segura (`ADD COLUMN ... DEFAULT`, sem
+tocar dado existente).
+
+Testado ponta a ponta contra o Postgres local, cenário real completo via API (não só teste
+unitário): criou protocolo, atribuiu a um conferente, reprovou (1º ciclo ~14.54s), reabriu via
+distribuidora, aprovou de novo (2º ciclo ~14.24s) — `GET /protocolos/distribuicao` confirmou
+`duracao: 00:00:28.7800620`, batendo exatamente com a soma dos dois ciclos medidos (não uma
+aproximação — os dois valores somados batem byte a byte com o total devolvido).

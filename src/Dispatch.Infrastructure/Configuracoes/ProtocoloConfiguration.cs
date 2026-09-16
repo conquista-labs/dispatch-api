@@ -49,6 +49,10 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.AtribuidoEm);
         builder.Property(p => p.CorrigidoEm);
         builder.Property(p => p.ReabertoEm);
+        // Mesma armadilha do EF Core já documentada (propriedade só-com-getter sem declaração
+        // explícita falha o constructor binding em tempo de design) — `TempoAcumuladoAnterior`
+        // não tem setter público, precisa disso mesmo tendo um valor default (TimeSpan.Zero).
+        builder.Property(p => p.TempoAcumuladoAnterior);
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
         // travar via Restrict) a leitura de um protocolo antigo que a citou. Sem FK, essa coluna

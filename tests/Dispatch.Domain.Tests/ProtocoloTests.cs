@@ -127,6 +127,41 @@ public class ProtocoloTests
         Assert.Equal(agora, protocolo.ReabertoEm);
     }
 
+    // Achado em uso real (produção): antes deste campo, a Duracao final de um protocolo
+    // reaberto só refletia o último ciclo (a reabertura), perdendo o tempo da conferência
+    // original — o dono via "5 min" num ato que na verdade ficou muito mais tempo em aberto.
+    [Fact]
+    public void ReabrirConferenciaEConcluirDeNovo_DuracaoSomaOsDoisCiclos()
+    {
+        var protocolo = NovoProtocolo();
+        var inicioOriginal = DateTimeOffset.UtcNow;
+        protocolo.IniciarConferencia(inicioOriginal);
+        protocolo.Reprovar(inicioOriginal.AddMinutes(20)); // 1º ciclo: 20 min
+
+        protocolo.ReabrirConferencia(inicioOriginal.AddHours(2));
+        var inicioSegundoCiclo = inicioOriginal.AddHours(2);
+        protocolo.Aprovar(inicioSegundoCiclo.AddMinutes(5)); // 2º ciclo: 5 min
+
+        Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
+    }
+
+    [Fact]
+    public void ReabrirConferenciaDuasVezes_AcumulaOsTresCiclos()
+    {
+        var protocolo = NovoProtocolo();
+        var t0 = DateTimeOffset.UtcNow;
+        protocolo.IniciarConferencia(t0);
+        protocolo.Reprovar(t0.AddMinutes(10)); // ciclo 1: 10 min
+
+        protocolo.ReabrirConferencia(t0.AddHours(1));
+        protocolo.Reprovar(t0.AddHours(1).AddMinutes(15)); // ciclo 2: 15 min
+
+        protocolo.ReabrirConferencia(t0.AddHours(2));
+        protocolo.Aprovar(t0.AddHours(2).AddMinutes(5)); // ciclo 3: 5 min
+
+        Assert.Equal(TimeSpan.FromMinutes(30), protocolo.Duracao);
+    }
+
     [Fact]
     public void Excluir_GuardaOStatusAnteriorEViraExcluido()
     {
