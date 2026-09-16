@@ -3,7 +3,8 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // RF-24c: a distribuidora decide um pedido pendente — aprovar reabre o protocolo de verdade
-// (mesmo dono, cronômetro do zero); negar só marca o pedido, o protocolo não muda.
+// (mesmo dono, volta pra Atribuído — cronômetro só liga quando ela chamar "iniciar" de novo);
+// negar só marca o pedido, o protocolo não muda.
 public sealed class DecidirPedidoReabertura(
     IPedidoReaberturaRepository pedidos, IProtocoloRepository protocolos, IRelogio relogio, IUnitOfWork unitOfWork)
 {

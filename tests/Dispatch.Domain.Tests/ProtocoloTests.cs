@@ -109,8 +109,12 @@ public class ProtocoloTests
         Assert.Equal(StatusProtocolo.Aprovado, protocolo.Status);
     }
 
+    // Achado em uso real (produção, protocolo 263605): reabrir bem antes só ligava o
+    // cronômetro na hora (Status ia direto pra Conferindo) — o ato pulava pra "Em conferência"
+    // sem a pessoa ter clicado em nada. Agora devolve pra Atribuído (fila da pessoa); o
+    // cronômetro só liga quando ela chamar IniciarConferencia de novo, igual a primeira vez.
     [Fact]
-    public void ReabrirConferencia_VoltaPraConferindoComCronometroDoZero()
+    public void ReabrirConferencia_VoltaPraAtribuidoSemLigarOCronometro()
     {
         var protocolo = NovoProtocolo();
         var inicioOriginal = DateTimeOffset.UtcNow;
@@ -120,8 +124,8 @@ public class ProtocoloTests
         var agora = inicioOriginal.AddHours(2);
         protocolo.ReabrirConferencia(agora);
 
-        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
-        Assert.Equal(agora, protocolo.IniciadoEm);
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
+        Assert.Null(protocolo.IniciadoEm);
         Assert.Null(protocolo.ConcluidoEm);
         Assert.Null(protocolo.Duracao);
         Assert.Equal(agora, protocolo.ReabertoEm);
@@ -139,7 +143,11 @@ public class ProtocoloTests
         protocolo.Reprovar(inicioOriginal.AddMinutes(20)); // 1º ciclo: 20 min
 
         protocolo.ReabrirConferencia(inicioOriginal.AddHours(2));
-        var inicioSegundoCiclo = inicioOriginal.AddHours(2);
+        // A distribuidora aprovou o pedido de reabertura às +2h, mas o conferente só retomou
+        // de verdade às +3h (fora do horário dele, por exemplo) — esse intervalo de espera não
+        // pode contar como tempo de conferência.
+        var inicioSegundoCiclo = inicioOriginal.AddHours(3);
+        protocolo.IniciarConferencia(inicioSegundoCiclo);
         protocolo.Aprovar(inicioSegundoCiclo.AddMinutes(5)); // 2º ciclo: 5 min
 
         Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
@@ -154,9 +162,11 @@ public class ProtocoloTests
         protocolo.Reprovar(t0.AddMinutes(10)); // ciclo 1: 10 min
 
         protocolo.ReabrirConferencia(t0.AddHours(1));
+        protocolo.IniciarConferencia(t0.AddHours(1));
         protocolo.Reprovar(t0.AddHours(1).AddMinutes(15)); // ciclo 2: 15 min
 
         protocolo.ReabrirConferencia(t0.AddHours(2));
+        protocolo.IniciarConferencia(t0.AddHours(2));
         protocolo.Aprovar(t0.AddHours(2).AddMinutes(5)); // ciclo 3: 5 min
 
         Assert.Equal(TimeSpan.FromMinutes(30), protocolo.Duracao);

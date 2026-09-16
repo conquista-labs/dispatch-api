@@ -32,9 +32,9 @@ public class DecidirPedidoReaberturaTests
         Assert.IsType<ResultadoDecidirPedidoReabertura.Sucesso>(resultado);
         Assert.Equal(StatusPedidoReabertura.Aprovado, pedido.Status);
         Assert.Equal(distribuidoraId, pedido.DecididoPorId);
-        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
         Assert.Equal(conferente.Id, protocolo.DonoId);
-        Assert.Equal(Agora, protocolo.IniciadoEm);
+        Assert.Null(protocolo.IniciadoEm);
         Assert.Equal(Agora, protocolo.ReabertoEm);
     }
 

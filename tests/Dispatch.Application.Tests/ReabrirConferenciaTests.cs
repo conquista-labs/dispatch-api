@@ -19,7 +19,7 @@ public class ReabrirConferenciaTests
         var resultado = await casoDeUso.ExecutarAsync(protocolo.Id);
 
         Assert.IsType<ResultadoReabrirConferencia.Sucesso>(resultado);
-        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+        Assert.Equal(StatusProtocolo.Atribuido, protocolo.Status);
         Assert.Equal(donoId, protocolo.DonoId);
         Assert.Equal(Agora, protocolo.ReabertoEm);
     }

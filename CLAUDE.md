@@ -2444,3 +2444,51 @@ unitário): criou protocolo, atribuiu a um conferente, reprovou (1º ciclo ~14.5
 distribuidora, aprovou de novo (2º ciclo ~14.24s) — `GET /protocolos/distribuicao` confirmou
 `duracao: 00:00:28.7800620`, batendo exatamente com a soma dos dois ciclos medidos (não uma
 aproximação — os dois valores somados batem byte a byte com o total devolvido).
+
+## Reabrir conferência devolve pra Atribuído, não liga o cronômetro na hora
+
+Achado em uso real (produção, protocolo 263605): "Reabrir conferência" fazia
+`ReabrirConferencia` ir direto pra `Status = Conferindo` (cronômetro ligado na mesma hora,
+`IniciadoEm = agora`) — o dono relatou que o ato "reabriu como em conferência e não na fila da
+pessoal", esperando que ele voltasse pra "Atribuídas a você" (esperando a pessoa clicar
+"Iniciar conferência" de novo), não já contando tempo sem ninguém ter feito nada.
+
+Segundo problema, levantado junto pelo dono (cenário real): às vezes o conferente pede
+reabertura e a distribuidora só aprova o pedido bem depois — fora do horário de trabalho dele,
+por exemplo. Com o comportamento antigo, esse intervalo de espera (aprovação → o conferente
+realmente sentar e retomar) entrava direto no cronômetro, contando como se fosse tempo de
+conferência.
+
+**Fix**: `Protocolo.ReabrirConferencia` (Domain) passou de `Status = Conferindo` +
+`IniciadoEm = agora` pra `Status = Atribuido` + `IniciadoEm = null` — mesmo dono, mas o
+cronômetro só liga quando `IniciarConferencia` é chamado de novo (o mesmo método que já existia
+pra primeira vez), igual uma atribuição nova. Isso resolve os dois problemas de uma vez: o ato
+aparece nas atribuídas da pessoa (não em conferência), e o intervalo entre a aprovação da
+distribuidora e o reinício de verdade não conta pra `Duracao` (só o que acontece entre
+`IniciarConferencia` e a conclusão seguinte entra no ciclo novo, somado a
+`TempoAcumuladoAnterior`).
+
+Usado pelos dois caminhos que já chamavam `ReabrirConferencia` — ação direta no painel de
+detalhe (`ReabrirConferencia.cs`, caso de uso) e aprovação de pedido de reabertura
+(`DecidirPedidoReabertura.cs`) — nenhuma mudança adicional precisou nos dois, só o
+comportamento do método de Domain por baixo. Nenhuma mudança de contrato de API (front já lê
+`Status` genérico pra decidir em qual coluna mostrar o card — Atribuído vs Conferindo —, sem
+nenhuma suposição hardcoded de "reabertura sempre vira Conferindo").
+
+**Testes atualizados** (não são testes novos, são os mesmos ajustados pro novo comportamento):
+`ProtocoloTests.ReabrirConferencia_VoltaPraAtribuidoSemLigarOCronometro` (renomeado, antes
+"...ComCronometroDoZero" — agora `IniciadoEm` fica nulo, não "zerado pra agora"); os dois testes
+de acumulação de ciclos (`ReabrirConferenciaEConcluirDeNovo_DuracaoSomaOsDoisCiclos`,
+`ReabrirConferenciaDuasVezes_AcumulaOsTresCiclos`) ganharam uma chamada explícita de
+`IniciarConferencia` entre cada `ReabrirConferencia` e o `Aprovar`/`Reprovar` seguinte — sem
+isso os testes não refletiam mais o fluxo real (antes o teste presumia que reabrir já deixava
+`IniciadoEm` setado). O primeiro desses dois também ganhou um intervalo deliberado entre
+"reabriu" e "iniciou de novo" (1h de espera não contando), provando o segundo cenário do dono.
+`ReabrirConferenciaTests`/`DecidirPedidoReaberturaTests` (Application) tiveram as asserções de
+`Status`/`IniciadoEm` trocadas de `Conferindo`/`Agora` pra `Atribuido`/`null`.
+
+Verificado ponta a ponta contra o Postgres local (não só teste unitário): criado protocolo,
+atribuído, iniciado, aprovado; reaberto pela distribuidora — confirmado via `psql` que ficou
+`Atribuido`/`IniciadoEm` nulo; confirmado via `GET /minha-fila` que aparece em `atribuidos`, não
+em `emConferencia`; iniciado de novo e concluído — `Duracao` final soma os dois ciclos
+corretamente. 384 testes automatizados no total (114 Domain + 270 Application).

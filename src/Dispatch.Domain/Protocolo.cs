@@ -198,10 +198,14 @@ public sealed class Protocolo
         CorrigidoEm = agora;
     }
 
-    // RF-24c: reabertura — mesmo dono (DonoId não muda), cronômetro reiniciado do zero.
-    // ConcluidoEm volta a nulo porque o ato deixou de estar concluído (Duracao volta a não
-    // existir até uma nova conclusão) — usada tanto pelo pedido aprovado quanto pela ação
-    // direta "reabrir conferência" no painel de detalhe.
+    // RF-24c: reabertura — mesmo dono (DonoId não muda), devolve pra Atribuído (fila da
+    // pessoa), não direto pra Conferindo — achado em uso real (produção, protocolo 263605):
+    // reabrir já ligava o cronômetro na hora, sem a pessoa ter clicado em nada, o que também
+    // fazia o ato pular direto pra "Em conferência" em vez de aparecer nas atribuídas dela.
+    // Cronômetro só volta a andar quando ela chamar IniciarConferencia de novo, igual a
+    // primeira vez. ConcluidoEm volta a nulo porque o ato deixou de estar concluído (Duracao
+    // volta a não existir até uma nova conclusão) — usada tanto pelo pedido aprovado quanto
+    // pela ação direta "reabrir conferência" no painel de detalhe.
     public void ReabrirConferencia(DateTimeOffset agora)
     {
         // Acumula o ciclo que está terminando agora antes de zerá-lo — sem isso, o tempo da
@@ -211,8 +215,8 @@ public sealed class Protocolo
             TempoAcumuladoAnterior += fimDoCiclo - inicioDoCiclo;
         }
 
-        Status = StatusProtocolo.Conferindo;
-        IniciadoEm = agora;
+        Status = StatusProtocolo.Atribuido;
+        IniciadoEm = null;
         ConcluidoEm = null;
         ReabertoEm = agora;
     }
