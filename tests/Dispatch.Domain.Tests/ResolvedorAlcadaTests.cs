@@ -279,11 +279,14 @@ public class ResolvedorAlcadaTests
     }
 
     [Fact]
-    public void EquipeEEtapa_ExcecaoPessoalSobrescreveANegacaoDeNivel()
+    public void EquipeEEtapa_NegacaoEhAbsolutaMesmoComExcecaoPessoalDoMesmoAlvo()
     {
-        // "a de baixo vence a de cima": uma exceção pessoal pode liberar um caso que a base
-        // por nível bloquearia com o alvo combinado novo, mesma regra de cascata já valendo
-        // pros outros alvos.
+        // Ao contrário de todo outro alvo (ver CamadaDeEquipeSobrescreveNegacaoDeEtapaDaCamadaDeNivel
+        // e RegraPessoalPermiteMesmoComRegraDeNivelNegandoOMesmoAlvo_Permite), "equipe não faz
+        // etapa" não segue "a de baixo vence a de cima" — o pedido original desse alvo sempre foi
+        // "ninguém, independente de quem" (Motor v4). Este cenário (Permite + PorEquipeEEtapa) na
+        // prática nem chega a existir de verdade — a Api só aceita esse alvo com Nega — mas o
+        // Domain precisa ser absoluto de qualquer forma, não só confiar na validação de borda.
         var conferenteId = Guid.NewGuid();
         var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Junior, 8, naEscala: true, cargaAtual: 0);
         var equipeQuintoAndar = Guid.NewGuid();
@@ -297,7 +300,31 @@ public class ResolvedorAlcadaTests
         var decisao = ResolvedorAlcada.Resolver(
             conferente, Caso(Etapa.PreConferencia, equipeId: equipeQuintoAndar), [negaDeNivel, permitePessoal]);
 
-        Assert.Equal(ResultadoAlcada.Permitido, decisao.Resultado);
-        Assert.Equal(permitePessoal, decisao.RegraAplicada);
+        Assert.Equal(ResultadoAlcada.Negado, decisao.Resultado);
+        Assert.Equal(negaDeNivel, decisao.RegraAplicada);
+        Assert.Equal(MotivoAlcada.EquipeEEtapa, decisao.Motivo);
+    }
+
+    [Fact]
+    public void EquipeEEtapa_NegacaoEhAbsolutaMesmoComAlcadaPlenaPessoal()
+    {
+        // Achado em produção: Maria Vittoria tinha "Permite TodosOsAtos" pessoal (alçada plena)
+        // e isso vencia "Quinto Andar não faz pré-conferência" pela regra normal de cascata —
+        // os atos de pré-conferência da equipe caíam na fila dela em vez de irem pra Exceção.
+        var conferenteId = Guid.NewGuid();
+        var conferente = new Conferente(conferenteId, Guid.NewGuid(), Nivel.Senior, 8, naEscala: true, cargaAtual: 0);
+        var equipeQuintoAndar = Guid.NewGuid();
+        var negaEquipeNaoFazEtapa = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorNivel(Nivel.Senior), PermissaoRegra.Nega,
+            new AlvoAlcada.PorEquipeEEtapa(equipeQuintoAndar, Etapa.PreConferencia));
+        var alcadaPlenaPessoal = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferenteId), PermissaoRegra.Permite, new AlvoAlcada.PorTodosOsAtos());
+
+        var decisao = ResolvedorAlcada.Resolver(
+            conferente, Caso(Etapa.PreConferencia, equipeId: equipeQuintoAndar), [negaEquipeNaoFazEtapa, alcadaPlenaPessoal]);
+
+        Assert.Equal(ResultadoAlcada.Negado, decisao.Resultado);
+        Assert.Equal(negaEquipeNaoFazEtapa, decisao.RegraAplicada);
+        Assert.Equal(MotivoAlcada.EquipeEEtapa, decisao.Motivo);
     }
 }

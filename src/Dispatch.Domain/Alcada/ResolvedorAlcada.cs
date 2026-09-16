@@ -21,6 +21,17 @@ namespace Dispatch.Domain;
 // Reserva (PermissaoRegra.Reserva) é checada ANTES de qualquer camada: se existe reserva ativa
 // batendo no caso e o conferente não é o sujeito dela, bloqueado direto — não concede acesso
 // sozinha pro próprio sujeito, só bloqueia todo mundo mais.
+//
+// "Equipe não faz etapa" (alvo PorEquipeEEtapa, Motor v4) também é checada ANTES de qualquer
+// camada, com a mesma prioridade da Reserva — achado em produção (Maria Vittoria tinha "Permite
+// TodosOsAtos" pessoal, camada Pessoa, e isso vencia a negação por nível de "Quinto Andar não
+// faz pré-conferência" pela regra normal de cascata, "a de baixo vence a de cima"). O pedido
+// original desse alvo sempre foi "ninguém, independente de quem" (ver CLAUDE.md, "Motor de
+// alçada v4", terceira rodada) — uma exceção pessoal (de qualquer tipo, inclusive alçada plena)
+// não pode reabrir isso; a API já garante que ninguém cria Permite/Reserva pra este alvo
+// especificamente (só Nega), então essa negação nunca tem uma exceção own-alvo legítima pra
+// ceder — sempre venceria de qualquer forma, só não vencia de exceções de OUTRO alvo que
+// terminam opinando na mesma camada Pessoa (como alçada plena).
 public static class ResolvedorAlcada
 {
     private enum Camada { Nivel, Equipe, Pessoa }
@@ -42,6 +53,12 @@ public static class ResolvedorAlcada
         if (reservaBloqueando is not null)
         {
             return new DecisaoAlcada(ResultadoAlcada.Negado, reservaBloqueando, MotivoAlcada.Reservado);
+        }
+
+        var negaEquipeEEtapa = NegaEquipeEEtapaQueBloqueia(conferente, caso, ativas);
+        if (negaEquipeEEtapa is not null)
+        {
+            return new DecisaoAlcada(ResultadoAlcada.Negado, negaEquipeEEtapa, MotivoAlcada.EquipeEEtapa);
         }
 
         var minhas = ativas.Where(r => r.Permissao != PermissaoRegra.Reserva && ValePara(r, conferente)).ToList();
@@ -76,6 +93,13 @@ public static class ResolvedorAlcada
 
         if (reservas.Count > 0 && !reservas.Any(r => ValePara(r, conferente)))
         {
+            return passos;
+        }
+
+        var negaEquipeEEtapa = NegaEquipeEEtapaQueBloqueia(conferente, caso, ativas);
+        if (negaEquipeEEtapa is not null)
+        {
+            passos.Add(new PassoTrilha("Equipe não faz etapa", ResultadoAlcada.Negado, negaEquipeEEtapa));
             return passos;
         }
 
@@ -120,6 +144,15 @@ public static class ResolvedorAlcada
 
         return reservas[0];
     }
+
+    // Mesma prioridade absoluta da Reserva, mas pra "equipe não faz etapa" (Motor v4) — este
+    // alvo só existe como Nega (garantido na Api), então basta achar uma que bata no caso e
+    // valha pro conferente: nenhuma exceção pessoal de outro alvo (ex.: alçada plena) pode
+    // sobrescrever isso na cascata normal, porque esta checagem roda antes dela.
+    private static RegraAlcada? NegaEquipeEEtapaQueBloqueia(Conferente conferente, CasoAlcada caso, IReadOnlyCollection<RegraAlcada> ativas) =>
+        ativas.FirstOrDefault(r =>
+            r.Permissao == PermissaoRegra.Nega && r.Alvo is AlvoAlcada.PorEquipeEEtapa &&
+            ValePara(r, conferente) && AlvoBate(r.Alvo, caso));
 
     private static (ResultadoAlcada? Resultado, RegraAlcada? Regra, Dimensao? Dimensao) DecideCamada(
         IReadOnlyCollection<RegraAlcada> regrasDaCamada, CasoAlcada caso)

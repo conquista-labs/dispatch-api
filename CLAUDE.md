@@ -1850,6 +1850,52 @@ caso em "Testar" batem entre si (frase, camada "Base por nível", veredito verme
 "equipe fora da alçada nesta etapa"). 348 testes automatizados no total (108 Domain + 240
 Application).
 
+### Bug real em produção: exceção pessoal de outro alvo reabria "ninguém, independente de quem"
+
+Achado em uso real (produção), reportado pelo dono: Maria Vittoria (conta combo
+Distribuidora+Conferente, ver seção acima sobre múltiplos papéis) tem uma regra pessoal de
+alçada plena (`Permite`/`PorTodosOsAtos`) — ela pode conferir qualquer ato, exceção de sempre.
+Depois de criar "Quinto Andar não faz pré-conferência" (`Nega`/`PorEquipeEEtapa`, Base por
+nível, os 3 níveis) pra ela mesma, os atos de pré-conferência da equipe continuavam caindo na
+fila **disponível** dela em vez de irem pra Exceção.
+
+Causa raiz, confirmada mecanicamente (não por suposição) contra o código de `ResolvedorAlcada.cs`
+e os dados reais de produção: a cascata do Motor v3 (`Resolver`) roda em 3 camadas (Nível →
+Equipe → Pessoa) e "a de baixo vence a de cima quando tem opinião" — regra **correta e
+obrigatória** pro caso geral (é o "exemplo resolvido" da seção 4 do documento de requisitos,
+coberto por `RegraPessoalPermiteMesmoComRegraDeNivelNegandoOMesmoAlvo_Permite`). O problema é que
+essa regra geral não distingue "a camada Pessoa tem uma exceção **para este mesmo alvo**" de "a
+camada Pessoa tem uma opinião sobre **qualquer alvo**, inclusive um sem nenhuma relação com a
+negação de nível" — a alçada plena de Maria (alvo `PorTodosOsAtos`) opinava sobre TODO caso,
+inclusive os que a negação `PorEquipeEEtapa` deveria bloquear de forma absoluta, e "vencia" na
+cascata mesmo sem ter nenhuma relação com "Quinto Andar não faz pré-conferência". Isso contradiz
+o pedido original desse alvo, já confirmado com o dono na v4: **"ninguém, independente de
+quem"** — uma exceção pessoal de qualquer tipo (inclusive alçada plena) não deveria conseguir
+reabrir isso.
+
+**Fix**: `PorEquipeEEtapa`/`Nega` ganhou a mesma prioridade absoluta que `Reserva` já tinha —
+checado **antes** de entrar na cascata de 3 camadas, não dentro dela. `Resolver`/`Explicar`
+ganharam um novo helper `NegaEquipeEEtapaQueBloqueia` (mesmo molde de `ReservaQueBloqueia`):
+acha uma regra `Nega`/`PorEquipeEEtapa` que valha pro conferente (nível ou pessoa) e bata no
+caso — se achar, `Negado`/`MotivoAlcada.EquipeEEtapa` direto, sem passar pela cascata. Como a Api
+só aceita esse alvo com `Nega` (ver acima), essa negação nunca tem uma exceção own-alvo
+legítima pra ceder — a checagem antecipada só muda o resultado nos casos em que uma exceção de
+OUTRO alvo (como alçada plena) terminava opinando na mesma camada Pessoa e vencendo por engano.
+
+Escopo deliberadamente restrito a este único alvo: a cascata "a de baixo vence a de cima"
+continua intacta pra todo alvo normal (`PorEtapa`/`PorTipoAto`/`PorGrupoTipoAto`/
+`PorEquipeDeEscrevente`/`PorTodosOsAtos`) — só `PorEquipeEEtapa` virou absoluto, junto com
+`Reserva`.
+
+`ResolvedorAlcadaTests.cs`: o teste antigo `EquipeEEtapa_ExcecaoPessoalSobrescreveANegacaoDeNivel`
+documentava o comportamento ANTIGO com uma combinação (`Permite`+`PorEquipeEEtapa`) que a Api já
+bloqueia na prática (400) — renomeado pra
+`EquipeEEtapa_NegacaoEhAbsolutaMesmoComExcecaoPessoalDoMesmoAlvo` e invertido pra `Negado` (o
+Domain precisa ser absoluto por conta própria, não só confiar na validação de borda). Novo teste
+`EquipeEEtapa_NegacaoEhAbsolutaMesmoComAlcadaPlenaPessoal` reproduz o cenário exato de produção
+(nível nega EquipeEEtapa + pessoa com alçada plena → `Negado`). 384 testes automatizados no
+total (114 Domain + 270 Application).
+
 ## Fix de performance: N+1 em GET /regras-alcada
 
 Reportado pelo dono direto (não achado numa auditoria): "as requests da aba de Central de
