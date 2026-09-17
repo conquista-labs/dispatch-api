@@ -49,6 +49,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.AtribuidoEm);
         builder.Property(p => p.CorrigidoEm);
         builder.Property(p => p.ReabertoEm);
+        builder.Property(p => p.PausadoEm);
 
         // Um ciclo de conferência já encerrado (ver CicloConferencia.cs — por que é um registro
         // por ciclo, não um TimeSpan acumulado cego). Primeira coleção-filha do projeto — EF Core

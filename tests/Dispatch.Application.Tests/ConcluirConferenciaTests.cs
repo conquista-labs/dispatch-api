@@ -80,4 +80,23 @@ public class ConcluirConferenciaTests
 
         Assert.Equal(ResultadoConcluirConferencia.NaoEhSeuOuNaoEstaEmConferencia, resultado);
     }
+
+    // Concluir com IniciadoEm nulo (estado de pausa) gravaria ConcluidoEm sem um ciclo aberto
+    // correspondente — Duracao (exige os dois) voltaria nula, escondendo CiclosAnteriores.
+    [Fact]
+    public async Task ProtocoloPausado_RetornaEstaPausado()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var protocolo = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        protocolo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
+        protocolo.IniciarConferencia(Inicio);
+        protocolo.Pausar(Inicio.AddMinutes(5));
+        var casoDeUso = new ConcluirConferencia(
+            new FakeProtocoloRepository([protocolo]), new FakeRelogio(Fim), new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente, aprovado: true);
+
+        Assert.Equal(ResultadoConcluirConferencia.EstaPausado, resultado);
+        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+    }
 }

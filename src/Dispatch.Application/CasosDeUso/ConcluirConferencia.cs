@@ -23,6 +23,15 @@ public sealed class ConcluirConferencia(
             return ResultadoConcluirConferencia.NaoEhSeuOuNaoEstaEmConferencia;
         }
 
+        // Pausado: IniciadoEm fica nulo até Retomar (ver Protocolo.Pausar) — concluir aqui
+        // gravaria ConcluidoEm sem um IniciadoEm correspondente, e Duracao (que exige os dois)
+        // voltaria nulo, escondendo o tempo que já está guardado em CiclosAnteriores. Precisa
+        // retomar antes de aprovar/reprovar.
+        if (protocolo.PausadoEm is not null)
+        {
+            return ResultadoConcluirConferencia.EstaPausado;
+        }
+
         if (aprovado)
         {
             protocolo.Aprovar(relogio.Agora);
@@ -41,5 +50,6 @@ public enum ResultadoConcluirConferencia
 {
     Sucesso,
     NaoEncontrado,
-    NaoEhSeuOuNaoEstaEmConferencia
+    NaoEhSeuOuNaoEstaEmConferencia,
+    EstaPausado
 }

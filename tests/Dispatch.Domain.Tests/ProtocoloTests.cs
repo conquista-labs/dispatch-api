@@ -255,4 +255,76 @@ public class ProtocoloTests
         Assert.Equal(novoEscreventeId, protocolo.EscreventeId);
         Assert.Equal(Etapa.PosConferencia, protocolo.Etapa);
     }
+
+    // Pedido do dono ("a pessoa sai pra almoçar, por exemplo") — pausar não sai de Conferindo
+    // (continua ocupando o limite de simultâneos, RF-21), só congela o cronômetro.
+    [Fact]
+    public void Pausar_ZeraIniciadoEmEMarcaPausadoEmSemMudarStatus()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+
+        var agora = inicio.AddMinutes(10);
+        protocolo.Pausar(agora);
+
+        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+        Assert.Null(protocolo.IniciadoEm);
+        Assert.Equal(agora, protocolo.PausadoEm);
+    }
+
+    [Fact]
+    public void Pausar_GuardaOCicloAteAliComoJaConferido()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+
+        protocolo.Pausar(inicio.AddMinutes(10));
+
+        var ciclo = Assert.Single(protocolo.CiclosAnteriores);
+        Assert.Equal(donoId, ciclo.ConferenteId);
+        Assert.Equal(inicio, ciclo.IniciadoEm);
+        Assert.Equal(inicio.AddMinutes(10), ciclo.ConcluidoEm);
+    }
+
+    [Fact]
+    public void Retomar_AbreUmCicloNovoELimpaPausadoEm()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+        protocolo.Pausar(inicio.AddMinutes(10));
+
+        // A pausa em si (1h de almoço) não pode contar — só o que roda depois de retomar.
+        var retomadoEm = inicio.AddHours(1);
+        protocolo.Retomar(retomadoEm);
+
+        Assert.Equal(StatusProtocolo.Conferindo, protocolo.Status);
+        Assert.Equal(retomadoEm, protocolo.IniciadoEm);
+        Assert.Null(protocolo.PausadoEm);
+    }
+
+    [Fact]
+    public void PausarERetomarEConcluir_DuracaoSomaOsDoisPedacosSemAHoraDaPausa()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+        protocolo.Pausar(inicio.AddMinutes(20)); // trabalhou 20 min antes do almoço
+
+        var retomadoEm = inicio.AddHours(1); // 1h de almoço, não conta
+        protocolo.Retomar(retomadoEm);
+        protocolo.Aprovar(retomadoEm.AddMinutes(5)); // mais 5 min depois
+
+        Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
+    }
 }

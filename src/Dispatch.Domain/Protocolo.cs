@@ -51,6 +51,12 @@ public sealed class Protocolo
     // direta no painel de detalhe).
     public DateTimeOffset? ReabertoEm { get; private set; }
 
+    // Pedido do dono ("a pessoa sai pra almoçar, por exemplo") — pausa sem contar o tempo
+    // parado, mas sem devolver o ato pra fila (continua ocupando o limite de simultâneos,
+    // RF-21: ela não pode iniciar outro enquanto este estiver pausado). Só tem valor enquanto
+    // pausado; `Retomar` limpa de novo.
+    public DateTimeOffset? PausadoEm { get; private set; }
+
     // Achado em uso real (produção): antes de existir isso, reabrir um protocolo já concluído
     // sobrescrevia `IniciadoEm`/`ConcluidoEm` na hora — a duração final só refletia o último
     // ciclo (ex.: 5 min da reabertura), perdendo o tempo da conferência original inteira. Um
@@ -227,5 +233,29 @@ public sealed class Protocolo
         IniciadoEm = null;
         ConcluidoEm = null;
         ReabertoEm = agora;
+    }
+
+    // Pausa — mesmo mecanismo de fechar ciclo que ReabrirConferencia já usa (fecha o pedaço que
+    // estava rodando, guarda de quem foi, pra Duracao final continuar somando certo), mas
+    // **sem** sair de Conferindo nem mudar Status/DonoId: pausar não é devolver o ato, é só
+    // congelar o cronômetro do mesmo ciclo — continua contando pro limite de simultâneos
+    // (RF-21), a pessoa não pode começar outro enquanto este está pausado.
+    public void Pausar(DateTimeOffset agora)
+    {
+        if (IniciadoEm is { } inicioDoCiclo && DonoId is { } donoDoCiclo)
+        {
+            _ciclosAnteriores.Add(new CicloConferencia(donoDoCiclo, inicioDoCiclo, agora));
+        }
+
+        IniciadoEm = null;
+        PausadoEm = agora;
+    }
+
+    // Volta a contar o tempo — abre um ciclo novo a partir de agora, igual IniciarConferencia
+    // faz na primeira vez (Status já continuava Conferindo durante a pausa, não muda aqui).
+    public void Retomar(DateTimeOffset agora)
+    {
+        IniciadoEm = agora;
+        PausadoEm = null;
     }
 }

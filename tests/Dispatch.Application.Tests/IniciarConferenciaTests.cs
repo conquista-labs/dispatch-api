@@ -81,4 +81,27 @@ public class IniciarConferenciaTests
         Assert.Equal(ResultadoIniciarConferencia.LimiteDeSimultaneosAtingido, resultado);
         Assert.Equal(StatusProtocolo.Atribuido, novo.Status);
     }
+
+    // Pedido do dono: pausar (ex.: almoço) não libera o limite de simultâneos — o protocolo
+    // pausado continua "Conferindo" por baixo (ver Protocolo.Pausar), só sem cronômetro ligado.
+    [Fact]
+    public async Task ProtocoloPausadoAindaContaNoLimiteDeSimultaneos()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+
+        var pausado = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        pausado.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
+        pausado.IniciarConferencia(Agora.AddMinutes(-30));
+        pausado.Pausar(Agora.AddMinutes(-10));
+
+        var novo = new Protocolo(Guid.NewGuid(), "2", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        novo.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
+
+        var casoDeUso = new IniciarConferencia(
+            new FakeProtocoloRepository([pausado, novo]), new FakeConfiguracaoRepository(), new FakeRelogio(Agora), new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(novo.Id, conferente);
+
+        Assert.Equal(ResultadoIniciarConferencia.LimiteDeSimultaneosAtingido, resultado);
+    }
 }

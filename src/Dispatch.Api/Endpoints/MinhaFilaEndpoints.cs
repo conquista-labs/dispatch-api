@@ -104,6 +104,66 @@ public static class MinhaFilaEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
+        grupo.MapPost("/{id:guid}/pausar", async (
+                Guid id,
+                PausarConferencia casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoPausarConferencia.Sucesso => Results.NoContent(),
+                    ResultadoPausarConferencia.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoPausarConferencia.NaoEhSeuOuNaoEstaEmConferencia =>
+                        Results.Conflict(new { motivo = "protocolo não é seu ou não está em conferência" }),
+                    ResultadoPausarConferencia.JaEstaPausado => Results.Conflict(new { motivo = "protocolo já está pausado" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
+            })
+            .WithName("PausarConferencia")
+            .WithSummary("Congela o cronômetro sem devolver o ato pra fila — continua ocupando o limite de simultâneos (RF-21).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        grupo.MapPost("/{id:guid}/retomar", async (
+                Guid id,
+                RetomarConferencia casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var conferente = await ResolverConferenteAsync(usuario, conferentes, cancellationToken);
+                if (conferente is null)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoRetomarConferencia.Sucesso => Results.NoContent(),
+                    ResultadoRetomarConferencia.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoRetomarConferencia.NaoEhSeuOuNaoEstaEmConferencia =>
+                        Results.Conflict(new { motivo = "protocolo não é seu ou não está em conferência" }),
+                    ResultadoRetomarConferencia.NaoEstaPausado => Results.Conflict(new { motivo = "protocolo não está pausado" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
+            })
+            .WithName("RetomarConferencia")
+            .WithSummary("Volta a contar o tempo de um protocolo pausado, abrindo um novo ciclo a partir de agora.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         grupo.MapPost("/{id:guid}/concluir", async (
                 Guid id,
                 ConcluirConferenciaRequest request,
@@ -125,6 +185,7 @@ public static class MinhaFilaEndpoints
                     ResultadoConcluirConferencia.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
                     ResultadoConcluirConferencia.NaoEhSeuOuNaoEstaEmConferencia =>
                         Results.Conflict(new { motivo = "protocolo não é seu ou não está em conferência" }),
+                    ResultadoConcluirConferencia.EstaPausado => Results.Conflict(new { motivo = "protocolo está pausado — retome antes de concluir" }),
                     _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
                 };
             })
@@ -282,6 +343,7 @@ public static class MinhaFilaEndpoints
         protocolo.Observacao,
         protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
         protocolo.IniciadoEm,
+        protocolo.PausadoEm,
         protocolo.ConcluidoEm,
         protocolo.Duracao,
         protocolo.AndamentoEm);

@@ -57,6 +57,9 @@ public sealed record ProtocoloResumo(
     // RF-21: o front calcula o cronômetro ao vivo (agora - IniciadoEm) — só existe depois que
     // IniciarConferencia roda, por isso nulo em qualquer status antes de "Conferindo".
     DateTimeOffset? IniciadoEm,
+    // Pausa (pedido do dono, "a pessoa sai pra almoçar") — não nulo enquanto pausado; o front
+    // usa isso pra trocar o cronômetro por "Pausado" + botão "Retomar" no card.
+    DateTimeOffset? PausadoEm,
     // "N feitos hoje"/tempo de conferência no card de conferente (aba "Por status" →
     // Concluídos) — só existem depois de ConcluirConferencia, nulos em qualquer status antes
     // disso (mesma regra de IniciadoEm acima).

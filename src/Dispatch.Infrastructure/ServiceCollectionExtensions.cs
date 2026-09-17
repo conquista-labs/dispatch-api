@@ -148,6 +148,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ObterMinhaFila>();
         services.AddScoped<PegarProtocolo>();
         services.AddScoped<IniciarConferencia>();
+        services.AddScoped<PausarConferencia>();
+        services.AddScoped<RetomarConferencia>();
         services.AddScoped<ConcluirConferencia>();
         services.AddScoped<ObterConcluidosHoje>();
         services.AddScoped<CorrigirResultado>();

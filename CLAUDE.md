@@ -2628,3 +2628,47 @@ Postgres local via API real: 2 protocolos criados com `andamentoEm` deliberadame
 ordem (um vencendo depois criado primeiro) — `GET /minha-fila` devolveu na ordem certa de
 vencimento, não na ordem de criação. Sem migration (não mexe em schema). 390 testes
 automatizados no total (116 Domain + 274 Application).
+
+## Pausar conferência — "a pessoa sai pra almoçar, por exemplo"
+
+Pedido do dono, não é RF numerado nem está no protótipo/requisito (confirmado buscando "pausa"
+no documento — não existe). Um protocolo em conferência pode ser pausado sem devolver o ato pra
+fila: continua ocupando o limite de simultâneos (RF-21, confirmado com o dono — decisão
+deliberada, não padrão implícito), aparece em "Em conferência" com "Pausado" no lugar do
+cronômetro e um botão "Retomar". O tempo pausado não pode contar (mesma disciplina já
+estabelecida pra reabertura, ver seção acima) — reaproveita exatamente o mesmo mecanismo de
+"fechar o ciclo em andamento" que `ReabrirConferencia` já usa.
+
+- **`Protocolo.cs`** — `PausadoEm : DateTimeOffset?` (novo). `Pausar(agora)`: fecha o ciclo
+  corrente em `CiclosAnteriores` (mesmo `CicloConferencia`, com o dono de agora) e zera
+  `IniciadoEm`, **sem** mudar `Status` (continua `Conferindo` — é isso que faz o limite de
+  simultâneos continuar contando este ato, `ObterEmConferenciaPorConferenteAsync` filtra só por
+  `Status`). `Retomar(agora)`: abre um ciclo novo (`IniciadoEm = agora`), limpa `PausadoEm`.
+  Nenhuma mudança em `Duracao` (já soma `CiclosAnteriores` + ciclo atual, ver seção anterior) —
+  o intervalo pausado nunca entra em nenhum dos dois lados.
+- **`PausarConferencia.cs`/`RetomarConferencia.cs`** (novos, `Dispatch.Application`) — mesmo
+  molde de `IniciarConferencia`: valida dono + `Status == Conferindo`, mais a checagem
+  específica (`PausadoEm` nulo pra pausar, não-nulo pra retomar).
+- **`ConcluirConferencia.cs`** ganhou uma guarda nova: `EstaPausado` — concluir com `IniciadoEm`
+  nulo (o estado durante a pausa) gravaria `ConcluidoEm` sem ciclo aberto correspondente,
+  `Duracao` (que exige os dois) voltaria nulo, escondendo o que já está em `CiclosAnteriores`.
+  Precisa retomar antes de aprovar/reprovar — reforçado também no front (some o botão
+  Aprovar/Não aprovar enquanto pausado, só mostra "Retomar").
+- **Endpoints novos**: `POST /minha-fila/{id}/pausar`, `POST /minha-fila/{id}/retomar` (mesmo
+  grupo/padrão de `/iniciar`/`/concluir`). `ProtocoloResumo` (DTO compartilhado por Minha
+  fila/Distribuição) ganhou `PausadoEm`.
+- **Migration `AdicionaPausaEmProtocolos`** — só `AddColumn` nullable, aditiva/segura.
+
+Testes novos: `ProtocoloTests` (4 — pausa zera `IniciadoEm` sem mudar `Status`, guarda o ciclo
+certo, retomar abre ciclo novo, e o cenário completo pausa→retoma→conclui provando que a
+`Duracao` soma os dois pedaços sem a hora da pausa), `PausarConferenciaTests`/
+`RetomarConferenciaTests` (novos, 5+4 casos), `IniciarConferenciaTests` ganhou
+`ProtocoloPausadoAindaContaNoLimiteDeSimultaneos` (prova que pausado continua bloqueando iniciar
+outro), `ConcluirConferenciaTests` ganhou `ProtocoloPausado_RetornaEstaPausado`.
+
+Verificado ponta a ponta contra o Postgres local (não só teste unitário): criado protocolo,
+atribuído, iniciado, pausado — confirmado que concluir dá 409 ("está pausado — retome antes de
+concluir") e que `GET /minha-fila` mostra em `emConferencia` com `iniciadoEm: null`/`pausadoEm`
+preenchido; retomado e concluído depois — `duracao` final bateu exatamente com a soma dos dois
+pedaços medidos (1.06s + 2.05s = 3.11s), excluindo o intervalo da pausa (~13s). 405 testes
+automatizados no total (120 Domain + 285 Application).
