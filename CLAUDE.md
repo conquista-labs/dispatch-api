@@ -94,6 +94,12 @@ Sem `min_machines_running`/equivalente configurado — o plano free do Render ta
 serviço por inatividade e acorda com cold start na próxima chamada, mesmo trade-off que o Fly
 já tinha.
 
+**Auto-deploy no ar, confirmado pelo dono** — push em `main` já dispara um novo deploy sozinho
+no Render, sem passo manual nenhum (diferente do front no Netlify, que é sempre
+`netlify deploy --prod --build` manual). Relevante pra sessões futuras: depois de um `git push`
+num repositório clonado localmente, o código já está indo pro ar sozinho — não presumir que
+falta um passo de deploy explícito do back como se presume pro front.
+
 **CORS não é Development-only.** Uma policy só, sempre ativa, com a origem vindo de config
 (`Cors:AllowedOrigin` — `appsettings.Development.json` fixa `localhost:5173`; produção é env
 var do Render `Cors__AllowedOrigin` apontando pra URL do Netlify). Trocar de host do front não
