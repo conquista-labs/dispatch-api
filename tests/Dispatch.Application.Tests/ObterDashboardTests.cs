@@ -237,4 +237,54 @@ public class ObterDashboardTests
         Assert.Equal(0, resultado.Kpis.AtosConferidos);
         Assert.Empty(resultado.Desempenho);
     }
+
+    // Achado em uso real (produção, protocolo 263605): reabertura + reatribuição (RF-24c, só
+    // acontece quando o dono original saiu da escala, RF-27) não pode fazer o tempo do 1º ciclo
+    // (de quem já saiu) entrar na conta do tempo médio de quem terminou. Cada um leva só o que
+    // de fato conferiu — mas o protocolo em si (volume/score) continua contando pro dono ATUAL.
+    [Fact]
+    public async Task ProtocoloReabertoEReatribuido_TempoMedioNaoHerdaDoConferenteAnterior()
+    {
+        var usuarioAna = NovoUsuario("Ana");
+        var usuarioBruno = NovoUsuario("Bruno");
+        var conferenteAna = NovoConferente(usuarioAna.Id);
+        var conferenteBruno = NovoConferente(usuarioBruno.Id);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+
+        // Ana faz o 1º ciclo (20 min) e reprova; o ato é reaberto e, como ela saiu da escala,
+        // reatribuído pro Bruno, que faz o 2º ciclo (5 min) e aprova.
+        var protocolo = new Protocolo(Guid.NewGuid(), "263605", tipo.Id, Guid.NewGuid(), Etapa.PreConferencia, Agora.AddDays(-1));
+        var inicio1 = Agora.AddDays(-1);
+        protocolo.AtribuirA(conferenteAna.Id, inicio1);
+        protocolo.IniciarConferencia(inicio1);
+        protocolo.Reprovar(inicio1.AddMinutes(20));
+
+        protocolo.ReabrirConferencia(inicio1.AddHours(1));
+        protocolo.AtribuirA(conferenteBruno.Id, inicio1.AddHours(1));
+        var inicio2 = inicio1.AddHours(2);
+        protocolo.IniciarConferencia(inicio2);
+        protocolo.Aprovar(inicio2.AddMinutes(5));
+
+        var casoDeUso = NovoCasoDeUso([protocolo], [conferenteAna, conferenteBruno], [tipo], [usuarioAna, usuarioBruno]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(2, resultado.Desempenho.Count);
+        var bruno = resultado.Desempenho.Single(d => d.Nome == "Bruno");
+        var ana = resultado.Desempenho.Single(d => d.Nome == "Ana");
+
+        // Bruno é o dono atual — o protocolo inteiro conta pro volume/score dele, do jeito que
+        // já era antes desta mudança.
+        Assert.Equal(1, bruno.Volume);
+        Assert.Equal(TimeSpan.FromMinutes(5), bruno.TempoMedio);
+
+        // Ana não é dona de nada no período (o protocolo passou pra frente), mas o tempo que ela
+        // realmente gastou não pode desaparecer do relatório de produtividade.
+        Assert.Equal(0, ana.Volume);
+        Assert.Equal(TimeSpan.FromMinutes(20), ana.TempoMedio);
+
+        // Duracao do protocolo em si continua somando os dois ciclos (25 min) — isso não mudou,
+        // só quem "leva o crédito" de cada pedaço no Dashboard.
+        Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
+    }
 }

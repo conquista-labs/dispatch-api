@@ -49,10 +49,29 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.AtribuidoEm);
         builder.Property(p => p.CorrigidoEm);
         builder.Property(p => p.ReabertoEm);
-        // Mesma armadilha do EF Core já documentada (propriedade só-com-getter sem declaração
-        // explícita falha o constructor binding em tempo de design) — `TempoAcumuladoAnterior`
-        // não tem setter público, precisa disso mesmo tendo um valor default (TimeSpan.Zero).
-        builder.Property(p => p.TempoAcumuladoAnterior);
+
+        // Um ciclo de conferência já encerrado (ver CicloConferencia.cs — por que é um registro
+        // por ciclo, não um TimeSpan acumulado cego). Primeira coleção-filha do projeto — EF Core
+        // acha o backing field `_ciclosAnteriores` sozinho (convenção `_<propriedade em
+        // camelCase>`), então não precisa de `UsePropertyAccessMode` explícito aqui. Chave da
+        // tabela filha é uma shadow property (`Id`, auto-incremento) porque `CicloConferencia`
+        // não tem identidade própria fora do protocolo — é auditoria histórica, não uma entidade
+        // que alguém busca/edita sozinha.
+        builder.OwnsMany(p => p.CiclosAnteriores, ciclo =>
+        {
+            ciclo.ToTable("ciclos_conferencia");
+            ciclo.WithOwner().HasForeignKey("protocolo_id");
+            ciclo.Property<int>("Id").ValueGeneratedOnAdd();
+            ciclo.HasKey("Id");
+            ciclo.Property(c => c.ConferenteId).IsRequired();
+            ciclo.Property(c => c.IniciadoEm).IsRequired();
+            ciclo.Property(c => c.ConcluidoEm).IsRequired();
+            // Índice pensando no consumidor real (ObterDashboard agrupando tempo por pessoa) —
+            // sem isso, "quanto tempo a pessoa X gastou nos ciclos dela" varreria a tabela
+            // inteira a cada carregamento do Dashboard, mesmo achado de auditoria já documentado
+            // acima pra RegraAplicadaId.
+            ciclo.HasIndex(c => c.ConferenteId);
+        });
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
         // travar via Restrict) a leitura de um protocolo antigo que a citou. Sem FK, essa coluna

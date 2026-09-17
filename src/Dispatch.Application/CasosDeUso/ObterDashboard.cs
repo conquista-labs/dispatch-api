@@ -39,23 +39,43 @@ public sealed class ObterDashboard(
             .GroupBy(p => p.DonoId!.Value)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        // Tempo de conferência por CICLO, não por protocolo — RF-43/45/46 usam esse tempo pra
+        // medir carga/produtividade de cada pessoa (achado em uso real, protocolo 263605): um
+        // ato reaberto e reatribuído (RF-24c, só quando o dono original saiu da escala, RF-27)
+        // não pode fazer a pessoa nova herdar o tempo que a pessoa antiga já gastou nele. Cada
+        // CicloConferencia sabe de quem foi; o ciclo final/atual (ainda em Protocolo, não em
+        // CiclosAnteriores) é sempre do DonoId de agora. Só usado pro TempoMedio de "por
+        // conferente" — Volume/Score/PercentualNoPrazo/PercentualAprovado continuam do jeito
+        // que já eram, atribuídos ao dono atual do protocolo inteiro (não foi pedido pra mudar
+        // isso, só o tempo).
+        var temposPorConferente = ConstruirTemposPorConferente(concluidosNoPeriodo);
+
         // RF-45: os KPIs do topo também são "os números dele", não o total da operação — sem
         // isso, um conferente via "atos conferidos" contando o trabalho de todo mundo, com a
         // linha de desempenho logo abaixo mostrando só a dele (achado real: os dois pareciam
         // dados desencontrados, cada um lendo uma fonte diferente).
         var kpis = conferenteRestritoId is { } idRestrito
-            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []))
-            : CalcularKpis(concluidosNoPeriodo);
+            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []), temposPorConferente.GetValueOrDefault(idRestrito, []))
+            : CalcularKpis(concluidosNoPeriodo, temposProprios: null);
 
         var maxVolume = porDono.Count == 0 ? 0 : porDono.Values.Max(lista => lista.Count);
         var maxComplexidadeMedia = porDono.Count == 0
             ? 0
             : porDono.Values.Max(lista => ComplexidadeMedia(lista, catalogoTipos));
 
-        var todosOsDesempenhos = porDono
-            .Select(par => CalcularDesempenho(
-                par.Key, todosConferentes[par.Key], usuarioPorId.GetValueOrDefault(todosConferentes[par.Key].UsuarioId),
-                par.Value, catalogoTipos, maxVolume, maxComplexidadeMedia, mostrarFaixa: conferenteRestritoId is null))
+        // Une quem é dono de algum protocolo concluído no período com quem só aparece em
+        // temposPorConferente (fez um ciclo, mas o protocolo foi reatribuído antes de concluir
+        // de vez) — sem isso, o tempo de quem só teve um ciclo intermediário nunca apareceria em
+        // lugar nenhum do Dashboard, mesmo tendo de fato trabalhado (achado pensando no caso do
+        // 263605: a Ana fez os primeiros 20 min, saiu da escala, o Bruno terminou — sem essa
+        // união, os 20 min da Ana desapareceriam do relatório de produtividade).
+        var idsComAtividadeNoPeriodo = porDono.Keys.Union(temposPorConferente.Keys).Where(todosConferentes.ContainsKey).ToList();
+
+        var todosOsDesempenhos = idsComAtividadeNoPeriodo
+            .Select(id => CalcularDesempenho(
+                id, todosConferentes[id], usuarioPorId.GetValueOrDefault(todosConferentes[id].UsuarioId),
+                porDono.GetValueOrDefault(id, []), temposPorConferente.GetValueOrDefault(id, []), catalogoTipos, maxVolume,
+                maxComplexidadeMedia, mostrarFaixa: conferenteRestritoId is null))
             .OrderByDescending(d => d.Score)
             .ToList();
 
@@ -85,7 +105,12 @@ public sealed class ObterDashboard(
         _ => throw new ArgumentOutOfRangeException(nameof(periodo), periodo, message: null)
     };
 
-    private static KpisDashboard CalcularKpis(IReadOnlyCollection<Protocolo> concluidos)
+    // `temposProprios`: nulo pra visão agregada (o "tempo médio da operação" continua somando o
+    // protocolo inteiro, do início ao fim, não importa quantas pessoas passaram por ele — é
+    // "quanto tempo esse ato leva", não "quanto tempo essa pessoa trabalhou"); uma lista (mesmo
+    // vazia) pra visão restrita de um conferente (RF-45: "os números dele" têm que refletir só
+    // os ciclos que ele mesmo fez, ver ConstruirTemposPorConferente).
+    private static KpisDashboard CalcularKpis(IReadOnlyCollection<Protocolo> concluidos, IReadOnlyCollection<TimeSpan>? temposProprios)
     {
         if (concluidos.Count == 0)
         {
@@ -94,7 +119,7 @@ public sealed class ObterDashboard(
 
         var noPrazo = concluidos.Count(EstaNoPrazo);
         var aprovados = concluidos.Count(p => p.Status == StatusProtocolo.Aprovado);
-        var duracoes = concluidos.Select(p => p.Duracao).Where(d => d is not null).Select(d => d!.Value).ToList();
+        var duracoes = temposProprios ?? concluidos.Select(p => p.Duracao).Where(d => d is not null).Select(d => d!.Value).ToList();
         TimeSpan? tempoMedio = duracoes.Count > 0
             ? TimeSpan.FromTicks((long)duracoes.Average(d => d.Ticks))
             : null;
@@ -104,6 +129,42 @@ public sealed class ObterDashboard(
             (double)noPrazo / concluidos.Count,
             (double)aprovados / concluidos.Count,
             tempoMedio);
+    }
+
+    // Achata cada protocolo concluído em (quem, quanto tempo) por ciclo — um ciclo por
+    // CicloConferencia já encerrado (reabertura), mais o ciclo final/atual (o que está direto em
+    // Protocolo.IniciadoEm/ConcluidoEm/DonoId, sempre do dono de agora). Um protocolo nunca
+    // reaberto vira só uma entrada (o comportamento de sempre); um reaberto duas vezes vira até
+    // três, cada uma na conta de quem de fato conferiu aquele pedaço.
+    private static Dictionary<Guid, List<TimeSpan>> ConstruirTemposPorConferente(IReadOnlyCollection<Protocolo> concluidos)
+    {
+        var porConferente = new Dictionary<Guid, List<TimeSpan>>();
+
+        void Adiciona(Guid conferenteId, TimeSpan duracao)
+        {
+            if (!porConferente.TryGetValue(conferenteId, out var lista))
+            {
+                lista = [];
+                porConferente[conferenteId] = lista;
+            }
+
+            lista.Add(duracao);
+        }
+
+        foreach (var protocolo in concluidos)
+        {
+            foreach (var ciclo in protocolo.CiclosAnteriores)
+            {
+                Adiciona(ciclo.ConferenteId, ciclo.Duracao);
+            }
+
+            if (protocolo.DonoId is { } donoId && protocolo.IniciadoEm is { } inicio && protocolo.ConcluidoEm is { } fim)
+            {
+                Adiciona(donoId, fim - inicio);
+            }
+        }
+
+        return porConferente;
     }
 
     private static bool EstaNoPrazo(Protocolo p) => p.VencimentoEm is null || p.ConcluidoEm is null || p.ConcluidoEm <= p.VencimentoEm;
@@ -119,13 +180,16 @@ public sealed class ObterDashboard(
 
     private static DesempenhoConferente CalcularDesempenho(
         Guid conferenteId, Conferente conferente, Usuario? usuario, IReadOnlyCollection<Protocolo> protocolosDoConferente,
+        IReadOnlyCollection<TimeSpan> temposProprios,
         IReadOnlyDictionary<Guid, TipoAto> catalogo, int maxVolume, double maxComplexidadeMedia, bool mostrarFaixa)
     {
         var volume = protocolosDoConferente.Count;
         var noPrazo = protocolosDoConferente.Count(EstaNoPrazo);
         var aprovados = protocolosDoConferente.Count(p => p.Status == StatusProtocolo.Aprovado);
-        var duracoes = protocolosDoConferente.Select(p => p.Duracao).Where(d => d is not null).Select(d => d!.Value).ToList();
-        TimeSpan? tempoMedio = duracoes.Count > 0 ? TimeSpan.FromTicks((long)duracoes.Average(d => d.Ticks)) : null;
+        // TempoMedio vem dos ciclos que esta pessoa de fato conferiu (ConstruirTemposPorConferente),
+        // não de Protocolo.Duracao — um protocolo que ela só herdou depois de uma reabertura
+        // (RF-24c) carrega tempo de ciclos anteriores que não são dela.
+        TimeSpan? tempoMedio = temposProprios.Count > 0 ? TimeSpan.FromTicks((long)temposProprios.Average(d => d.Ticks)) : null;
         var complexidadeMedia = ComplexidadeMedia(protocolosDoConferente, catalogo);
 
         var pctNoPrazo = volume == 0 ? 0 : (double)noPrazo / volume;

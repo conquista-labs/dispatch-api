@@ -139,6 +139,10 @@ public class ProtocoloTests
     {
         var protocolo = NovoProtocolo();
         var inicioOriginal = DateTimeOffset.UtcNow;
+        // ReabrirConferencia só registra o ciclo anterior com um DonoId de verdade (precisa
+        // saber de quem foi aquele ciclo, ver CicloConferencia) — reflete o fluxo real, onde
+        // IniciarConferencia nunca acontece sem AtribuirA antes.
+        protocolo.AtribuirA(Guid.NewGuid(), inicioOriginal);
         protocolo.IniciarConferencia(inicioOriginal);
         protocolo.Reprovar(inicioOriginal.AddMinutes(20)); // 1º ciclo: 20 min
 
@@ -158,6 +162,7 @@ public class ProtocoloTests
     {
         var protocolo = NovoProtocolo();
         var t0 = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(Guid.NewGuid(), t0);
         protocolo.IniciarConferencia(t0);
         protocolo.Reprovar(t0.AddMinutes(10)); // ciclo 1: 10 min
 
@@ -170,6 +175,42 @@ public class ProtocoloTests
         protocolo.Aprovar(t0.AddHours(2).AddMinutes(5)); // ciclo 3: 5 min
 
         Assert.Equal(TimeSpan.FromMinutes(30), protocolo.Duracao);
+    }
+
+    // O ponto inteiro de CicloConferencia (em vez de um TimeSpan acumulado cego) é o Dashboard
+    // conseguir saber DE QUEM foi cada ciclo — não só quanto tempo passou. Prova isso direto,
+    // não só a soma final.
+    [Fact]
+    public void ReabrirConferencia_RegistraOCicloComQuemEraODonoNaquelaHora()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicioOriginal = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicioOriginal);
+        protocolo.IniciarConferencia(inicioOriginal);
+        protocolo.Reprovar(inicioOriginal.AddMinutes(20));
+
+        protocolo.ReabrirConferencia(inicioOriginal.AddHours(2));
+
+        var ciclo = Assert.Single(protocolo.CiclosAnteriores);
+        Assert.Equal(donoId, ciclo.ConferenteId);
+        Assert.Equal(inicioOriginal, ciclo.IniciadoEm);
+        Assert.Equal(inicioOriginal.AddMinutes(20), ciclo.ConcluidoEm);
+        Assert.Equal(TimeSpan.FromMinutes(20), ciclo.Duracao);
+    }
+
+    [Fact]
+    public void ReabrirConferencia_SemDonoNuncaTerAcontecido_NaoRegistraCiclo()
+    {
+        // Reabrir um protocolo que nunca chegou a ser conferido de verdade (sem IniciadoEm/
+        // ConcluidoEm ainda) não tem ciclo nenhum pra fechar — guarda de nulidade, não é um
+        // cenário real (a Application só chama isso pra Aprovado/Reprovado), mas o Domain não
+        // deve quebrar nem inventar um ciclo vazio se for chamado fora desse invariante.
+        var protocolo = NovoProtocolo();
+
+        protocolo.ReabrirConferencia(DateTimeOffset.UtcNow);
+
+        Assert.Empty(protocolo.CiclosAnteriores);
     }
 
     [Fact]

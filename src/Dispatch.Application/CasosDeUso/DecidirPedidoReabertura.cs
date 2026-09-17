@@ -3,10 +3,12 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // RF-24c: a distribuidora decide um pedido pendente — aprovar reabre o protocolo de verdade
-// (mesmo dono, volta pra Atribuído — cronômetro só liga quando ela chamar "iniciar" de novo);
-// negar só marca o pedido, o protocolo não muda.
+// (mesmo dono, volta pra Atribuído — cronômetro só liga quando ela chamar "iniciar" de novo,
+// exceto se esse dono já saiu da escala nesse meio-tempo, aí vai pro pool — ver
+// ReabrirConferencia.cs, mesmo raciocínio); negar só marca o pedido, o protocolo não muda.
 public sealed class DecidirPedidoReabertura(
-    IPedidoReaberturaRepository pedidos, IProtocoloRepository protocolos, IRelogio relogio, IUnitOfWork unitOfWork)
+    IPedidoReaberturaRepository pedidos, IProtocoloRepository protocolos, IConferenteRepository conferentes,
+    IRelogio relogio, IUnitOfWork unitOfWork)
 {
     public async Task<ResultadoDecidirPedidoReabertura> ExecutarAsync(
         Guid pedidoId, bool aprovar, Guid decididoPorId, CancellationToken cancellationToken = default)
@@ -36,7 +38,13 @@ public sealed class DecidirPedidoReabertura(
                 return new ResultadoDecidirPedidoReabertura.StatusInvalido();
             }
 
+            var donoAnterior = protocolo.DonoId is { } donoId ? await conferentes.ObterPorIdAsync(donoId, cancellationToken) : null;
             protocolo.ReabrirConferencia(agora);
+            if (donoAnterior is null || !donoAnterior.NaEscala)
+            {
+                protocolo.EnviarParaPool();
+            }
+
             pedido.Aprovar(decididoPorId, agora);
         }
         else

@@ -51,13 +51,17 @@ public sealed class Protocolo
     // direta no painel de detalhe).
     public DateTimeOffset? ReabertoEm { get; private set; }
 
-    // Achado em uso real (produção): antes de existir este campo, reabrir um protocolo já
-    // concluído sobrescrevia `IniciadoEm`/`ConcluidoEm` na hora — a duração final só refletia o
-    // último ciclo (ex.: 5 min da reabertura), perdendo o tempo da conferência original inteira.
-    // Guarda a soma de todo ciclo de conferência já encerrado antes do atual (zero se nunca
-    // reaberto) — `ReabrirConferencia` soma o ciclo que está terminando aqui, antes de zerar
+    // Achado em uso real (produção): antes de existir isso, reabrir um protocolo já concluído
+    // sobrescrevia `IniciadoEm`/`ConcluidoEm` na hora — a duração final só refletia o último
+    // ciclo (ex.: 5 min da reabertura), perdendo o tempo da conferência original inteira. Um
+    // registro por ciclo (não só a soma cega de um TimeSpan) porque o Dashboard (RF-43/45/46)
+    // usa esse tempo pra medir carga/produtividade por pessoa — precisa saber QUEM fez cada
+    // ciclo, não só quanto tempo, senão um ato reaberto e reatribuído (RF-24c, só quando o dono
+    // original saiu da escala, RF-27) jogaria o tempo de uma pessoa na conta de outra.
+    // `ReabrirConferencia` adiciona aqui o ciclo que está terminando, antes de zerar
     // `IniciadoEm`/`ConcluidoEm` pro próximo.
-    public TimeSpan TempoAcumuladoAnterior { get; private set; } = TimeSpan.Zero;
+    private readonly List<CicloConferencia> _ciclosAnteriores = [];
+    public IReadOnlyList<CicloConferencia> CiclosAnteriores => _ciclosAnteriores;
 
     // RF-18i/j: só tem valor quando Status == Excluido — guarda o que era antes, pra
     // Restaurar() devolver exato (mesmo vencimento/dono/histórico, nada mais muda).
@@ -70,11 +74,13 @@ public sealed class Protocolo
     public void DefinirPrioridade(Prioridade prioridade) => Prioridade = prioridade;
 
     // RF-24: "duração" do ato — só existe depois de concluído. Soma o tempo do ciclo atual com
-    // o de qualquer reabertura anterior (TempoAcumuladoAnterior) — sem isso, um protocolo
+    // o de qualquer ciclo anterior já encerrado (CiclosAnteriores) — sem isso, um protocolo
     // reaberto mostraria só a duração da última rodada, escondendo o tempo real que ficou em
     // conferência desde o início.
     public TimeSpan? Duracao =>
-        IniciadoEm is { } inicio && ConcluidoEm is { } fim ? TempoAcumuladoAnterior + (fim - inicio) : null;
+        IniciadoEm is { } inicio && ConcluidoEm is { } fim
+            ? _ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo.Duracao)
+            : null;
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
@@ -208,11 +214,13 @@ public sealed class Protocolo
     // pela ação direta "reabrir conferência" no painel de detalhe.
     public void ReabrirConferencia(DateTimeOffset agora)
     {
-        // Acumula o ciclo que está terminando agora antes de zerá-lo — sem isso, o tempo da
-        // conferência original (antes desta reabertura) desaparecia da Duracao final.
-        if (IniciadoEm is { } inicioDoCiclo && ConcluidoEm is { } fimDoCiclo)
+        // Registra o ciclo que está terminando agora, com quem foi o dono dele, antes de zerar
+        // IniciadoEm/ConcluidoEm — sem isso, o tempo da conferência original (antes desta
+        // reabertura) desaparecia da Duracao final, e o Dashboard não teria como saber de quem
+        // foi esse tempo se o protocolo for reatribuído depois.
+        if (IniciadoEm is { } inicioDoCiclo && ConcluidoEm is { } fimDoCiclo && DonoId is { } donoDoCiclo)
         {
-            TempoAcumuladoAnterior += fimDoCiclo - inicioDoCiclo;
+            _ciclosAnteriores.Add(new CicloConferencia(donoDoCiclo, inicioDoCiclo, fimDoCiclo));
         }
 
         Status = StatusProtocolo.Atribuido;

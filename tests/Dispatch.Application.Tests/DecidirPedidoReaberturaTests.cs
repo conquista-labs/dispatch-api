@@ -6,7 +6,7 @@ public class DecidirPedidoReaberturaTests
 {
     private static readonly DateTimeOffset Agora = new(2026, 8, 29, 10, 0, 0, TimeSpan.Zero);
 
-    private static Conferente NovoConferente() => new(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+    private static Conferente NovoConferente(bool naEscala = true) => new(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala, cargaAtual: 0);
 
     private static Protocolo NovoProtocoloConcluido(Conferente dono)
     {
@@ -25,7 +25,8 @@ public class DecidirPedidoReaberturaTests
         var pedido = new PedidoReabertura(Guid.NewGuid(), protocolo.Id, conferente.Id, Agora.AddMinutes(-5));
         var distribuidoraId = Guid.NewGuid();
         var casoDeUso = new DecidirPedidoReabertura(
-            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: true, distribuidoraId);
 
@@ -38,6 +39,27 @@ public class DecidirPedidoReaberturaTests
         Assert.Equal(Agora, protocolo.ReabertoEm);
     }
 
+    // Achado pensando no caso real (protocolo 263605): se o conferente que pediu a reabertura
+    // já saiu da escala até a distribuidora decidir, o protocolo não pode ficar preso em
+    // Atribuído pra ele — vai pro pool (mesmo raciocínio de MarcarPresenca/RF-27).
+    [Fact]
+    public async Task Aprovar_VaiParaOPool_QuandoOSolicitanteJaSaiuDaEscala()
+    {
+        var conferente = NovoConferente(naEscala: false);
+        var protocolo = NovoProtocoloConcluido(conferente);
+        var pedido = new PedidoReabertura(Guid.NewGuid(), protocolo.Id, conferente.Id, Agora.AddMinutes(-5));
+        var casoDeUso = new DecidirPedidoReabertura(
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: true, Guid.NewGuid());
+
+        Assert.IsType<ResultadoDecidirPedidoReabertura.Sucesso>(resultado);
+        Assert.Equal(StatusPedidoReabertura.Aprovado, pedido.Status);
+        Assert.Equal(StatusProtocolo.Pool, protocolo.Status);
+        Assert.Null(protocolo.DonoId);
+    }
+
     [Fact]
     public async Task Negar_SoMarcaOPedido_ProtocoloNaoMuda()
     {
@@ -46,7 +68,8 @@ public class DecidirPedidoReaberturaTests
         var pedido = new PedidoReabertura(Guid.NewGuid(), protocolo.Id, conferente.Id, Agora.AddMinutes(-5));
         var distribuidoraId = Guid.NewGuid();
         var casoDeUso = new DecidirPedidoReabertura(
-            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: false, distribuidoraId);
 
@@ -61,7 +84,8 @@ public class DecidirPedidoReaberturaTests
         var pedido = new PedidoReabertura(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Agora.AddMinutes(-5));
         pedido.Cancelar();
         var casoDeUso = new DecidirPedidoReabertura(
-            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([]), new FakeConferenteRepository([]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: true, Guid.NewGuid());
 
@@ -79,7 +103,8 @@ public class DecidirPedidoReaberturaTests
         var pedido = new PedidoReabertura(Guid.NewGuid(), protocolo.Id, conferente.Id, Agora.AddMinutes(-5));
         protocolo.Excluir();
         var casoDeUso = new DecidirPedidoReabertura(
-            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakePedidoReaberturaRepository([pedido]), new FakeProtocoloRepository([protocolo]), new FakeConferenteRepository([conferente]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(pedido.Id, aprovar: true, Guid.NewGuid());
 
@@ -92,7 +117,8 @@ public class DecidirPedidoReaberturaTests
     public async Task IdInexistente_NaoEncontrado()
     {
         var casoDeUso = new DecidirPedidoReabertura(
-            new FakePedidoReaberturaRepository([]), new FakeProtocoloRepository([]), new FakeRelogio(Agora), new FakeUnitOfWork());
+            new FakePedidoReaberturaRepository([]), new FakeProtocoloRepository([]), new FakeConferenteRepository([]),
+            new FakeRelogio(Agora), new FakeUnitOfWork());
 
         var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), aprovar: true, Guid.NewGuid());
 

@@ -2492,3 +2492,116 @@ atribuído, iniciado, aprovado; reaberto pela distribuidora — confirmado via `
 `Atribuido`/`IniciadoEm` nulo; confirmado via `GET /minha-fila` que aparece em `atribuidos`, não
 em `emConferencia`; iniciado de novo e concluído — `Duracao` final soma os dois ciclos
 corretamente. 384 testes automatizados no total (114 Domain + 270 Application).
+
+## `TempoAcumuladoAnterior` vira `CiclosAnteriores` — Dashboard não pode mais herdar tempo de outra pessoa
+
+Continuação direta da seção acima, mesma conversa com o dono. Ele testou o fix e reportou dois
+pontos novos, os dois genuínos:
+
+1. **"Às vezes um conferente pede reabertura e a distribuidora aprova fora do horário de
+   trabalho dele — esse tempo não pode contar."** Já resolvido de graça pelo fix anterior (o
+   cronômetro só liga quando `IniciarConferencia` roda de novo, não na aprovação) — só faltava
+   confirmar, o que o teste `ReabrirConferenciaEConcluirDeNovo_DuracaoSomaOsDoisCiclos` (seção
+   acima) já prova com um intervalo de 1h entre reabrir e iniciar.
+2. **A pergunta de verdade, que abriu escopo maior**: "quando o ato reabre, ele sempre volta pro
+   mesmo conferente, exceto se a pessoa estiver fora da escala" — e esse tempo de conferência
+   "é usado pra medir carga/produtividade" numa conta de bonificação **fora do sistema** (RF-46
+   só define o score = 40% volume + 30% prazo + 20% qualidade + 10% complexidade, sem nenhuma
+   parcela de tempo — confirmado relendo o documento de requisitos antes de mexer; o uso real do
+   tempo é externo ao app). Confirmado com o dono: "não podemos perder nada desses dados" — dado
+   o peso financeiro disso, valia a pena fazer o modelo certo, não um atalho.
+
+**Causa raiz do gap**: `TempoAcumuladoAnterior` (`TimeSpan`, seção acima) somava certo pra
+`Duracao`, mas era cego — não sabia **de quem** era cada ciclo. Se um protocolo reabre e é
+reatribuído pra outra pessoa (só acontece quando o dono original saiu da escala, ver abaixo), o
+Dashboard (`ObterDashboard.CalcularDesempenho`) lia `Protocolo.Duracao` inteiro e jogava tudo na
+conta de quem quer que fosse o dono **atual** — a pessoa nova herdava o tempo que a pessoa
+antiga já tinha gastado, e a pessoa antiga não aparecia em lugar nenhum.
+
+### `CicloConferencia` — um registro por ciclo, não um acumulador cego
+
+- **`CicloConferencia.cs`** (novo, `Dispatch.Domain`) — `ConferenteId`/`IniciadoEm`/`ConcluidoEm`
+  (+`Duracao` computada). Um ciclo de conferência já encerrado.
+- **`Protocolo.cs`** — `TempoAcumuladoAnterior : TimeSpan` (getter só, sem setter público) virou
+  `CiclosAnteriores : IReadOnlyList<CicloConferencia>` (mesmo padrão de encapsulamento, backing
+  field privado `_ciclosAnteriores`). `ReabrirConferencia` agora **adiciona um
+  `CicloConferencia`** ao fechar o ciclo (com o `DonoId` de agora, antes de zerar
+  `IniciadoEm`/`ConcluidoEm`) em vez de somar um `TimeSpan`. `Duracao` continua sendo a soma de
+  tudo (ciclos anteriores + o ciclo atual, se concluído) — o valor exibido no card não muda nada.
+- **`ProtocoloConfiguration.cs`** — primeira coleção-filha do projeto (`OwnsMany`), tabela nova
+  `ciclos_conferencia` (`protocolo_id` FK com `Cascade`, `conferente_id`, `iniciado_em`,
+  `concluido_em`, chave própria via shadow property `Id` — `CicloConferencia` não tem
+  identidade fora do protocolo, é auditoria histórica, não uma entidade buscável sozinha).
+  **Gotcha novo de EF Core, documentado aqui pela primeira vez**: coleção owned (`OwnsMany`),
+  diferente de uma propriedade escalar, não precisa de `UsePropertyAccessMode` explícito — o EF
+  acha o backing field `_ciclosAnteriores` sozinho pela convenção de nome
+  (`_<propriedade em camelCase>`), a mesma convenção que já resolve `IReadOnlyList<T>` sem
+  setter público em outros cantos do projeto. Índice em `conferente_id` pensando no consumidor
+  real (`ObterDashboard` somando tempo por pessoa).
+- **Migration `AdicionaCiclosDeConferencia`** — cria a tabela, dropa
+  `tempo_acumulado_anterior`. **Backfill obrigatório antes de dropar** (achado pensando em "não
+  podemos perder nada desses dados"): protocolos que já tinham `TempoAcumuladoAnterior > 0`
+  antes desta migration só tinham a soma cega, sem saber de quem era — não dá pra reconstruir o
+  histórico exato (não sabemos os horários reais de cada ciclo passado), mas em vez de deixar o
+  dado sumir, um `INSERT` sintetiza um único ciclo por protocolo, atribuído ao dono **atual**
+  (`COALESCE(iniciado_em, reaberto_em) - tempo_acumulado_anterior` até
+  `COALESCE(iniciado_em, reaberto_em)`) — o cenário confirmado como esmagadoramente comum é o
+  mesmo conferente refazer a conferência, então essa aproximação é honesta na prática. Conferido
+  contra produção antes de rodar: só **1 protocolo** (o próprio 263605) tinha tempo acumulado,
+  com dono e âncora de horário presentes — nenhum dado ficou de fora. `Down()` é simétrico
+  (soma os ciclos de volta pro `TimeSpan` antes de derrubar a tabela).
+
+### `ObterDashboard.cs` — tempo por conferente vem dos ciclos, não do protocolo inteiro
+
+- **`ConstruirTemposPorConferente`** (novo, privado) — achata cada protocolo concluído em
+  `(conferenteId, duração)` por ciclo: um por `CicloConferencia` já encerrado, mais o ciclo
+  final/atual (o que ainda está direto em `Protocolo.IniciadoEm`/`ConcluidoEm`/`DonoId`, sempre
+  do dono de agora). Devolve `Dictionary<Guid, List<TimeSpan>>`.
+- **`CalcularKpis`** ganhou um parâmetro `temposProprios` — `null` pra visão agregada (o "tempo
+  médio da operação" e o "por tipo de ato" continuam somando o protocolo inteiro, não interessa
+  quantas pessoas passaram por ele — é "quanto tempo esse ato leva", não "quanto tempo essa
+  pessoa trabalhou", então **não mudou**); uma lista (mesmo vazia) pra visão restrita de um
+  conferente — RF-45 ("os números dele") agora reflete só os ciclos que ele mesmo fez.
+- **`CalcularDesempenho`** — `TempoMedio` (a tabela de desempenho, e a linha "meus números")
+  vem de `temposProprios` (os ciclos da pessoa), não mais de `protocolosDoConferente.Select(p =>
+  p.Duracao)`. **Volume/Score/PercentualNoPrazo/PercentualAprovado/ComplexidadeMedia não
+  mudaram** — continuam do dono atual do protocolo inteiro, escopo que o dono não pediu pra
+  mexer.
+- **Achado corrigindo, não pedido explicitamente**: a lista de desempenho (`todosOsDesempenhos`)
+  antes só iterava `porDono` (quem é dono de algum protocolo concluído no período) — alguém que
+  fez um ciclo e teve o protocolo reatribuído antes de concluir de vez (o cenário raro: saiu da
+  escala no meio) nunca apareceria em lugar nenhum, mesmo tendo de fato trabalhado. Corrigido
+  unindo `porDono.Keys` com `temposPorConferente.Keys` — essa pessoa aparece com `Volume: 0`
+  (não é dona de nada agora) mas `TempoMedio` refletindo o que ela realmente fez.
+
+### RF-27 aplicado à reabertura — "fora da escala" não fica preso em Atribuído
+
+Fechando a pergunta "sempre volta pro mesmo, exceto se a pessoa estiver fora da escala":
+`ReabrirConferencia.cs` e `DecidirPedidoReabertura.cs` ganharam `IConferenteRepository` — depois
+de `protocolo.ReabrirConferencia(agora)`, checam se o dono (o mesmo de antes, `ReabrirConferencia`
+não muda `DonoId`) ainda está `NaEscala`; se não, chamam `protocolo.EnviarParaPool()` (mesma
+transição que `MarcarPresenca(ausente)` já usa pro RF-27) em vez de deixar em Atribuído pra
+alguém que ninguém está mais olhando. `donoAnterior is null` (o `Conferente` sumiu de verdade)
+trata como não-elegível também, mesmo raciocínio conservador.
+
+Testes novos: `ReabrirConferenciaTests.ProtocoloConcluido_VaiParaOPool_QuandoODonoSaiuDaEscala` e
+`DecidirPedidoReaberturaTests.Aprovar_VaiParaOPool_QuandoOSolicitanteJaSaiuDaEscala` — os testes
+existentes que verificavam o caminho feliz (`ProtocoloConcluido_Reabre`,
+`Aprovar_ReabreOProtocoloComMesmoDono`) foram renomeados e passaram a criar o `Conferente` com
+`naEscala: true` explícito (antes não precisavam de `Conferente` nenhum, só de um `DonoId` cru).
+
+`ObterDashboardTests.ProtocoloReabertoEReatribuido_TempoMedioNaoHerdaDoConferenteAnterior` —
+prova o cenário completo: Ana faz 20 min, reprova; reabre e é reatribuído pro Bruno (ela saiu da
+escala); Bruno faz 5 min e aprova. Bruno fica com `Volume: 1`/`TempoMedio: 5min` (dono atual,
+comportamento de sempre); Ana fica com `Volume: 0`/`TempoMedio: 20min` (não é dona de nada, mas
+o tempo dela não desaparece); `Protocolo.Duracao` continua somando os 25 min certinho.
+
+Verificado ponta a ponta contra o Postgres local (não só teste unitário, dado o peso financeiro
+do dado): cenário completo via API real — protocolo criado, atribuído à Conferente RF27,
+reprovado (1º ciclo), reaberto e reatribuído à Conferente Visual, aprovado (2º ciclo) —
+`GET /dashboard` confirmou RF27 com `volume: 0`/`tempoMedio` batendo exatamente com a duração
+do ciclo dela sozinho (não a soma dos dois), e Visual com `volume: 1`/`tempoMedio` batendo só
+com o ciclo dela. Testado também o caminho de "fora da escala": conferente marcada ausente via
+`POST /conferentes/{id}/presenca`, protocolo reaberto — confirmado via `psql` que foi pro Pool
+(`dono_id` nulo), não ficou preso em Atribuído. 389 testes automatizados no total (116 Domain +
+273 Application).
