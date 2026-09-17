@@ -73,6 +73,19 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
             // acima pra RegraAplicadaId.
             ciclo.HasIndex(c => c.ConferenteId);
         });
+
+        // Uma pausa já encerrada (ver PausaConferencia.cs) — mesmo padrão de coleção-filha do
+        // CiclosAnteriores acima, só que sem FK pra conferente (uma pausa é sempre do dono atual,
+        // não muda de pessoa como um ciclo reaberto pode mudar).
+        builder.OwnsMany(p => p.Pausas, pausa =>
+        {
+            pausa.ToTable("pausas_conferencia");
+            pausa.WithOwner().HasForeignKey("protocolo_id");
+            pausa.Property<int>("Id").ValueGeneratedOnAdd();
+            pausa.HasKey("Id");
+            pausa.Property(p => p.PausadoEm).IsRequired();
+            pausa.Property(p => p.RetomadoEm).IsRequired();
+        });
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
         // travar via Restrict) a leitura de um protocolo antigo que a citou. Sem FK, essa coluna

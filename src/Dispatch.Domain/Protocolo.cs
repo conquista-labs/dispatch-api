@@ -69,6 +69,15 @@ public sealed class Protocolo
     private readonly List<CicloConferencia> _ciclosAnteriores = [];
     public IReadOnlyList<CicloConferencia> CiclosAnteriores => _ciclosAnteriores;
 
+    // Achado numa conversa com o dono, pensando em uso real: nada garantia que "pausar" não
+    // virasse um jeito de esconder tempo do tempo médio (usado numa conta de bonificação
+    // externa, ver ObterDashboard.cs) — pausar "de mentira" bem na hora que o trabalho ficaria
+    // lento. Decisão consciente: não bloquear nem limitar (time pequeno, confiança resolve),
+    // só garantir que fica auditável — `Retomar` registra aqui cada pausa já encerrada (quando
+    // começou, quando voltou), pro painel de detalhe poder mostrar "pausado Nx, M min no total".
+    private readonly List<PausaConferencia> _pausas = [];
+    public IReadOnlyList<PausaConferencia> Pausas => _pausas;
+
     // RF-18i/j: só tem valor quando Status == Excluido — guarda o que era antes, pra
     // Restaurar() devolver exato (mesmo vencimento/dono/histórico, nada mais muda).
     public StatusProtocolo? StatusAntesDeExcluir { get; private set; }
@@ -255,6 +264,11 @@ public sealed class Protocolo
     // faz na primeira vez (Status já continuava Conferindo durante a pausa, não muda aqui).
     public void Retomar(DateTimeOffset agora)
     {
+        if (PausadoEm is { } pausadoEm)
+        {
+            _pausas.Add(new PausaConferencia(pausadoEm, agora));
+        }
+
         IniciadoEm = agora;
         PausadoEm = null;
     }

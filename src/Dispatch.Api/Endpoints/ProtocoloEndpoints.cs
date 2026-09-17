@@ -320,13 +320,14 @@ public static class ProtocoloEndpoints
         return new DetalheProtocoloResponse(
             p.Id, p.Numero, p.TipoAtoId, p.TipoAtoNomeOriginal, p.EscreventeId, p.Etapa, p.Prioridade, p.AndamentoEm,
             p.Prazo?.Tipo, p.VencimentoEm, p.Status, p.DonoId, p.MotivoExcecao, p.Observacao,
-            p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId, p.CorrigidoEm, p.ReabertoEm,
+            p.AtribuidoEm, p.IniciadoEm, p.ConcluidoEm, p.RegraAplicadaId, p.CorrigidoEm, p.ReabertoEm, p.PausadoEm,
             p.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
             resultado.Avaliacoes.Select(a => new AlcadaConferenteResponse(
                 a.Conferente.Id, a.Elegivel, a.Decisao.RegraAplicada?.Id, a.Decisao.Motivo,
                 a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList(),
             resultado.HistoricoConferencias.Select(h => new HistoricoConferenciaResponse(
-                h.Id, h.AndamentoEm, h.Status, h.DonoId, h.ConcluidoEm)).ToList());
+                h.Id, h.AndamentoEm, h.Status, h.DonoId, h.ConcluidoEm)).ToList(),
+            p.Pausas.Select(pausa => new PausaConferenciaResponse(pausa.PausadoEm, pausa.RetomadoEm, pausa.Duracao)).ToList());
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
@@ -405,9 +406,14 @@ public sealed record DetalheProtocoloResponse(
     Guid? RegraAplicadaId,
     DateTimeOffset? CorrigidoEm,
     DateTimeOffset? ReabertoEm,
+    DateTimeOffset? PausadoEm,
     FaixaSemaforo? Semaforo,
     IReadOnlyList<AlcadaConferenteResponse> Alcada,
-    IReadOnlyList<HistoricoConferenciaResponse> HistoricoConferencias);
+    IReadOnlyList<HistoricoConferenciaResponse> HistoricoConferencias,
+    // Pedido do dono ("como garantir que ninguém abusa da pausa pra melhorar o tempo dela?") —
+    // não bloqueia nada, só deixa auditável: quantas vezes e por quanto tempo este ato ficou
+    // pausado. Front decide como resumir ("pausado 2x, 47min no total").
+    IReadOnlyList<PausaConferenciaResponse> Pausas);
 
 // RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto
 // (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
@@ -419,6 +425,9 @@ public sealed record AlcadaConferenteResponse(Guid ConferenteId, bool Elegivel, 
 // manda o fato cru" de todo o resto do projeto.
 public sealed record HistoricoConferenciaResponse(
     Guid ProtocoloId, DateTimeOffset AndamentoEm, StatusProtocolo Status, Guid? DonoId, DateTimeOffset? ConcluidoEm);
+
+// Uma pausa já encerrada (ver PausaConferencia.cs) — visibilidade, não bloqueio.
+public sealed record PausaConferenciaResponse(DateTimeOffset PausadoEm, DateTimeOffset RetomadoEm, TimeSpan Duracao);
 
 // Motor v3: uma entrada por camada que opinou sobre o caso (nível/equipe/pessoa, mais reserva
 // se houver) — "Camada" já vem como o texto legível do Domain (ver ResolvedorAlcada.Explicar),

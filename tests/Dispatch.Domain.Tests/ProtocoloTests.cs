@@ -311,6 +311,49 @@ public class ProtocoloTests
         Assert.Null(protocolo.PausadoEm);
     }
 
+    // Achado numa conversa com o dono: nada garantia que "pausar" não virasse um jeito de
+    // esconder tempo do tempo médio (usado numa conta de bonificação externa) sem deixar
+    // rastro nenhum. Retomar precisa registrar cada pausa já encerrada, não só descartá-la.
+    [Fact]
+    public void Retomar_RegistraAPausaEncerrada()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+
+        var pausadoEm = inicio.AddMinutes(10);
+        protocolo.Pausar(pausadoEm);
+        var retomadoEm = pausadoEm.AddHours(1);
+        protocolo.Retomar(retomadoEm);
+
+        var pausa = Assert.Single(protocolo.Pausas);
+        Assert.Equal(pausadoEm, pausa.PausadoEm);
+        Assert.Equal(retomadoEm, pausa.RetomadoEm);
+        Assert.Equal(TimeSpan.FromHours(1), pausa.Duracao);
+    }
+
+    [Fact]
+    public void PausarERetomarVariasVezes_AcumulaUmaPausaPorCiclo()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+
+        protocolo.Pausar(inicio.AddMinutes(10));
+        protocolo.Retomar(inicio.AddMinutes(40)); // 1ª pausa: 30 min
+
+        protocolo.Pausar(inicio.AddMinutes(50));
+        protocolo.Retomar(inicio.AddHours(2)); // 2ª pausa: 70 min
+
+        Assert.Equal(2, protocolo.Pausas.Count);
+        Assert.Equal(TimeSpan.FromMinutes(30), protocolo.Pausas[0].Duracao);
+        Assert.Equal(TimeSpan.FromMinutes(70), protocolo.Pausas[1].Duracao);
+    }
+
     [Fact]
     public void PausarERetomarEConcluir_DuracaoSomaOsDoisPedacosSemAHoraDaPausa()
     {

@@ -2672,3 +2672,34 @@ concluir") e que `GET /minha-fila` mostra em `emConferencia` com `iniciadoEm: nu
 preenchido; retomado e concluído depois — `duracao` final bateu exatamente com a soma dos dois
 pedaços medidos (1.06s + 2.05s = 3.11s), excluindo o intervalo da pausa (~13s). 405 testes
 automatizados no total (120 Domain + 285 Application).
+
+### Visibilidade das pausas — "como garantir que ninguém abusa da pausa pra melhorar o tempo dela?"
+
+Pergunta do dono, feita na mesma conversa, antes de aplicar a migration em produção — genuína e
+importante, já que esse tempo alimenta uma conta real de bonificação (ver seção "CiclosAnteriores
+vira Dashboard", acima). Hoje pausar não tem NENHUM controle nem registro: a pessoa pode pausar
+quantas vezes quiser, por quanto tempo quiser, sem ninguém saber depois. Decisão do dono:
+**visibilidade, não bloqueio** — time pequeno, confiança resolve, mas o dado não pode ficar
+invisível.
+
+- **`PausaConferencia.cs`** (novo, `Dispatch.Domain`) — `PausadoEm`/`RetomadoEm` (+`Duracao`
+  computada), uma pausa já encerrada. Mesmo raciocínio de `CicloConferencia`, mas mais simples:
+  uma pausa é sempre do dono atual (nunca muda de pessoa como um ciclo reaberto pode mudar), não
+  precisa de `ConferenteId`.
+- **`Protocolo.cs`** — `Pausas : IReadOnlyList<PausaConferencia>` (nova coleção-filha, mesmo
+  padrão de `CiclosAnteriores`). `Retomar(agora)` agora registra a pausa que está terminando
+  (`PausadoEm` → `agora`) antes de limpar `PausadoEm` — antes, esse intervalo simplesmente
+  desaparecia, sem rastro nenhum.
+- **`ProtocoloConfiguration.cs`** — `OwnsMany(p => p.Pausas, ...)`, tabela `pausas_conferencia`
+  (sem FK de conferente, só `protocolo_id`). Migration `AdicionaHistoricoDePausas` (aditiva, só
+  `CreateTable`).
+- **`DetalheProtocoloResponse`** (`GET /protocolos/{id}/detalhe`) ganha `PausadoEm` (estado atual,
+  se estiver pausado agora) e `Pausas: PausaConferenciaResponse[]` (`PausadoEm`/`RetomadoEm`/
+  `Duracao` de cada pausa já encerrada) — front decide como resumir.
+
+Testes novos: `ProtocoloTests.Retomar_RegistraAPausaEncerrada` e
+`PausarERetomarVariasVezes_AcumulaUmaPausaPorCiclo` (duas pausas seguidas, cada uma com sua
+própria duração, não uma soma cega). Verificado ponta a ponta: protocolo pausado e retomado duas
+vezes seguidas, `GET /protocolos/{id}/detalhe` devolvendo as 2 pausas certinhas (`pausadoEm`/
+`retomadoEm`/`duracao` batendo com os intervalos reais medidos). 407 testes automatizados no
+total (122 Domain + 285 Application).
