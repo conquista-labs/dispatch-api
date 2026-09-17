@@ -2605,3 +2605,26 @@ com o ciclo dela. Testado também o caminho de "fora da escala": conferente marc
 `POST /conferentes/{id}/presenca`, protocolo reaberto — confirmado via `psql` que foi pro Pool
 (`dono_id` nulo), não ficou preso em Atribuído. 389 testes automatizados no total (116 Domain +
 273 Application).
+
+## "Atribuídas a você" também ordenada por vencimento
+
+Pedido do dono: o pool disponível já vinha ordenado por vencimento (achado numa auditoria
+anterior, ver "Pool ordenado + '+N protocolos' em Minha fila" no `dispatch-web/CLAUDE.md`), mas
+`ObterAtribuidosAAsync` (repositório) não tinha `ORDER BY` nenhum — a ordem de "Atribuídas a
+você" ficava por conta do que o Postgres decidisse devolver, não garantida.
+
+`ObterMinhaFila.ExecutarAsync` — `atribuidos` ganhou o mesmo `.OrderBy(p => p.VencimentoEm ??
+DateTimeOffset.MaxValue)` que `poolDisponivel` já usava (quem tá vencendo primeiro no topo, sem
+vencimento por último). Único caso de uso que lê `ObterAtribuidosAAsync` pra exibição — os
+outros dois consumidores (`MarcarPresenca`/`RemoverConferente`) só usam pra devolver protocolos
+ao pool em lote, onde ordem não importa. Corrige as duas telas que reaproveitam
+`ObterMinhaFila` (Minha fila do próprio conferente e Fila de conferentes da distribuidora, RF-19)
+de uma vez só, mesmo caso de uso por trás das duas. `EmConferencia` não pedido, ficou de fora
+(RF-21 já limita a 1 simultâneo por padrão, ordem quase nunca importa ali).
+
+Teste novo `ObterMinhaFilaTests.Atribuidos_OrdenaPorVencimentoAscendente`, espelhando
+`PoolDisponivel_OrdenaPorVencimentoAscendente` que já existia. Verificado também contra o
+Postgres local via API real: 2 protocolos criados com `andamentoEm` deliberadamente fora de
+ordem (um vencendo depois criado primeiro) — `GET /minha-fila` devolveu na ordem certa de
+vencimento, não na ordem de criação. Sem migration (não mexe em schema). 390 testes
+automatizados no total (116 Domain + 274 Application).

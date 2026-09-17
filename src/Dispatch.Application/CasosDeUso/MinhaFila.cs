@@ -34,9 +34,14 @@ public sealed class ObterMinhaFila(
             .OrderBy(p => p.VencimentoEm ?? DateTimeOffset.MaxValue)
             .ToList();
 
-        var atribuidos = await protocolos.ObterAtribuidosAAsync(conferente.Id, cancellationToken);
+        // Mesmo raciocínio do pool acima: sem ORDER BY a ordem não é garantida — pedido do
+        // dono pra "Atribuídas a você" também ficar por vencimento, quem tá vencendo primeiro
+        // no topo (mesmo critério do pool, já estabelecido).
+        var atribuidos = (await protocolos.ObterAtribuidosAAsync(conferente.Id, cancellationToken))
+            .OrderBy(p => p.VencimentoEm ?? DateTimeOffset.MaxValue)
+            .ToList();
         var emConferencia = await protocolos.ObterEmConferenciaPorConferenteAsync(conferente.Id, cancellationToken);
 
-        return new MinhaFila(poolDisponivel, atribuidos.ToList(), emConferencia.ToList());
+        return new MinhaFila(poolDisponivel, atribuidos, emConferencia.ToList());
     }
 }
