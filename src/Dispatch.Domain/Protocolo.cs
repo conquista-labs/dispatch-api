@@ -242,6 +242,16 @@ public sealed class Protocolo
         IniciadoEm = null;
         ConcluidoEm = null;
         ReabertoEm = agora;
+
+        // Achado em uso real (produção): o vencimento continuava calculado a partir da entrada
+        // original — um ato reaberto dias depois aparecia "vencido há Xd" na hora, mesmo sendo
+        // uma conferência nova pedida agora. AndamentoEm (a "entrada", histórico de quando o ato
+        // chegou pela primeira vez) não muda — só o vencimento recalcula como um prazo novo, do
+        // mesmo tipo (TipoPrazo) que o protocolo já tinha, a partir do momento da reabertura.
+        if (Prazo is { } prazoAtual)
+        {
+            DefinirPrazo(prazoAtual, agora);
+        }
     }
 
     // Pausa — mesmo mecanismo de fechar ciclo que ReabrirConferencia já usa (fecha o pedaço que

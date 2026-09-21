@@ -2709,3 +2709,37 @@ própria duração, não uma soma cega). Verificado ponta a ponta: protocolo pau
 vezes seguidas, `GET /protocolos/{id}/detalhe` devolvendo as 2 pausas certinhas (`pausadoEm`/
 `retomadoEm`/`duracao` batendo com os intervalos reais medidos). 407 testes automatizados no
 total (122 Domain + 285 Application).
+
+## Reabertura recalcula o vencimento a partir de agora
+
+Achado em uso real (produção): um protocolo reaberto dias depois de concluído continuava com o
+vencimento calculado a partir da entrada original — aparecia "vencido há Xd" na hora, mesmo
+sendo uma conferência nova pedida agora. Confirmado com o dono com um exemplo concreto antes de
+mexer (entrada 10/09, D+1, reaberto 15/09 → vencimento devia virar 16/09, não continuar 11/09).
+
+**Importante, para não confundir com a mudança anterior desta mesma conversa**: isso é sobre
+`VencimentoEm` (prazo/semáforo), não sobre `Duracao` (tempo de conferência trabalhado,
+`CiclosAnteriores`) — os dois são conceitos independentes. `Duracao` continua somando os ciclos
+normalmente (decisão já confirmada e testada, ver seções acima) — só o vencimento é que reseta.
+
+`Protocolo.ReabrirConferencia` ganhou, no fim do método, `if (Prazo is { } prazoAtual) {
+DefinirPrazo(prazoAtual, agora); }` — reaproveita o mesmo `DefinirPrazo` já existente (mesmo
+`TipoPrazo` que o protocolo já tinha, só troca o momento de referência de `AndamentoEm` pra
+`agora`). **`AndamentoEm` não muda** — continua sendo o histórico real de quando o ato entrou no
+sistema pela primeira vez (é `{ get; }`, imutável de propósito). Guarda defensiva: se `Prazo`
+por algum motivo ainda for nulo (não deveria acontecer — todo protocolo que chega a
+Aprovado/Reprovado já passou por `DistribuirProtocolo`, que sempre define um `Prazo`), não
+inventa vencimento nenhum, só não recalcula.
+
+Dois testes novos em `ProtocoloTests`: `ReabrirConferencia_RecalculaVencimentoAPartirDeAgora`
+(prova que `VencimentoEm` muda e `AndamentoEm` não) e
+`ReabrirConferencia_SemPrazoDefinidoAntes_NaoQuebraENaoInventaVencimento` (a guarda defensiva).
+Nenhuma mudança em `ReabrirConferencia.cs`/`DecidirPedidoReabertura.cs` (Application) — o
+recálculo é parte da própria transição de domínio, os dois caminhos que já chamavam
+`ReabrirConferencia` ganham o comportamento de graça.
+
+Verificado ponta a ponta contra o Postgres local: protocolo criado com `andamentoEm` 5 dias
+atrás (prazo D1, vencimento já no passado), concluído, reaberto — `AndamentoEm` continuou
+idêntico, `VencimentoEm` saiu do dia seguinte à entrada original pro dia seguinte à reabertura
+(D+1 a partir de agora). Sem migration (mudança pura de lógica de domínio). 409 testes
+automatizados no total (124 Domain + 285 Application).

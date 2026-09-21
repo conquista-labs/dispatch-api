@@ -131,6 +131,46 @@ public class ProtocoloTests
         Assert.Equal(agora, protocolo.ReabertoEm);
     }
 
+    // Achado em uso real (produção): o vencimento continuava calculado a partir da entrada
+    // original — um ato reaberto dias depois aparecia "vencido há Xd" na hora, mesmo sendo uma
+    // conferência nova pedida agora. AndamentoEm não muda (é histórico), só VencimentoEm
+    // recalcula como um prazo novo do mesmo tipo, a partir da reabertura.
+    [Fact]
+    public void ReabrirConferencia_RecalculaVencimentoAPartirDeAgora()
+    {
+        var protocolo = NovoProtocolo();
+        var andamentoOriginal = protocolo.AndamentoEm;
+        var inicioOriginal = DateTimeOffset.UtcNow;
+        protocolo.DefinirPrazo(new Prazo(TipoPrazo.D1), andamentoOriginal);
+        var vencimentoOriginal = protocolo.VencimentoEm;
+        protocolo.IniciarConferencia(inicioOriginal);
+        protocolo.Aprovar(inicioOriginal.AddMinutes(10));
+
+        var reabertoEm = inicioOriginal.AddDays(5);
+        protocolo.ReabrirConferencia(reabertoEm);
+
+        Assert.Equal(andamentoOriginal, protocolo.AndamentoEm);
+        Assert.Equal(new Prazo(TipoPrazo.D1).CalcularVencimento(reabertoEm), protocolo.VencimentoEm);
+        Assert.NotEqual(vencimentoOriginal, protocolo.VencimentoEm);
+    }
+
+    [Fact]
+    public void ReabrirConferencia_SemPrazoDefinidoAntes_NaoQuebraENaoInventaVencimento()
+    {
+        // Guarda defensiva de domínio — não deveria acontecer na prática (todo protocolo que
+        // chega a Aprovado/Reprovado já passou por DistribuirProtocolo, que sempre define um
+        // Prazo), mas ReabrirConferencia não deve quebrar nem inventar um vencimento do nada
+        // se, por algum motivo, Prazo ainda for nulo.
+        var protocolo = NovoProtocolo();
+        var inicioOriginal = DateTimeOffset.UtcNow;
+        protocolo.IniciarConferencia(inicioOriginal);
+        protocolo.Aprovar(inicioOriginal.AddMinutes(10));
+
+        protocolo.ReabrirConferencia(inicioOriginal.AddDays(5));
+
+        Assert.Null(protocolo.VencimentoEm);
+    }
+
     // Achado em uso real (produção): antes deste campo, a Duracao final de um protocolo
     // reaberto só refletia o último ciclo (a reabertura), perdendo o tempo da conferência
     // original — o dono via "5 min" num ato que na verdade ficou muito mais tempo em aberto.
