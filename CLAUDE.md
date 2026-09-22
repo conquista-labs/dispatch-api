@@ -2797,3 +2797,103 @@ motivo devolve 204; `GET .../detalhe` mostra `duracao: "00:30:00"` e `ajustesDeD
 motivo certo; `GET /dashboard?periodo=Semana` confirma `tempoMedio: "00:30:00"` pro conferente
 dono — reflete no Dashboard como pedido. Duração negativa → 400; protocolo ainda não concluído
 → 409. 420 testes automatizados no total (127 Domain + 293 Application).
+
+## Cobertura de testes + testes de integração (Infrastructure/Api) — fecha dois gaps de ferramental
+
+O dono notou dois buracos: "não temos nada de teste unitário no front e sinto falta de um
+coverage no backend". Do lado do back, o levantamento confirmou: `coverlet.collector` já estava
+nos dois `.csproj` de teste desde sempre (artefato padrão do template `dotnet new xunit`), mas
+**nunca foi usado pra gerar relatório nenhum**; e `Dispatch.Infrastructure`/`Dispatch.Api` nunca
+tiveram um teste automatizado sequer — a verificação dessas duas camadas sempre foi manual
+(`dotnet run` + curl/psql, ver skill `verify-integration`). Convenções adotadas do repo vizinho
+`swap/frontend/swap-benefits-web` (skills `testing-strategy`/`gate` + ADR-0005 de lá), adaptadas
+— lá o registro de decisão são ADRs em `docs/`, aqui é este arquivo.
+
+### Relatório de cobertura
+
+`dotnet-reportgenerator-globaltool` entrou como tool local (`.config/dotnet-tools.json`, mesmo
+padrão do `dotnet-ef`). O comando completo está na skill `gate` nova (`.claude/skills/gate/`).
+
+**O `-classfilters:"-Dispatch.Infrastructure.Migrations.*"` não é detalhe cosmético.** Sem ele as
+migrations do EF Core (código gerado; ~18,6k das 24,8k linhas cobríveis do projeto) entram no
+denominador, e como o fixture de integração roda `Database.Migrate()`, **todas** contam como
+cobertas. O efeito é uma mentira confortável:
+
+| | Com migrations | Sem (número honesto) |
+| --- | --- | --- |
+| `Dispatch.Infrastructure` | 97,2% | **65,4%** |
+| Total (linha) | 92,1% | **71,5%** |
+
+Baseline real de hoje: Domain 96%, Application 96,9%, Infrastructure 65,4%, **Api 43%**, branch
+63,4%. Cobertura inflada por código gerado é pior que nenhuma — dá confiança falsa exatamente
+onde falta teste.
+
+**Sem threshold/gate**: `coverlet.collector` é data collector, não sabe enforçar limite (exigiria
+trocar pra `coverlet.msbuild`), e não há CI pra avaliar isso de qualquer forma. É número pra
+olhar, não pra travar build — diferente do front, que ganhou ratchet de verdade.
+
+### `tests/Dispatch.Api.Tests` — um projeto só, HTTP de verdade
+
+Nome que a própria skill `verify-integration` já antecipava. **Um projeto, não dois**: bater no
+endpoint via `WebApplicationFactory<Program>` já exercita Infrastructure por baixo (EF Core,
+`ValueConverter`, `CHECK` do Postgres, change tracker) — um projeto "só de repositório" separado
+duplicaria a estratégia de banco sem cobrir nada a mais.
+
+- **`Testcontainers.PostgreSql`, não o Postgres do `docker-compose.yml`.** O container de dev
+  acumula dado de sessão (e já recebeu clone de produção anonimizado) — teste que dependesse dele
+  seria flaky por construção. Container efêmero por execução, `Database.Migrate()` do zero no
+  fixture: isso **é**, de graça, o teste de fumaça do schema (pega o tipo de bug "migration com
+  CHECK novo sem backfill", que já aconteceu aqui no Motor v2).
+- **Isolação: um container pra suíte inteira + Respawn entre testes.** Subir container é a parte
+  cara; Respawn trunca respeitando FK sozinho. `TablesToIgnore`: `configuracao` (a linha única é
+  semeada pela migration — truncar quebraria o `SingleAsync` de `ConfiguracaoRepository` em todo
+  endpoint que lê as faixas do semáforo) e `__EFMigrationsHistory`.
+- **Autenticação reaproveita `POST /dev/seed-e2e`** — o mesmo endpoint que o `globalSetup` do
+  Playwright do `dispatch-web` já usa. Login real (hash + JWT), sem bypass.
+- **`Program.cs` ganhou `public partial class Program;`** no fim — top-level statements geram uma
+  classe `internal`, e `WebApplicationFactory<Program>` precisa dela pública. Única mudança no
+  projeto de produção por causa de teste, e não altera comportamento nenhum.
+- **`Microsoft.EntityFrameworkCore` pinado em 10.0.11 no `.csproj` de teste** — sem isso o
+  MSBuild resolvia 10.0.4 (trazido transitivamente) contra 10.0.11 do resto da solution,
+  gerando MSB3277.
+
+**A primeira leva mira bug de histórico documentado, não cobertura de enfeite** (9 testes):
+migrations aplicam limpo + `configuracao` semeada; `RegraAlcada` ativar/desativar persistindo de
+verdade (o bug do change tracker desconectado, que aconteceu 2× neste projeto e que fake nenhum
+pega — fake não tem change tracker pra perder a referência); XOR de alvo rejeitado pela Api
+**e** pelo `CHECK` do Postgres (os dois podem divergir com o tempo; o banco é a última linha de
+defesa); guarda de papel RNF-04 pelo pipeline real (403 pra Conferente, 201 pra Distribuidora,
+401 sem token); e importação de lote (linha de corte não duplicando + tipo de ato e escrevente
+nascendo na importação, as duas FKs que já quebraram de verdade uma vez).
+
+### Bug real achado pela primeira execução dos testes novos: 500 com horário não-UTC
+
+`Npgsql` recusa gravar `DateTimeOffset` com offset != 0 em `timestamp with time zone`
+("only offset 0 (UTC) is supported"). O teste de importação mandou `dataHoraAndamento` com
+`-03:00` — horário de Brasília, ISO-8601 perfeitamente válido, exatamente o que qualquer cliente
+fora do navegador escreveria — e a API devolveu **500**.
+
+Era um bug latente de verdade, não erro do teste: o `dispatch-web` nunca esbarrou nisso porque
+`Date.toISOString()` do JS sempre emite UTC, então todo tráfego real do único cliente existente
+já vinha com offset 0. Qualquer integração futura (curl, Postman, um script do cartório) tomaria
+500 num payload correto.
+
+**Fix** em `DispatchDbContext.ConfigureConventions` — `DateTimeOffsetParaUtcConverter`
+(`ValueConverter<DateTimeOffset, DateTimeOffset>`, `ToUniversalTime()` na escrita) aplicado a
+toda propriedade `DateTimeOffset` do modelo. Preserva o instante exato (a coluna `timestamptz`
+guarda UTC de qualquer forma, o offset nunca foi persistido) — é normalização de representação,
+não mudança semântica. **Sem migration**: `dotnet ef migrations has-pending-model-changes`
+confirmou "No changes have been made to the model" (conversor de mesmo tipo não altera schema).
+
+**Lição**: esse é precisamente o tipo de defeito que a camada de fake não tem como revelar — não
+existe Npgsql no meio, então a restrição de offset nunca aparece. Foi o primeiro achado do
+primeiro `dotnet test` da suíte de integração nova.
+
+**Premissa desatualizada corrigida no teste, não no código**: escrevi a asserção assumindo que
+tipo de ato desconhecido só é *sinalizado* na importação (texto antigo deste arquivo) — o
+comportamento atual, desde "Cadastro automático de tipo de ato na importação", é **criar** o tipo
+normalizado. O teste passou a afirmar o comportamento real (tipo criado + protocolos apontando
+pra ele), que é justamente a FK que interessa exercitar contra Postgres.
+
+429 testes automatizados no total (127 Domain + 293 Application + 9 Api.Tests), `dotnet build`
+sem nenhum aviso.

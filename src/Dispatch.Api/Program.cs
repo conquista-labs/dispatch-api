@@ -147,3 +147,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
+
+// Top-level statements geram uma classe Program internal — WebApplicationFactory<Program>
+// (tests/Dispatch.Api.Tests) precisa dela pública pra subir a API em memória. Declarar a
+// partial aqui é o jeito oficial de expor só o tipo, sem mudar nada do comportamento acima.
+public partial class Program;

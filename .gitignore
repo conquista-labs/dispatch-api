@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Relatório de cobertura gerado pelo reportgenerator (ver CLAUDE.md, seção Cobertura de
+# testes) — artefato local de verificação, nunca commitado. TestResults/ já é coberto acima
+# pelo padrão [Tt]est[Rr]esult*/.
+coveragereport/
