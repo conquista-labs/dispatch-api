@@ -11,8 +11,12 @@ internal static class RecalculoDeVencimentos
     public static async Task AplicarAsync(
         Equipe equipe, IEscreventeRepository escreventes, IProtocoloRepository protocolos, CancellationToken cancellationToken)
     {
-        var idsDosEscreventes = (await escreventes.ObterTodosAsync(cancellationToken))
-            .Where(e => e.EquipeId == equipe.Id)
+        // Pedido do dono ("não tem que olhar todos os protocolos, apenas os daquela equipe") —
+        // filtra no banco (ObterPorEquipeIdAsync), não traz a tabela de escreventes inteira só
+        // pra filtrar em memória depois. ObterAbertosPorEscreventesAsync (abaixo) já filtrava
+        // certo (WHERE escreventeIds IN (...) AND status != concluído/descartado/excluído) —
+        // só a busca de escreventes que ainda escaneava tudo.
+        var idsDosEscreventes = (await escreventes.ObterPorEquipeIdAsync(equipe.Id, cancellationToken))
             .Select(e => e.Id)
             .ToList();
 

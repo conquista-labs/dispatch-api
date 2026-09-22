@@ -240,6 +240,9 @@ internal sealed class FakeEscreventeRepository : IEscreventeRepository
     public Task<IReadOnlyCollection<Escrevente>> ObterTodosAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Escrevente>>(_escreventes.ToList());
 
+    public Task<IReadOnlyCollection<Escrevente>> ObterPorEquipeIdAsync(Guid equipeId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Escrevente>>(_escreventes.Where(e => e.EquipeId == equipeId).ToList());
+
     public Task<Escrevente?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(_escreventes.SingleOrDefault(e => e.Id == id));
 

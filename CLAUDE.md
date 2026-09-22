@@ -2970,3 +2970,32 @@ protocolo criado depois do corte, recarregado numa query nova (prova que o round
 `Tipo` e `HorarioDeVencimento`), atribuído/iniciado/concluído/reaberto (prova que
 `ReabrirConferencia` não quebra reusando o `Prazo` recarregado). 434 testes automatizados no
 total (130 Domain + 294 Application + 10 Api.Tests).
+
+### Fix de performance: `RecalculoDeVencimentos` escaneava a tabela inteira de escreventes
+
+Apontado pelo dono direto ("quando você recalcula a fila, não tem que olhar todos os
+protocolos, só os daquela equipe — e só o que ainda não foi concluído"). Investigação
+confirmou: `RecalculoDeVencimentos.AplicarAsync` chamava `IEscreventeRepository.ObterTodosAsync`
+(`SELECT * FROM escreventes`, **a tabela inteira**, sem `WHERE`) e filtrava `EquipeId ==
+equipe.Id` **em memória** depois — clássico full scan disfarçado de filtro.
+
+**A metade do pedido sobre "só o que não foi concluído" já estava certa** —
+`ObterAbertosPorEscreventesAsync` (usada logo em seguida) já filtra no próprio SQL
+(`WHERE escreventeIds.Contains(...) AND status NOT IN (Aprovado, Reprovado, Descartado,
+Excluido)`), então a busca de protocolos nunca escaneou a base inteira nem tocou concluídos.
+Só a busca de *escreventes* que precisava do fix.
+
+**Fix**: `IEscreventeRepository` ganha `ObterPorEquipeIdAsync(Guid equipeId, ct)` —
+`WHERE equipe_id = @equipeId` de verdade no banco, não filtro em memória.
+`EscreventeConfiguration.cs` já mapeia `EquipeId` como FK (`HasForeignKey`), e EF Core cria
+índice automático em toda FK — `ix_escreventes_equipe_id` já existe desde a migration inicial,
+**nenhuma migration nova precisou** pra esse fix ser rápido de verdade. `ObterTodosAsync`
+continua existindo intacto (~10 outros consumidores legítimos precisam da lista inteira —
+`ImportarLote`, `MinhaFila`, `ObterDashboard`, etc. — só `RecalculoDeVencimentos` tinha esse uso
+específico que merecia um método dedicado).
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): criada equipe +
+escrevente + protocolo, mudado o `TipoPrazo` da equipe (D1→D2) via `PUT /equipes/{id}`,
+confirmado que o vencimento do protocolo aberto recalculou exatamente +1 dia (RF-38 continua
+funcionando igual, só a query por baixo mudou). 434 testes automatizados continuam passando —
+suíte inteira rodada 3× seguidas pra confirmar estabilidade depois do fix.
