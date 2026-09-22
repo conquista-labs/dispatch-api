@@ -153,6 +153,20 @@ public sealed class ObterDashboard(
 
         foreach (var protocolo in concluidos)
         {
+            // Ajuste manual (pedido do dono: distribuidora corrige o tempo final de um
+            // protocolo) substitui a conta por ciclo inteira — o valor corrigido vai inteiro
+            // pro dono atual, não fica misturado com os pedaços "originais" que a própria
+            // correção considerou errados.
+            if (protocolo.AjustesDeDuracao.Count > 0)
+            {
+                if (protocolo.DonoId is { } donoAjustado && protocolo.Duracao is { } duracaoAjustada)
+                {
+                    Adiciona(donoAjustado, duracaoAjustada);
+                }
+
+                continue;
+            }
+
             foreach (var ciclo in protocolo.CiclosAnteriores)
             {
                 Adiciona(ciclo.ConferenteId, ciclo.Duracao);

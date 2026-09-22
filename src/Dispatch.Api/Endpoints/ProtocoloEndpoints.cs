@@ -100,7 +100,8 @@ public static class ProtocoloEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
 
         app.MapGet("/protocolos/{id:guid}/detalhe", async (
-                Guid id, ObterDetalheProtocolo casoDeUso, ObterConfiguracao obterConfiguracao, IRelogio relogio, CancellationToken cancellationToken) =>
+                Guid id, ObterDetalheProtocolo casoDeUso, ObterConfiguracao obterConfiguracao, IUsuarioRepository usuarios,
+                IRelogio relogio, CancellationToken cancellationToken) =>
             {
                 var resultado = await casoDeUso.ExecutarAsync(id, cancellationToken);
                 if (resultado is null)
@@ -108,8 +109,16 @@ public static class ProtocoloEndpoints
                     return Results.NotFound(new { motivo = "protocolo não encontrado" });
                 }
 
+                // Quem ajustou a duração (AjustarDuracaoProtocolo) é sempre uma Distribuidora, não
+                // necessariamente alguém na lista de Conferentes que o front já carrega — sem
+                // GET /usuarios geral, o back resolve o nome aqui mesmo (exceção ao "back manda o
+                // fato cru, front resolve o nome": aqui o front não tem de onde resolver sozinho).
+                var nomePorUsuarioId = (await usuarios.ObterVariosPorIdsAsync(
+                        resultado.Protocolo.AjustesDeDuracao.Select(a => a.AjustadoPorId).Distinct().ToList(), cancellationToken))
+                    .ToDictionary(u => u.Id, u => u.Nome);
+
                 var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
-                return Results.Ok(ParaDetalheResponse(resultado, relogio.Agora, config.FaixaAtencao, config.FaixaUrgente));
+                return Results.Ok(ParaDetalheResponse(resultado, relogio.Agora, config.FaixaAtencao, config.FaixaUrgente, nomePorUsuarioId));
             })
             .WithName("ObterDetalheProtocolo")
             .WithSummary("Painel de detalhe (RF-18a) — todos os campos do protocolo, mais quem pode conferir este ato especificamente.")
@@ -187,6 +196,30 @@ public static class ProtocoloEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+
+        app.MapPost("/protocolos/{id:guid}/ajustar-duracao", async (
+                Guid id, AjustarDuracaoRequest request, AjustarDuracaoProtocolo casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken) =>
+            {
+                var usuarioId = usuario.ObterUsuarioId();
+                var resultado = await casoDeUso.ExecutarAsync(
+                    id, TimeSpan.FromMinutes(request.DuracaoMinutos), usuarioId, request.Motivo, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoAjustarDuracaoProtocolo.Sucesso => Results.NoContent(),
+                    ResultadoAjustarDuracaoProtocolo.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
+                    ResultadoAjustarDuracaoProtocolo.StatusInvalido => Results.Conflict(new { motivo = "protocolo não está concluído" }),
+                    ResultadoAjustarDuracaoProtocolo.DuracaoInvalida => Results.BadRequest(new { motivo = "duração não pode ser negativa" }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                };
+            })
+            .WithName("AjustarDuracaoProtocolo")
+            .WithSummary("Pedido do dono: distribuidora (admin) corrige o tempo final de conferência de um protocolo já concluído.")
+            .WithTags(OpenApiTags.Protocolos)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status400BadRequest)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
 
         app.MapGet("/protocolos/pedidos-reabertura", async (ListarPedidosReaberturaPendentes casoDeUso, CancellationToken cancellationToken) =>
@@ -314,7 +347,8 @@ public static class ProtocoloEndpoints
         r.PedidoId, r.ProtocoloId, r.ProtocoloNumero, r.TipoAtoId, r.Etapa, r.StatusAtual, r.SolicitanteId, r.NomeSolicitante, r.CriadoEm);
 
     private static DetalheProtocoloResponse ParaDetalheResponse(
-        ResultadoDetalheProtocolo resultado, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente)
+        ResultadoDetalheProtocolo resultado, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente,
+        IReadOnlyDictionary<Guid, string> nomePorUsuarioId)
     {
         var p = resultado.Protocolo;
         return new DetalheProtocoloResponse(
@@ -327,7 +361,10 @@ public static class ProtocoloEndpoints
                 a.Trilha.Select(t => new PassoTrilhaResponse(t.Camada, t.Efeito, t.Regra?.Id)).ToList())).ToList(),
             resultado.HistoricoConferencias.Select(h => new HistoricoConferenciaResponse(
                 h.Id, h.AndamentoEm, h.Status, h.DonoId, h.ConcluidoEm)).ToList(),
-            p.Pausas.Select(pausa => new PausaConferenciaResponse(pausa.PausadoEm, pausa.RetomadoEm, pausa.Duracao)).ToList());
+            p.Pausas.Select(pausa => new PausaConferenciaResponse(pausa.PausadoEm, pausa.RetomadoEm, pausa.Duracao)).ToList(),
+            p.Duracao,
+            p.AjustesDeDuracao.Select(a => new AjusteDeDuracaoResponse(
+                nomePorUsuarioId.GetValueOrDefault(a.AjustadoPorId, "—"), a.AjustadoEm, a.DuracaoAnterior, a.DuracaoNova, a.Motivo)).ToList());
     }
 
     // Domain (ResultadoDistribuicao) não sai direto pro cliente HTTP — vira um DTO de
@@ -385,6 +422,10 @@ public sealed record DefinirObservacaoRequest(string? Observacao);
 
 public sealed record DefinirPrioridadeRequest(Prioridade Prioridade);
 
+// Minutos, não TimeSpan cru — mesmo padrão já usado em Configuracao (mais fácil de editar via
+// curl/Swagger do que o formato "hh:mm:ss" que o System.Text.Json usa por padrão).
+public sealed record AjustarDuracaoRequest(int DuracaoMinutos, string? Motivo);
+
 public sealed record DetalheProtocoloResponse(
     Guid Id,
     string Numero,
@@ -413,7 +454,12 @@ public sealed record DetalheProtocoloResponse(
     // Pedido do dono ("como garantir que ninguém abusa da pausa pra melhorar o tempo dela?") —
     // não bloqueia nada, só deixa auditável: quantas vezes e por quanto tempo este ato ficou
     // pausado. Front decide como resumir ("pausado 2x, 47min no total").
-    IReadOnlyList<PausaConferenciaResponse> Pausas);
+    IReadOnlyList<PausaConferenciaResponse> Pausas,
+    // Duracao não existia nesse DTO até o pedido "editar o tempo de conferência" precisar
+    // mostrar o valor atual antes de editar — os outros consumidores (Concluídos hoje,
+    // Distribuição) já tinham isso, só o painel de detalhe não.
+    TimeSpan? Duracao,
+    IReadOnlyList<AjusteDeDuracaoResponse> AjustesDeDuracao);
 
 // RegraEtapaId/RegraTipoId nulos não significam "sem alçada" — podem vir do padrão aberto
 // (ausência de regra = permitido). O front resolve `Elegivel` já pronto; as duas regras só
@@ -428,6 +474,13 @@ public sealed record HistoricoConferenciaResponse(
 
 // Uma pausa já encerrada (ver PausaConferencia.cs) — visibilidade, não bloqueio.
 public sealed record PausaConferenciaResponse(DateTimeOffset PausadoEm, DateTimeOffset RetomadoEm, TimeSpan Duracao);
+
+// Um ajuste manual de duração já aplicado (ver AjusteDeDuracao.cs). Exceção deliberada ao
+// padrão "back manda o fato cru, front resolve o nome": AjustadoPorId é sempre uma
+// Distribuidora, não necessariamente alguém na lista de Conferentes que o front já carrega —
+// sem um GET /usuarios geral, o back resolve o nome aqui mesmo.
+public sealed record AjusteDeDuracaoResponse(
+    string AjustadoPorNome, DateTimeOffset AjustadoEm, TimeSpan? DuracaoAnterior, TimeSpan DuracaoNova, string? Motivo);
 
 // Motor v3: uma entrada por camada que opinou sobre o caso (nível/equipe/pessoa, mais reserva
 // se houver) — "Camada" já vem como o texto legível do Domain (ver ResolvedorAlcada.Explicar),

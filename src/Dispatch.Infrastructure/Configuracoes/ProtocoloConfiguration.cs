@@ -86,6 +86,22 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
             pausa.Property(p => p.PausadoEm).IsRequired();
             pausa.Property(p => p.RetomadoEm).IsRequired();
         });
+
+        // Um ajuste manual da Duracao já aplicado (ver AjusteDeDuracao.cs) — mesmo padrão de
+        // coleção-filha, sem FK pro usuário que ajustou (mesmo raciocínio de RegraAplicadaId
+        // abaixo: é só auditoria, não pode travar/quebrar se aquele usuário for removido depois).
+        builder.OwnsMany(p => p.AjustesDeDuracao, ajuste =>
+        {
+            ajuste.ToTable("ajustes_de_duracao");
+            ajuste.WithOwner().HasForeignKey("protocolo_id");
+            ajuste.Property<int>("Id").ValueGeneratedOnAdd();
+            ajuste.HasKey("Id");
+            ajuste.Property(a => a.AjustadoPorId).IsRequired();
+            ajuste.Property(a => a.AjustadoEm).IsRequired();
+            ajuste.Property(a => a.DuracaoAnterior);
+            ajuste.Property(a => a.DuracaoNova).IsRequired();
+            ajuste.Property(a => a.Motivo);
+        });
         // Sem relacionamento/FK de propósito: é só um registro de auditoria (RNF-02), não uma
         // dependência de verdade — remover a regra de alçada mais tarde não pode quebrar (nem
         // travar via Restrict) a leitura de um protocolo antigo que a citou. Sem FK, essa coluna

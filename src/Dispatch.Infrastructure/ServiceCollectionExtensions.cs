@@ -101,6 +101,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DefinirObservacao>();
         services.AddScoped<DecidirPedidoReabertura>();
         services.AddScoped<ReabrirConferencia>();
+        services.AddScoped<AjustarDuracaoProtocolo>();
         services.AddScoped<ListarPedidosReaberturaPendentes>();
         services.AddScoped<SimularProtocoloManual>();
         services.AddScoped<CriarProtocoloManual>();

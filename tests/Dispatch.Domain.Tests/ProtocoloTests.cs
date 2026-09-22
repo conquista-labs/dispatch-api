@@ -410,4 +410,66 @@ public class ProtocoloTests
 
         Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
     }
+
+    // Pedido do dono ("como distribuidora e admin, quero editar o tempo de conferência de um
+    // protocolo") — sobrescreve o que Duracao devolve, sem mexer em IniciadoEm/ConcluidoEm/
+    // CiclosAnteriores (o cálculo automático continua existindo por baixo, só deixa de ser o
+    // que aparece).
+    [Fact]
+    public void AjustarDuracao_SobrescreveODuracaoCalculada()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+        protocolo.Aprovar(inicio.AddMinutes(10)); // Duracao calculada: 10 min
+
+        var ajustadoPorId = Guid.NewGuid();
+        var agora = inicio.AddDays(1);
+        protocolo.AjustarDuracao(TimeSpan.FromMinutes(30), ajustadoPorId, agora, "esqueceu de pausar");
+
+        Assert.Equal(TimeSpan.FromMinutes(30), protocolo.Duracao);
+        Assert.Equal(inicio.AddMinutes(10), protocolo.ConcluidoEm); // horários reais não mudam
+    }
+
+    [Fact]
+    public void AjustarDuracao_RegistraOHistoricoComValorAnterior()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+        protocolo.Aprovar(inicio.AddMinutes(10));
+
+        var ajustadoPorId = Guid.NewGuid();
+        var agora = inicio.AddDays(1);
+        protocolo.AjustarDuracao(TimeSpan.FromMinutes(30), ajustadoPorId, agora, "esqueceu de pausar");
+
+        var ajuste = Assert.Single(protocolo.AjustesDeDuracao);
+        Assert.Equal(ajustadoPorId, ajuste.AjustadoPorId);
+        Assert.Equal(agora, ajuste.AjustadoEm);
+        Assert.Equal(TimeSpan.FromMinutes(10), ajuste.DuracaoAnterior);
+        Assert.Equal(TimeSpan.FromMinutes(30), ajuste.DuracaoNova);
+        Assert.Equal("esqueceu de pausar", ajuste.Motivo);
+    }
+
+    [Fact]
+    public void AjustarDuracao_DuasVezes_OSegundoAjusteVenceEGuardaOPrimeiroComoAnterior()
+    {
+        var protocolo = NovoProtocolo();
+        var donoId = Guid.NewGuid();
+        var inicio = DateTimeOffset.UtcNow;
+        protocolo.AtribuirA(donoId, inicio);
+        protocolo.IniciarConferencia(inicio);
+        protocolo.Aprovar(inicio.AddMinutes(10));
+
+        protocolo.AjustarDuracao(TimeSpan.FromMinutes(30), Guid.NewGuid(), inicio.AddDays(1), null);
+        protocolo.AjustarDuracao(TimeSpan.FromMinutes(20), Guid.NewGuid(), inicio.AddDays(2), "correção do ajuste anterior");
+
+        Assert.Equal(TimeSpan.FromMinutes(20), protocolo.Duracao);
+        Assert.Equal(2, protocolo.AjustesDeDuracao.Count);
+        Assert.Equal(TimeSpan.FromMinutes(30), protocolo.AjustesDeDuracao[1].DuracaoAnterior);
+    }
 }

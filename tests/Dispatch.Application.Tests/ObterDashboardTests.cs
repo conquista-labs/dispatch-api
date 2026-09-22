@@ -287,4 +287,26 @@ public class ObterDashboardTests
         // só quem "leva o crédito" de cada pedaço no Dashboard.
         Assert.Equal(TimeSpan.FromMinutes(25), protocolo.Duracao);
     }
+
+    // Pedido do dono: ajuste manual de duração (distribuidora corrigindo um valor errado) tem
+    // que refletir no tempo médio do conferente, não só no card/histórico do protocolo — senão
+    // a bonificação continuaria calculada em cima do número que a própria distribuidora julgou
+    // errado.
+    [Fact]
+    public async Task ProtocoloComDuracaoAjustadaManualmente_TempoMedioReflete()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var protocolo = NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1), duracao: TimeSpan.FromMinutes(10));
+
+        protocolo.AjustarDuracao(TimeSpan.FromMinutes(45), Guid.NewGuid(), Agora, "esqueceu de pausar durante o almoço");
+
+        var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        var desempenho = Assert.Single(resultado.Desempenho);
+        Assert.Equal(TimeSpan.FromMinutes(45), desempenho.TempoMedio);
+    }
 }

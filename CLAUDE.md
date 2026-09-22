@@ -2743,3 +2743,57 @@ atrás (prazo D1, vencimento já no passado), concluído, reaberto — `Andament
 idêntico, `VencimentoEm` saiu do dia seguinte à entrada original pro dia seguinte à reabertura
 (D+1 a partir de agora). Sem migration (mudança pura de lógica de domínio). 409 testes
 automatizados no total (124 Domain + 285 Application).
+
+## Ajustar duração — a distribuidora corrige o tempo final de conferência
+
+Pedido do dono: "eu como distribuidora e admin do sistema gostaria de uma opção de editar o
+tempo de conferência de um protocolo". Confirmado via perguntas de esclarecimento: campo
+editável é um **valor final direto em minutos** (não editar timestamps de ciclo), precisa ser
+**rastreável** (quem/quando/valor antes/valor depois/motivo — mesmo padrão "visibilidade, não
+bloqueio" já usado em Pausar/Retomar) e precisa **refletir no Dashboard** (tempo médio por
+conferente, RF-46, usado numa conta real de bonificação fora do sistema).
+
+- **`AjusteDeDuracao.cs`** (novo, `Dispatch.Domain`) — `AjustadoPorId`/`AjustadoEm`/
+  `DuracaoAnterior` (nullable — pode não haver duração calculada ainda)/`DuracaoNova`/`Motivo`,
+  um ajuste já aplicado. Mesmo molde de `PausaConferencia`/`CicloConferencia`.
+- **`Protocolo.cs`** — `_ajustesDeDuracao : List<AjusteDeDuracao>` + `AjustesDeDuracao` getter.
+  `Duracao` passou a checar um override primeiro: `DuracaoAjustada ?? (cálculo normal por
+  ciclos)` — `DuracaoAjustada` é `_ajustesDeDuracao[^1].DuracaoNova` quando existe algum ajuste,
+  senão nulo (cálculo normal preservado). `AjustarDuracao(duracaoNova, ajustadoPorId, agora,
+  motivo)` adiciona um `AjusteDeDuracao` novo, guardando o `Duracao` **atual** (antes do ajuste,
+  já podendo ser um ajuste anterior) como `DuracaoAnterior` — histórico encadeado, cada ajuste
+  sabe o que havia antes dele, não só o valor original calculado pelos ciclos.
+- **`AjustarDuracaoProtocolo.cs`** (novo caso de uso) — só `Aprovado`/`Reprovado` (protocolo
+  precisa estar concluído, tem um `Duracao` de verdade pra corrigir), rejeita duração negativa.
+  `POST /protocolos/{id}/ajustar-duracao`, corpo `{ duracaoMinutos, motivo? }` — minutos, não
+  `TimeSpan` cru (mesmo padrão de `Configuracao`/RF-14 faixas do semáforo), `RequireRole(
+Distribuidora)`. 204 / 404 / 409 (status inválido) / 400 (duração negativa).
+- **`ProtocoloConfiguration.cs`** — `OwnsMany(p => p.AjustesDeDuracao, ...)`, tabela
+  `ajustes_de_duracao` (mesmo padrão de `pausas_conferencia`/`ciclos_conferencia`: shadow `Id`
+  int, FK `protocolo_id` cascade). Migration `AdicionaAjustesDeDuracao` — só `CreateTable`.
+- **`ObterDashboard.ConstruirTemposPorConferente`** — quando `protocolo.AjustesDeDuracao.Count
+> 0`, atribui `protocolo.Duracao.Value` inteiro ao `DonoId` **atual** e pula o loop normal por
+  ciclo (que dividiria entre quem passou pelo protocolo). Decisão consciente: um ajuste manual
+  substitui o cálculo por ciclo inteiro, não só o ciclo mais recente — a distribuidora está
+  dizendo "o tempo certo é este", não "corrija só a última pessoa".
+- **`DetalheProtocoloResponse`** ganha `Duracao` (não existia nesse DTO antes — os outros
+  consumidores, Concluídos hoje/Distribuição, já tinham) e `AjustesDeDuracao:
+AjusteDeDuracaoResponse[]`.
+
+**Exceção deliberada ao padrão "back manda o fato cru, front resolve o nome"**: `AjustadoPorId`
+é sempre uma `Usuario.Id` de Distribuidora, não necessariamente alguém na lista de `Conferente`s
+que o front já carrega em qualquer tela — sem um `GET /usuarios` geral (que não existe e não
+vale a pena criar só pra isso), o front não tem de onde resolver esse nome sozinho. `GET
+/protocolos/{id}/detalhe` (`ProtocoloEndpoints.cs`) ganhou `IUsuarioRepository` injetado, monta
+um `nomePorUsuarioId` (via `ObterVariosPorIdsAsync` sobre os `AjustadoPorId` distintos dos
+ajustes) e resolve o nome **no back** — `AjusteDeDuracaoResponse` carrega `AjustadoPorNome`
+(string já resolvida), não `AjustadoPorId` cru.
+
+Testado ponta a ponta contra o Postgres local (`dotnet run` de verdade): criado protocolo,
+atribuído, iniciado, concluído (~2s de duração real) — `POST .../ajustar-duracao` com 30min +
+motivo devolve 204; `GET .../detalhe` mostra `duracao: "00:30:00"` e `ajustesDeDuracao[0]` com
+`ajustadoPorNome: "Distribuidora Teste"` (nome resolvido, não Guid cru),
+`duracaoAnterior: "00:00:02..."` (o valor real antes do ajuste), `duracaoNova: "00:30:00"`,
+motivo certo; `GET /dashboard?periodo=Semana` confirma `tempoMedio: "00:30:00"` pro conferente
+dono — reflete no Dashboard como pedido. Duração negativa → 400; protocolo ainda não concluído
+→ 409. 420 testes automatizados no total (127 Domain + 293 Application).

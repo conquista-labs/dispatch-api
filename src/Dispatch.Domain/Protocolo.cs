@@ -78,6 +78,16 @@ public sealed class Protocolo
     private readonly List<PausaConferencia> _pausas = [];
     public IReadOnlyList<PausaConferencia> Pausas => _pausas;
 
+    // Pedido do dono ("como distribuidora e admin, quero editar o tempo de conferência de um
+    // protocolo") — sobrescreve o valor calculado por CiclosAnteriores/IniciadoEm/ConcluidoEm
+    // (não mexe nesses campos, só o que Duracao devolve). Guarda um histórico de ajustes (não
+    // só o valor atual) pelo mesmo motivo de CiclosAnteriores/Pausas: auditoria (RNF-02) — esse
+    // tempo alimenta uma conta real de bonificação (ver ObterDashboard.cs), não pode sumir quem
+    // editou o quê.
+    private readonly List<AjusteDeDuracao> _ajustesDeDuracao = [];
+    public IReadOnlyList<AjusteDeDuracao> AjustesDeDuracao => _ajustesDeDuracao;
+    private TimeSpan? DuracaoAjustada => _ajustesDeDuracao.Count > 0 ? _ajustesDeDuracao[^1].DuracaoNova : null;
+
     // RF-18i/j: só tem valor quando Status == Excluido — guarda o que era antes, pra
     // Restaurar() devolver exato (mesmo vencimento/dono/histórico, nada mais muda).
     public StatusProtocolo? StatusAntesDeExcluir { get; private set; }
@@ -91,11 +101,12 @@ public sealed class Protocolo
     // RF-24: "duração" do ato — só existe depois de concluído. Soma o tempo do ciclo atual com
     // o de qualquer ciclo anterior já encerrado (CiclosAnteriores) — sem isso, um protocolo
     // reaberto mostraria só a duração da última rodada, escondendo o tempo real que ficou em
-    // conferência desde o início.
+    // conferência desde o início. Um ajuste manual (AjustarDuracao) sobrescreve esse cálculo —
+    // o valor mais recente em AjustesDeDuracao, se houver, sempre vence.
     public TimeSpan? Duracao =>
-        IniciadoEm is { } inicio && ConcluidoEm is { } fim
+        DuracaoAjustada ?? (IniciadoEm is { } inicio && ConcluidoEm is { } fim
             ? _ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo.Duracao)
-            : null;
+            : null);
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
@@ -281,5 +292,15 @@ public sealed class Protocolo
 
         IniciadoEm = agora;
         PausadoEm = null;
+    }
+
+    // Pedido do dono: distribuidora (admin) corrige o tempo final de um protocolo já concluído.
+    // Não mexe em IniciadoEm/ConcluidoEm/CiclosAnteriores — só sobrescreve o que Duracao
+    // devolve, guardando o ajuste no histórico (quem, quando, valor anterior/novo, motivo).
+    // Quem decide QUANDO isso é permitido (só Aprovado/Reprovado) é o caso de uso, mesmo
+    // padrão já usado em ReabrirConferencia/IniciarConferencia — aqui é só a mutação.
+    public void AjustarDuracao(TimeSpan duracaoNova, Guid ajustadoPorId, DateTimeOffset agora, string? motivo)
+    {
+        _ajustesDeDuracao.Add(new AjusteDeDuracao(ajustadoPorId, agora, Duracao, duracaoNova, motivo));
     }
 }
