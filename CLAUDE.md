@@ -2897,3 +2897,76 @@ pra ele), que é justamente a FK que interessa exercitar contra Postgres.
 
 429 testes automatizados no total (127 Domain + 293 Application + 9 Api.Tests), `dotnet build`
 sem nenhum aviso.
+
+## Corte de horário — prazo condicional por horário de entrada (Equipe + Etapa)
+
+Pedido do dono: "os protocolos da equipe Quinto Andar que entram para a pós-conferência após as
+16h do dia têm um prazo de conferência até as 10h do dia seguinte — como fazer isso sem ser algo
+chumbado?" Confirmado por perguntas de esclarecimento: **genérico, configurável por Equipe +
+Etapa** (qualquer equipe pode configurar seu próprio par corte/vencimento, Quinto Andar é só a
+primeira a usar); é um **acréscimo** ao `TipoPrazo` normal, não substituição (antes do corte, no
+mesmo dia, vale D+0/D+1/D+2/1 hora normalmente); o vencimento calculado (corte → dia seguinte)
+segue o mesmo ajuste de dia útil que D0/D1/D2 já usam; "16h"/"10h" são horário de Brasília.
+
+- **`TipoPrazo`** ganha `CorteDeHorario` — só existe transitoriamente, construído por
+  `Equipe.PrazoPara` quando a entrada já foi decidida como "depois do corte", nunca é o
+  `TipoPrazo` base persistido de uma Equipe.
+- **`Prazo`** vira `record Prazo(TipoPrazo Tipo, TimeOnly? HorarioDeVencimento = null)` — o
+  campo novo só é preenchido quando `Tipo == CorteDeHorario` (o horário do dia seguinte, já em
+  horário local, que vale como vencimento — `Equipe.PrazoPara` já decidiu o corte antes de
+  construir este `Prazo`, `CalcularVencimento` não reavalia nada). Novo branch reaproveita a
+  `ProximoDiaUtil` já existente, sem duplicar a lógica de ajuste de dia útil.
+- **`FusoHorario.cs`** (novo, `Dispatch.Domain/Prazos/`) — helper fixo (`America/Sao_Paulo`,
+  UTC−3, sem `TimeZoneInfo`/horário de verão desde 2019, mesma filosofia de "sem calendário de
+  feriado" já usada em `ProximoDiaUtil`). **Achado importante antes de codificar**: todo instante
+  do sistema é guardado/comparado em UTC (inclusive `IRelogio.Agora`, e o Postgres via
+  `DateTimeOffsetParaUtcConverter` sempre devolve offset 0) — comparar "16h" direto contra isso
+  sem converter disparava a regra ~3h adiantada/atrasada. Usado tanto por `Equipe.PrazoPara`
+  (decidir se já passou do corte) quanto por `Prazo.CalcularVencimento` (calcular "amanhã" no
+  calendário certo).
+- **`Equipe`** ganha 4 propriedades opcionais (`TimeOnly?`, `private set`):
+  `CortePreConferenciaHorarioCorte`/`CortePreConferenciaHorarioVencimento`/
+  `CortePosConferenciaHorarioCorte`/`CortePosConferenciaHorarioVencimento` — null nos dois de uma
+  etapa = sem corte, comportamento de sempre. Adicionadas como parâmetros opcionais no fim do
+  construtor (default `null`) — preserva os 19 call sites existentes de `new Equipe(...)` sem
+  tocar em nenhum. `PrazoPara` muda de assinatura pra `PrazoPara(Etapa etapa, DateTimeOffset
+  referencia)`: decide se a entrada foi depois do corte (comparado em horário de Brasília) e
+  devolve `Prazo(CorteDeHorario, horarioVencimento)`, senão devolve o `TipoPrazo` base da etapa
+  sem mudança. `DefinirPrazos` ganha os mesmos 4 parâmetros (sem default — força o único call
+  site real, `EditarEquipe.cs`, a ser atualizado deliberadamente).
+- **`ResolvedorDePrazo.Resolver`** ganha `DateTimeOffset referencia` (sem default), thread pra
+  `equipe.PrazoPara(etapa, referencia)`. Todos os call sites reais já tinham a instância certa
+  ao alcance (`protocolo.AndamentoEm`), zero plumbing nova: `AplicadorDeDistribuicao.cs`,
+  `EditarProtocoloManual.cs`, `RecalculoDeVencimentos.cs` (esse último chama `Equipe.PrazoPara`
+  direto, não via `ResolvedorDePrazo`). `AplicarSugestao.cs` (fluxo de "prazo irreal") também
+  precisou de ajuste — preserva o corte já configurado da equipe intacto ao aplicar a sugestão
+  (a sugestão só propõe o `TipoPrazo` base, nunca mexe em corte).
+
+**Risco real de perda de dado, achado e corrigido antes de aplicar a migration**: `Protocolo.Prazo`
+é reaproveitado por `ReabrirConferencia` (`if (Prazo is { } prazoAtual) { DefinirPrazo(prazoAtual,
+agora); }`) — recalcula o vencimento a partir do `Prazo` **já persistido e recarregado**.
+`PrazoConversoes` só serializava `Tipo.ToString()`; sem ajuste, `HorarioDeVencimento` sumiria no
+round-trip do banco e reabrir um protocolo com corte de horário quebraria
+(`NullReferenceException` no `CalcularVencimento`). Corrigido com um formato composto,
+retrocompatível: `"Tipo"` (sem corte, igual sempre foi) ou `"Tipo|HH:mm"` (com corte) — nenhuma
+linha antiga tem `|`, então o parse continua funcionando sem migração de dado nenhuma.
+`protocolos.prazo_tipo` (e, por consistência, `equipes.prazo_pre_tipo`/`prazo_pos_tipo`) subiram
+de `varchar(20)` pra `varchar(30)` — `"CorteDeHorario|10:00"` tem exatamente 20 chars, sem folga
+nenhuma pra qualquer variação de formatação.
+
+**API** (`EquipeEndpoints.cs`): `CriarEquipeRequest`/`EditarEquipeRequest`/`EquipeResponse` ganham
+4 campos `TimeOnly?` planos (mesmo padrão flat do resto do arquivo). Validação: cada par
+(corte, vencimento) precisa ser os dois nulos ou os dois preenchidos — 400 com motivo caso
+contrário (mesmo padrão de XOR já usado em `RegraAlcadaEndpoints`/`AtualizarConfiguracao`).
+`System.Text.Json` já serializa `TimeOnly` nativamente (ISO `"HH:mm:ss"`), sem configuração
+extra. Migration `AdicionaCorteDeHorarioEmEquipes` — 4 colunas `time` nullable em `equipes` +
+widening das 3 colunas de prazo pra `varchar(30)`, só aditivo, sem backfill.
+
+Testado ponta a ponta contra o Postgres local: `dotnet run` de verdade, criado protocolo antes
+das 16h → confirma D+1 normal (24h corridas); criado numa sexta depois das 16h → confirma
+vencimento segunda 10h (pula o fim de semana, mesmo ajuste de D0/D1/D2). Teste de integração
+novo (`Dispatch.Api.Tests/CorteDeHorarioIntegracaoTests.cs`) cobre o cenário mais arriscado —
+protocolo criado depois do corte, recarregado numa query nova (prova que o round-trip preserva
+`Tipo` e `HorarioDeVencimento`), atribuído/iniciado/concluído/reaberto (prova que
+`ReabrirConferencia` não quebra reusando o `Prazo` recarregado). 434 testes automatizados no
+total (130 Domain + 294 Application + 10 Api.Tests).

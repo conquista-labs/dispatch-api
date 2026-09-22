@@ -18,7 +18,7 @@ internal static class AplicadorDeDistribuicao
         out ResolucaoPrazo resolucaoPrazo,
         Guid? donoDaPrimeiraConferenciaId = null)
     {
-        resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, protocolo.Etapa, equipes);
+        resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, protocolo.Etapa, protocolo.AndamentoEm, equipes);
         protocolo.DefinirPrazo(resolucaoPrazo.Prazo, protocolo.AndamentoEm);
 
         var resultado = MotorDistribuicao.Distribuir(

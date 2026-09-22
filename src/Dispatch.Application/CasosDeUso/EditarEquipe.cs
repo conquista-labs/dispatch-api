@@ -10,7 +10,10 @@ public sealed class EditarEquipe(
     IUnitOfWork unitOfWork)
 {
     public async Task<bool> ExecutarAsync(
-        Guid equipeId, string nome, Prazo prazoPreConferencia, Prazo prazoPosConferencia, CancellationToken cancellationToken = default)
+        Guid equipeId, string nome, Prazo prazoPreConferencia, Prazo prazoPosConferencia,
+        TimeOnly? cortePreConferenciaHorarioCorte, TimeOnly? cortePreConferenciaHorarioVencimento,
+        TimeOnly? cortePosConferenciaHorarioCorte, TimeOnly? cortePosConferenciaHorarioVencimento,
+        CancellationToken cancellationToken = default)
     {
         var equipe = await equipes.ObterPorIdAsync(equipeId, cancellationToken);
         if (equipe is null)
@@ -19,7 +22,10 @@ public sealed class EditarEquipe(
         }
 
         equipe.Renomear(nome);
-        equipe.DefinirPrazos(prazoPreConferencia, prazoPosConferencia);
+        equipe.DefinirPrazos(
+            prazoPreConferencia, prazoPosConferencia,
+            cortePreConferenciaHorarioCorte, cortePreConferenciaHorarioVencimento,
+            cortePosConferenciaHorarioCorte, cortePosConferenciaHorarioVencimento);
 
         // RF-38: todo protocolo aberto de quem está nessa equipe recalcula o vencimento com
         // o prazo novo — o momentoDeReferencia continua sendo o AndamentoEm original de cada

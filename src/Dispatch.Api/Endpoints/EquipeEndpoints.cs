@@ -27,26 +27,46 @@ public static class EquipeEndpoints
 
         equipesGrupo.MapPost("/", async (CriarEquipeRequest request, CriarEquipe casoDeUso, CancellationToken cancellationToken) =>
             {
+                if (!CorteValido(request.CortePreConferenciaHorarioCorte, request.CortePreConferenciaHorarioVencimento) ||
+                    !CorteValido(request.CortePosConferenciaHorarioCorte, request.CortePosConferenciaHorarioVencimento))
+                {
+                    return Results.BadRequest(new { motivo = "corte de horário precisa dos dois horários (corte e vencimento), ou nenhum" });
+                }
+
                 var id = await casoDeUso.ExecutarAsync(
-                    request.Nome, new Prazo(request.PrazoPreConferencia), new Prazo(request.PrazoPosConferencia), cancellationToken);
+                    request.Nome, new Prazo(request.PrazoPreConferencia), new Prazo(request.PrazoPosConferencia),
+                    request.CortePreConferenciaHorarioCorte, request.CortePreConferenciaHorarioVencimento,
+                    request.CortePosConferenciaHorarioCorte, request.CortePosConferenciaHorarioVencimento,
+                    cancellationToken);
                 return Results.Created($"/equipes/{id}", new CriarEquipeResponse(id));
             })
             .WithName("CriarEquipe")
             .WithSummary("RF-35.")
             .Produces<CriarEquipeResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status400BadRequest)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
 
         equipesGrupo.MapPut("/{id:guid}", async (
                 Guid id, EditarEquipeRequest request, EditarEquipe casoDeUso, CancellationToken cancellationToken) =>
             {
+                if (!CorteValido(request.CortePreConferenciaHorarioCorte, request.CortePreConferenciaHorarioVencimento) ||
+                    !CorteValido(request.CortePosConferenciaHorarioCorte, request.CortePosConferenciaHorarioVencimento))
+                {
+                    return Results.BadRequest(new { motivo = "corte de horário precisa dos dois horários (corte e vencimento), ou nenhum" });
+                }
+
                 var encontrada = await casoDeUso.ExecutarAsync(
-                    id, request.Nome, new Prazo(request.PrazoPreConferencia), new Prazo(request.PrazoPosConferencia), cancellationToken);
+                    id, request.Nome, new Prazo(request.PrazoPreConferencia), new Prazo(request.PrazoPosConferencia),
+                    request.CortePreConferenciaHorarioCorte, request.CortePreConferenciaHorarioVencimento,
+                    request.CortePosConferenciaHorarioCorte, request.CortePosConferenciaHorarioVencimento,
+                    cancellationToken);
                 return encontrada ? Results.NoContent() : Results.NotFound();
             })
             .WithName("EditarEquipe")
             .WithSummary("Renomear e/ou redefinir prazo de pré e pós-conferência — recalcula vencimento dos protocolos abertos de quem está nessa equipe (RF-35/RF-36/RF-38).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status400BadRequest)
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
 
         var escreventesGrupo = app.MapGroup("/escreventes").WithTags(OpenApiTags.CentralDeRegras);
@@ -103,20 +123,40 @@ public static class EquipeEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
     }
 
+    // Corte de horário é opcional por etapa — os dois horários (corte e vencimento) precisam
+    // vir juntos ou nenhum, senão a regra de Equipe.PrazoPara ficaria incompleta.
+    private static bool CorteValido(TimeOnly? horarioDeCorte, TimeOnly? horarioDeVencimento) =>
+        (horarioDeCorte is null) == (horarioDeVencimento is null);
+
     private static EquipeResponse ParaResponse(Equipe equipe) =>
-        new(equipe.Id, equipe.Nome, equipe.PrazoPreConferencia.Tipo, equipe.PrazoPosConferencia.Tipo);
+        new(
+            equipe.Id, equipe.Nome, equipe.PrazoPreConferencia.Tipo, equipe.PrazoPosConferencia.Tipo,
+            equipe.CortePreConferenciaHorarioCorte, equipe.CortePreConferenciaHorarioVencimento,
+            equipe.CortePosConferenciaHorarioCorte, equipe.CortePosConferenciaHorarioVencimento);
 
     private static EscreventeResponse ParaResponse(Escrevente escrevente) =>
         new(escrevente.Id, escrevente.Nome, escrevente.EquipeId);
 }
 
-public sealed record CriarEquipeRequest(string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia);
+// CortePreConferencia*/CortePosConferencia* são opcionais — pedido do dono ("equipe X entra na
+// etapa Y depois das 16h, vence às 10h do dia seguinte"): acréscimo genérico ao TipoPrazo normal
+// de cada etapa, configurável por Equipe, não hardcoded pra uma equipe específica.
+public sealed record CriarEquipeRequest(
+    string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia,
+    TimeOnly? CortePreConferenciaHorarioCorte = null, TimeOnly? CortePreConferenciaHorarioVencimento = null,
+    TimeOnly? CortePosConferenciaHorarioCorte = null, TimeOnly? CortePosConferenciaHorarioVencimento = null);
 
 public sealed record CriarEquipeResponse(Guid EquipeId);
 
-public sealed record EditarEquipeRequest(string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia);
+public sealed record EditarEquipeRequest(
+    string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia,
+    TimeOnly? CortePreConferenciaHorarioCorte, TimeOnly? CortePreConferenciaHorarioVencimento,
+    TimeOnly? CortePosConferenciaHorarioCorte, TimeOnly? CortePosConferenciaHorarioVencimento);
 
-public sealed record EquipeResponse(Guid Id, string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia);
+public sealed record EquipeResponse(
+    Guid Id, string Nome, TipoPrazo PrazoPreConferencia, TipoPrazo PrazoPosConferencia,
+    TimeOnly? CortePreConferenciaHorarioCorte, TimeOnly? CortePreConferenciaHorarioVencimento,
+    TimeOnly? CortePosConferenciaHorarioCorte, TimeOnly? CortePosConferenciaHorarioVencimento);
 
 public sealed record MoverEscreventeRequest(Guid? EquipeId);
 

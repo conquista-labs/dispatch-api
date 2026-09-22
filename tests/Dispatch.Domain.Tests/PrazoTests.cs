@@ -95,4 +95,34 @@ public class PrazoTests
         Assert.Equal(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.Zero), vencimento); // segunda 00h
         Assert.Equal(DayOfWeek.Monday, vencimento.DayOfWeek);
     }
+
+    // Pedido do dono ("equipe X entra na etapa Y depois das 16h, vence às 10h do dia
+    // seguinte") — CorteDeHorario sempre vence no dia seguinte (horário de Brasília) ao
+    // HorarioDeVencimento configurado; quem decide "está depois do corte" é Equipe.PrazoPara,
+    // não Prazo — aqui só se testa "dado que já é CorteDeHorario, o vencimento é o certo".
+    [Fact]
+    public void CorteDeHorario_VenceNoHorarioConfiguradoDoDiaSeguinte()
+    {
+        // QuartaFeira = 26/08 14:30 UTC = 26/08 11:30 em Brasília (ainda quarta).
+        var prazo = new Prazo(TipoPrazo.CorteDeHorario, new TimeOnly(10, 0));
+
+        var vencimento = prazo.CalcularVencimento(QuartaFeira);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.FromHours(-3)), vencimento); // quinta 10h Brasília
+    }
+
+    // Mesmo ajuste de dia útil que D0/D1/D2 já usam: se o dia seguinte cair num fim de semana,
+    // empurra pro próximo dia útil, no mesmo horário configurado.
+    [Fact]
+    public void CorteDeHorario_DiaSeguinteCaiNoFimDeSemana_EmpurraParaSegunda()
+    {
+        // SextaFeira16h = 28/08 16h UTC = 28/08 13h em Brasília (ainda sexta) — dia seguinte
+        // (sábado 29/08) não é dia útil, empurra pra segunda 31/08.
+        var prazo = new Prazo(TipoPrazo.CorteDeHorario, new TimeOnly(10, 0));
+
+        var vencimento = prazo.CalcularVencimento(SextaFeira16h);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 10, 0, 0, TimeSpan.FromHours(-3)), vencimento);
+        Assert.Equal(DayOfWeek.Monday, vencimento.DayOfWeek);
+    }
 }

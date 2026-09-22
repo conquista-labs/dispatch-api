@@ -23,11 +23,13 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         builder.Property(p => p.LoteImportacaoId);
         builder.Property(p => p.TipoAtoNomeOriginal).HasMaxLength(200);
 
-        // Prazo aqui é opcional (só existe depois de DistribuirProtocolo rodar).
+        // Prazo aqui é opcional (só existe depois de DistribuirProtocolo rodar). 30 (não 20)
+        // porque o formato composto de corte de horário ("CorteDeHorario|10:00") tem 20 chars
+        // exatos — sem folga nenhuma pra qualquer variação de formatação.
         builder.Property(p => p.Prazo)
             .HasConversion(PrazoConversoes.ParaTextoOpcional)
             .HasColumnName("prazo_tipo")
-            .HasMaxLength(20);
+            .HasMaxLength(30);
 
         // Filtro mais repetido da tabela mais quente (ObterPoolAsync/ObterSemDonoAsync/
         // ObterParaDistribuicaoAsync/ObterConcluidosNoPeriodoAsync) — sustenta o caminho mais

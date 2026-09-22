@@ -7,7 +7,11 @@ namespace Dispatch.Domain;
 // deste código assumia. "1 hora" fica de fora do ajuste de dia útil abaixo de propósito: é o
 // prazo mais urgente do sistema (RF-13, "urgente: prazo 1 hora, D+0 ou prioridade alta"),
 // empurrar isso pra depois de um fim de semana contradiz o motivo dele existir.
-public sealed record Prazo(TipoPrazo Tipo)
+// HorarioDeVencimento só existe quando Tipo == CorteDeHorario (o horário do dia seguinte, já em
+// horário local, que vale como vencimento) — Equipe.PrazoPara já decidiu que a entrada foi
+// depois do corte configurado antes de construir este Prazo; CalcularVencimento não reavalia o
+// corte, só aplica o horário de vencimento no próximo dia (útil).
+public sealed record Prazo(TipoPrazo Tipo, TimeOnly? HorarioDeVencimento = null)
 {
     public DateTimeOffset CalcularVencimento(DateTimeOffset momentoDeReferencia) => Tipo switch
     {
@@ -15,6 +19,9 @@ public sealed record Prazo(TipoPrazo Tipo)
         TipoPrazo.D0 => ProximoDiaUtil(FimDoDia(momentoDeReferencia)),
         TipoPrazo.D1 => ProximoDiaUtil(momentoDeReferencia.AddHours(24)),
         TipoPrazo.D2 => ProximoDiaUtil(momentoDeReferencia.AddHours(48)),
+        TipoPrazo.CorteDeHorario => ProximoDiaUtil(
+            new DateTimeOffset(FusoHorario.ParaHorarioLocal(momentoDeReferencia).Date.AddDays(1), FusoHorario.Brasilia)
+                + HorarioDeVencimento!.Value.ToTimeSpan()),
         _ => throw new ArgumentOutOfRangeException(nameof(Tipo), Tipo, message: null)
     };
 

@@ -40,7 +40,7 @@ public sealed class EditarProtocoloManual(
         if (identidadeMudou)
         {
             var todasEquipes = await equipes.ObterTodasAsync(cancellationToken);
-            var resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, etapa, todasEquipes);
+            var resolucaoPrazo = ResolvedorDePrazo.Resolver(escrevente, etapa, protocolo.AndamentoEm, todasEquipes);
             protocolo.DefinirPrazo(resolucaoPrazo.Prazo, protocolo.AndamentoEm);
 
             // RF-18h: só faz sentido checar quem já é dono (Atribuido/Conferindo) — pool/

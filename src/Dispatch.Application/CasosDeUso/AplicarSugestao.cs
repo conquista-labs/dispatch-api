@@ -45,7 +45,13 @@ public sealed class AplicarSugestao(
                 var prazoNovo = new Prazo(prazoIrreal.PrazoSugerido);
                 var prazoPre = prazoIrreal.Etapa == Etapa.PreConferencia ? prazoNovo : equipe.PrazoPreConferencia;
                 var prazoPos = prazoIrreal.Etapa == Etapa.PosConferencia ? prazoNovo : equipe.PrazoPosConferencia;
-                equipe.DefinirPrazos(prazoPre, prazoPos);
+                // Sugestão de "prazo irreal" só propõe o TipoPrazo base — o corte de horário
+                // (se a equipe já tiver um configurado) não é o que essa sugestão avalia, então
+                // preserva intacto o que já estava.
+                equipe.DefinirPrazos(
+                    prazoPre, prazoPos,
+                    equipe.CortePreConferenciaHorarioCorte, equipe.CortePreConferenciaHorarioVencimento,
+                    equipe.CortePosConferenciaHorarioCorte, equipe.CortePosConferenciaHorarioVencimento);
                 await RecalculoDeVencimentos.AplicarAsync(equipe, escreventes, protocolos, cancellationToken);
                 break;
 

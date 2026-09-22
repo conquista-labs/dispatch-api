@@ -24,7 +24,7 @@ internal static class RecalculoDeVencimentos
         var abertos = await protocolos.ObterAbertosPorEscreventesAsync(idsDosEscreventes, cancellationToken);
         foreach (var protocolo in abertos)
         {
-            var prazoNovo = equipe.PrazoPara(protocolo.Etapa);
+            var prazoNovo = equipe.PrazoPara(protocolo.Etapa, protocolo.AndamentoEm);
             protocolo.DefinirPrazo(prazoNovo, protocolo.AndamentoEm);
         }
     }

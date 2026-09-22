@@ -31,7 +31,8 @@ public class EditarEquipeTests
         var equipe = new Equipe(Guid.NewGuid(), "Antigo", new Prazo(TipoPrazo.D1), new Prazo(TipoPrazo.D1));
         var casoDeUso = NovoCasoDeUso(new FakeEquipeRepository([equipe]));
 
-        var resultado = await casoDeUso.ExecutarAsync(equipe.Id, "Novo nome", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D2));
+        var resultado = await casoDeUso.ExecutarAsync(
+            equipe.Id, "Novo nome", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D2), null, null, null, null);
 
         Assert.True(resultado);
         Assert.Equal("Novo nome", equipe.Nome);
@@ -44,7 +45,8 @@ public class EditarEquipeTests
     {
         var casoDeUso = NovoCasoDeUso(new FakeEquipeRepository([]));
 
-        var resultado = await casoDeUso.ExecutarAsync(Guid.NewGuid(), "x", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D0));
+        var resultado = await casoDeUso.ExecutarAsync(
+            Guid.NewGuid(), "x", new Prazo(TipoPrazo.D0), new Prazo(TipoPrazo.D0), null, null, null, null);
 
         Assert.False(resultado);
     }
@@ -70,11 +72,38 @@ public class EditarEquipeTests
             new FakeEscreventeRepository([escrevente]),
             new FakeProtocoloRepository([aberto, concluido]));
 
-        await casoDeUso.ExecutarAsync(equipe.Id, equipe.Nome, new Prazo(TipoPrazo.UmaHora), equipe.PrazoPosConferencia);
+        await casoDeUso.ExecutarAsync(
+            equipe.Id, equipe.Nome, new Prazo(TipoPrazo.UmaHora), equipe.PrazoPosConferencia, null, null, null, null);
 
         Assert.Equal(referencia.AddHours(1), aberto.VencimentoEm);
         // Descartado é terminal — não deveria ser tocado pelo recálculo.
         Assert.Equal(vencimentoOriginalDoConcluido, concluido.VencimentoEm);
+    }
+
+    // RF-38 também precisa valer quando o que mudou foi o corte de horário, não o TipoPrazo
+    // base — mesmo cenário do teste acima, mas mudando só o corte.
+    [Fact]
+    public async Task MudarCorteDeHorario_RecalculaVencimentoDosProtocolosAbertosDaEquipe()
+    {
+        var equipe = new Equipe(Guid.NewGuid(), "Quinto Andar", new Prazo(TipoPrazo.D1), new Prazo(TipoPrazo.D1));
+        var escrevente = new Escrevente(Guid.NewGuid(), "Fulano", equipe.Id);
+        // 26/08/2026 19h30 UTC = 16h30 em Brasília — depois de um corte das 16h.
+        var referencia = new DateTimeOffset(2026, 8, 26, 19, 30, 0, TimeSpan.Zero);
+
+        var aberto = new Protocolo(Guid.NewGuid(), "1", Guid.NewGuid(), escrevente.Id, Etapa.PosConferencia, referencia);
+        aberto.DefinirPrazo(new Prazo(TipoPrazo.D1), referencia);
+
+        var casoDeUso = NovoCasoDeUso(
+            new FakeEquipeRepository([equipe]),
+            new FakeEscreventeRepository([escrevente]),
+            new FakeProtocoloRepository([aberto]));
+
+        await casoDeUso.ExecutarAsync(
+            equipe.Id, equipe.Nome, equipe.PrazoPreConferencia, equipe.PrazoPosConferencia,
+            null, null, new TimeOnly(16, 0), new TimeOnly(10, 0));
+
+        Assert.Equal(TipoPrazo.CorteDeHorario, aberto.Prazo!.Tipo);
+        Assert.Equal(new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.FromHours(-3)), aberto.VencimentoEm);
     }
 }
 
