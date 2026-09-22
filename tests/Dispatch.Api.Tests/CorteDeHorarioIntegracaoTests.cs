@@ -52,8 +52,15 @@ public sealed class CorteDeHorarioIntegracaoTests(IntegracaoFixture fixture) : I
             HttpStatusCode.NoContent,
             (await conferente.PostAsJsonAsync($"/minha-fila/{protocoloId}/concluir", new { aprovado = true })).StatusCode);
 
+        // `AutenticarComoAsync` re-semeia (POST /dev/seed-e2e) toda vez que é chamado — a
+        // chamada acima (Conferente) reseta as 3 contas de novo, o que pode invalidar o token
+        // da distribuidora obtido no início do teste (SessoesValidasApartirDe bumped depois de
+        // IssuedAt do token antigo, RF-01k). Reautentica pra garantir um token emitido depois
+        // do último seed — achado como flake real rodando a suíte inteira várias vezes.
+        distribuidora = await AutenticarComoAsync(Papel.Distribuidora);
+
         var reabriu = await distribuidora.PostAsync($"/protocolos/{protocoloId}/reabrir-conferencia", content: null);
-        Assert.True(reabriu.IsSuccessStatusCode, await reabriu.Content.ReadAsStringAsync());
+        Assert.True(reabriu.IsSuccessStatusCode, $"status={reabriu.StatusCode} corpo={await reabriu.Content.ReadAsStringAsync()}");
 
         // Reaberto: vencimento recalcula a partir de "agora" (não do andamento original), ainda
         // usando o mesmo Prazo(CorteDeHorario, 10:00) — sem lançar.
