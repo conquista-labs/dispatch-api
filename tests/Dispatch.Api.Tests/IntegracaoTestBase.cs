@@ -23,12 +23,24 @@ public abstract class IntegracaoTestBase(IntegracaoFixture fixture) : IAsyncLife
     // Reaproveita POST /dev/seed-e2e (o mesmo endpoint que o globalSetup do Playwright do
     // dispatch-web já usa) em vez de inventar um caminho de autenticação só pros testes —
     // login aqui é o fluxo real, com hash de senha e JWT de verdade.
+    //
+    // Semeia UMA vez por teste (xUnit cria uma instância por teste, e o banco é zerado no
+    // InitializeAsync): o seed redefine a senha das contas, e RedefinirSenha encerra as sessões
+    // emitidas antes (SessoesValidasApartirDe, truncado ao segundo). Re-semear a cada chamada fazia o
+    // token de um cliente autenticado antes cair em 401 sempre que um segundo virava entre os dois
+    // logins — flake real em DashboardIntegracaoTests e PainelDeHojeIntegracaoTests.
+    private bool _contasSemeadas;
+
     protected async Task<HttpClient> AutenticarComoAsync(Papel papel)
     {
         var cliente = CriarCliente();
 
-        var seed = await cliente.PostAsync("/dev/seed-e2e", content: null);
-        seed.EnsureSuccessStatusCode();
+        if (!_contasSemeadas)
+        {
+            var seed = await cliente.PostAsync("/dev/seed-e2e", content: null);
+            seed.EnsureSuccessStatusCode();
+            _contasSemeadas = true;
+        }
 
         var email = papel switch
         {
