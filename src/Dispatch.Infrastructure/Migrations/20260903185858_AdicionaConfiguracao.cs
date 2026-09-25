@@ -35,8 +35,8 @@ namespace Dispatch.Infrastructure.Migrations
                 });
 
             // Linha única, semeada com os mesmos valores que eram hardcoded antes desta tabela
-            // existir (ver dispatch-api/CLAUDE.md) — sem isso ConfiguracaoRepository.ObterAsync
-            // quebra em runtime contra uma tabela vazia.
+            // existir (ver docs/decisions/0023-tabela-config-de-linha-unica.md) — sem isso
+            // ConfiguracaoRepository.ObterAsync quebra em runtime contra uma tabela vazia.
             migrationBuilder.InsertData(
                 table: "configuracao",
                 columns: new[]

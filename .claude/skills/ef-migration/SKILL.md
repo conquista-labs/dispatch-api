@@ -6,8 +6,10 @@ description: Use when creating or applying an Entity Framework Core migration in
 # Criar ou aplicar uma migration do EF Core
 
 O schema do Postgres no Neon só muda por migration versionada — nunca editando o banco na mão
-(regra de qualidade do `CLAUDE.md`). Todos os comandos abaixo rodam a partir da raiz do
-`dispatch-api`.
+(premissa de qualidade do `CLAUDE.md`). Todos os comandos abaixo rodam a partir da raiz do
+`dispatch-api`. Armadilhas de mapeamento e de migration em banco com dado (backfill antes de
+`CHECK`, `DEFAULT` coerente, `builder.Property` explícito): `docs/patterns/ef-core.md`. Aplicar em
+produção (Neon) antes do push: `docs/patterns/deploy.md`.
 
 ## Pré-requisito (uma vez só)
 

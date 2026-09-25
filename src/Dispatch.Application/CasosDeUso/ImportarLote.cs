@@ -51,8 +51,9 @@ public sealed class ImportarLote(
             : null;
 
         // Dicionário por nome normalizado (não lista + FirstOrDefault por linha) — um lote pode
-        // ter centenas de linhas (ver dispatch-api/CLAUDE.md), então uma busca linear nos dois
-        // catálogos por linha é custo que cresce junto (achado numa auditoria de qualidade).
+        // ter centenas de linhas, então uma busca linear nos dois catálogos por linha é custo que
+        // cresce junto (achado numa auditoria de qualidade — ver docs/historico.md, "Auditoria de
+        // qualidade do back"; padrão em docs/patterns/ef-core.md, "Performance").
         var escreventePorNome = (await escreventes.ObterTodosAsync(cancellationToken))
             .ToDictionary(e => e.Nome, StringComparer.OrdinalIgnoreCase);
         var equipesTodas = await equipes.ObterTodasAsync(cancellationToken);

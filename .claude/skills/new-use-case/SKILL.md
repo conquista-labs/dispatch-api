@@ -19,8 +19,13 @@ description: Use when adding a new use case to Dispatch.Application (an applicat
 4. **Regra de negócio de verdade vive no Domain.** O caso de uso orquestra chamadas ao
    `Dispatch.Domain` e às portas — ele não reimplementa o motor de distribuição, o cálculo de
    prazo ou a precedência de alçada.
-5. **Registre no composition root.** A interface e a implementação real são ligadas via DI em
-   `Dispatch.Api/Program.cs`.
-6. **Teste isolado.** Teste o caso de uso com fakes/in-memory das interfaces das quais ele
+5. **Registre no DI.** O caso de uso (`services.AddScoped<X>()`) e a implementação real de cada
+   porta são ligados em `src/Dispatch.Infrastructure/ServiceCollectionExtensions.cs` (o
+   `Program.cs` só chama essa extensão). Pra expor como rota, siga a skill `new-endpoint`.
+6. **Desfechos como tipo.** Quando há mais de um resultado possível, devolva um
+   `abstract record ResultadoX` com construtor privado e um `sealed record` por desfecho
+   (`Sucesso`, `NaoEncontrado`, `JaExiste`...) — modelo: `CriarTipoAto.cs`. O endpoint faz um
+   `switch` exaustivo sobre ele.
+7. **Teste isolado.** Teste o caso de uso com fakes/in-memory das interfaces das quais ele
    depende — sem banco real. Validar contra o banco/HTTP real é papel da skill
    `verify-integration`, não desta.

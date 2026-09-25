@@ -9,5 +9,5 @@ namespace Dispatch.Domain;
 // (protótipo mostra um número mockado) — decisão de projeto: reaproveitar a proporção que cada
 // função do GeradorDeSugestoes já calcula internamente pra comparar com o próprio limiar
 // (força da moda do nível, percentual de estouro, dominância da equipe, percentual de
-// reprovação), em vez de inventar um peso novo. Ver CLAUDE.md.
+// reprovação), em vez de inventar um peso novo. Ver docs/patterns/indicadores-e-aprendizado.md.
 public sealed record CandidatoSugestao(string Chave, PayloadSugestao Payload, string Evidencia, int Ocorrencias, double IndiceConfianca);

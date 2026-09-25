@@ -16,7 +16,10 @@ a parte de precedência entre regra por pessoa e regra por nível).
    4 (motor de distribuição e precedência de regras), 5 (prazo e semáforo). Se a mudança
    envolve precedência pessoa/nível, releia o exemplo resolvido da seção 4 antes de escrever
    qualquer código — é fácil implementar a interpretação errada (o próprio documento avisa que
-   o protótipo atual diverge do comportamento correto).
+   o protótipo atual diverge do comportamento correto). O algoritmo **atual** do back (cascata
+   de 3 camadas, reserva, equipe+etapa absoluto — que já diverge da seção 4 de propósito) está em
+   `docs/patterns/motor-e-prazos.md`; o porquê de cada versão, na cadeia de ADRs 0002 → 0017 →
+   0018 (+0024 → 0030) em `docs/decisions/`.
 2. **Teste primeiro.** Escreva o teste em `Dispatch.Domain.Tests` cobrindo o cenário do
    requisito antes de implementar, incluindo casos de borda de precedência:
    - regra por pessoa existe para o alvo → substitui a regra de nível sobre aquele mesmo alvo
@@ -30,4 +33,7 @@ a parte de precedência entre regra por pessoa e regra por nível).
    expõe isso (ex: um campo com a regra aplicada), não apenas true/false.
 5. **Rode `dotnet test`** e confirme que passa antes de considerar a tarefa terminada.
 6. Se a mudança alterar um comportamento já documentado (modo de operação, faixas de
-   semáforo, etc.), atualize `CLAUDE.md` na raiz do `dispatch-api` de acordo.
+   semáforo, etc.), atualize `docs/patterns/motor-e-prazos.md`; se houve escolha entre
+   alternativas reais, registre um ADR com a skill `/api-adr` (supersedendo o anterior, se for o
+   caso); registre a entrega em `docs/historico.md`. Não acrescente seção de changelog ao
+   `CLAUDE.md`.

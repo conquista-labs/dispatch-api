@@ -485,3 +485,8 @@ $RECYCLE.BIN/
 # testes) — artefato local de verificação, nunca commitado. TestResults/ já é coberto acima
 # pelo padrão [Tt]est[Rr]esult*/.
 coveragereport/
+
+# Claude Code — estado local (o versionado é .claude/settings.json, skills, hooks e agents)
+.claude/settings.local.json
+.claude/skill-usage.jsonl
+.claude/worktrees/

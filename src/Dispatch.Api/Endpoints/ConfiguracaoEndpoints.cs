@@ -5,7 +5,8 @@ using Dispatch.Domain;
 namespace Dispatch.Api.Endpoints;
 
 // Seção 8 do documento de requisitos — tabela de configuração do sistema, editável sem
-// redeploy (antes vivia hardcoded em vários casos de uso/endpoints, ver dispatch-api/CLAUDE.md).
+// redeploy (antes vivia hardcoded em vários casos de uso/endpoints, ver
+// docs/decisions/0023-tabela-config-de-linha-unica.md).
 // Sem tela própria no front ainda — editável via GET/PUT direto (curl/Swagger), Distribuidora.
 public static class ConfiguracaoEndpoints
 {

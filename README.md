@@ -10,7 +10,7 @@ planilha manual.
 
 ## Stack
 
-.NET 10 · ASP.NET Core (minimal APIs) · Entity Framework Core · PostgreSQL (Neon) · Fly.io
+.NET 10 · ASP.NET Core (minimal APIs) · Entity Framework Core · PostgreSQL (Neon) · Render
 
 ## Rodando localmente
 
@@ -27,8 +27,7 @@ dotnet run --project src/Dispatch.Api     # sobe a API
   segredo — só existem no container local). Connection string em
   `src/Dispatch.Api/appsettings.Development.json`.
 - **Produção**: Postgres no Neon. A connection string real não fica em nenhum arquivo do
-  repositório — é configurada como secret no Fly.io (`fly secrets set`) quando o deploy for
-  configurado.
+  repositório — é secret no dashboard do Render (`ConnectionStrings__DispatchDb`).
 
 ## Docker
 
@@ -38,5 +37,6 @@ docker run -p 8080:8080 dispatch-api
 ```
 
 O Dockerfile faz um build multi-stage: compila com a imagem do SDK e publica na imagem de
-runtime do ASP.NET, mais enxuta. Ainda não há `fly.toml` — a configuração de deploy no
-Fly.io entra quando o deploy for de fato configurado (via `fly launch`).
+runtime do ASP.NET, mais enxuta. Produção roda no Render (`render.yaml`, auto-deploy a cada push
+em `main`) — procedimentos em [`docs/patterns/deploy.md`](docs/patterns/deploy.md). O `fly.toml` é
+legado do primeiro deploy, no Fly.io.
