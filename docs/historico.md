@@ -891,10 +891,11 @@ ADR-0039 e ADR-0040; fecha gaps §1. Feature 3 do `PLANO-melhorias.md`, lado do 
 
 Verificado: `ContasTests` (Application), `AutenticarTests`, `ListarConferentesTests`,
 `ObterDashboardTests`, `ListarRegrasAlcadaTests`, `CadastrarConferenteTests`; integração em
-`AdministradorIntegracaoTests` (403 da distribuidora em 14 rotas, leitura mantida, nível mascarado em
+`AdministradorIntegracaoTests` (403 da distribuidora em todas as 32 rotas só do admin, leitura mantida, nível mascarado em
 Conferentes e Regras, score só pro admin, conta nova → troca obrigatória → uso → desativada → 401,
 trava da própria conta) contra o Postgres real; migration aplicada no banco local e smoke pela HTTP.
-502 testes (146 Domain + 326 Application + 30 Api.Tests).
+Testes de Domain para `ServeComoSenhaInicial` e `ExigirTrocaDeSenha`/`RedefinirSenha`. 524 testes
+(150 Domain + 326 Application + 48 Api.Tests).
 
 **Subida**: migration no Neon antes do merge; promover a primeira admin (Maria Vittoria) logo depois
 do deploy do front — ver `docs/patterns/deploy.md`, "Ordem de subida".

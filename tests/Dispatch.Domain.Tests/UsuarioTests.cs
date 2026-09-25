@@ -14,6 +14,21 @@ public class UsuarioTests
         Assert.Equal(agora, usuario.SessoesValidasApartirDe);
     }
 
+    // RF-45 / ADR-0040: conta criada por outra pessoa nasce exigindo troca; qualquer troca de senha
+    // (a inicial ou uma recuperação) desliga a exigência.
+    [Fact]
+    public void ExigirTrocaDeSenha_LigaAFlag_ERedefinirSenhaDesliga()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Fulano", "fulano@cartorio.com", "hash-inicial", Papel.Distribuidora);
+        Assert.False(usuario.TrocarSenhaNoProximoAcesso);
+
+        usuario.ExigirTrocaDeSenha();
+        Assert.True(usuario.TrocarSenhaNoProximoAcesso);
+
+        usuario.RedefinirSenha("hash-novo", new DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero));
+        Assert.False(usuario.TrocarSenhaNoProximoAcesso);
+    }
+
     [Fact]
     public void RedefinirSenha_TruncaCarimboPraOSegundo()
     {

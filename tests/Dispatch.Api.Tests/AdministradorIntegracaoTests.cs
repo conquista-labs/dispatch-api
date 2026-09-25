@@ -16,22 +16,42 @@ public sealed class AdministradorIntegracaoTests(IntegracaoFixture fixture) : In
     // A distribuidora é barrada pela autorização antes de o handler rodar — por isso um id
     // qualquer basta; o par "admin passa" está nos outros testes deste arquivo e em
     // AutorizacaoIntegracaoTests.
+    // Exaustiva de propósito: toda rota da tabela "só Administrador" de docs/patterns/autorizacao.md.
+    // Rota nova só do admin entra aqui.
     public static TheoryData<string, string> EscritasSoDoAdmin => new()
     {
         { "POST", "/conferentes" },
         { "POST", "/conferentes/vincular" },
+        { "PUT", $"/conferentes/{IdQualquer}/perfil" },
         { "PUT", $"/conferentes/{IdQualquer}/nivel-jornada" },
         { "DELETE", $"/conferentes/{IdQualquer}" },
         { "GET", "/contas" },
         { "POST", "/contas" },
+        { "POST", $"/contas/{IdQualquer}/desativar" },
         { "POST", "/regras-alcada" },
+        { "POST", $"/regras-alcada/{IdQualquer}/ativar" },
         { "POST", $"/regras-alcada/{IdQualquer}/desativar" },
+        { "DELETE", $"/regras-alcada/{IdQualquer}" },
+        { "POST", "/regras-alcada/testar" },
         { "PUT", "/config" },
         { "POST", "/tipos-ato" },
         { "GET", "/tipos-ato/com-uso" },
+        { "PUT", $"/tipos-ato/{IdQualquer}" },
+        { "PUT", $"/tipos-ato/{IdQualquer}/peso" },
+        { "PUT", $"/tipos-ato/{IdQualquer}/grupo" },
+        { "POST", $"/tipos-ato/{IdQualquer}/ativar" },
+        { "POST", $"/tipos-ato/{IdQualquer}/desativar" },
+        { "DELETE", $"/tipos-ato/{IdQualquer}" },
         { "POST", "/equipes" },
+        { "PUT", $"/equipes/{IdQualquer}" },
+        { "GET", "/escreventes/sem-equipe" },
         { "POST", "/escreventes" },
+        { "POST", $"/escreventes/{IdQualquer}/mover" },
+        { "POST", "/sugestoes/gerar" },
         { "GET", "/sugestoes" },
+        { "GET", "/sugestoes/historico" },
+        { "POST", $"/sugestoes/{IdQualquer}/aplicar" },
+        { "POST", $"/sugestoes/{IdQualquer}/descartar" },
     };
 
     [Theory]
