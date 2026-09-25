@@ -11,7 +11,7 @@ public static class TipoAtoEndpoints
         app.MapGet("/tipos-ato", async (ListarTiposAto casoDeUso, CancellationToken cancellationToken) =>
                 Results.Ok((await casoDeUso.ExecutarAsync(cancellationToken)).Select(ParaResponse).ToList()))
             .WithName("ListarTiposAto")
-            .WithSummary("Catálogo de tipos de ato — usado pra resolver nome no alvo de uma regra de alçada (RF-31) e no filtro de tipo de ato (RF-18e/RF-24f).")
+            .WithSummary("Catálogo de tipos de ato — usado pra resolver nome no alvo de uma regra de alçada (RF-31), no filtro de tipo de ato (RF-18e/RF-24f) e no \"Peso de complexidade\" do painel de detalhe (RF-18a).")
             .WithTags(OpenApiTags.CentralDeRegras)
             .Produces<IReadOnlyList<TipoAtoResponse>>()
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
@@ -47,7 +47,7 @@ public static class TipoAtoEndpoints
                 return Results.Ok(new PaginaDeTipoAtoComUsoResponse(resultado.Itens.Select(ParaComUsoResponse).ToList(), resultado.Total));
             })
             .WithName("ListarTiposAtoComUso")
-            .WithSummary("Catálogo com volume e cobertura de alçada, paginado, pra tabela da aba Tipos de ato (RF-34a).")
+            .WithSummary("Catálogo com volume, cobertura de alçada e tempo de referência efetivo (informado → mediana de 12 meses com ≥ 30 conferências → estimativa), paginado, pra tabela da aba Tipos de ato (RF-34a, RF-46c).")
             .Produces<PaginaDeTipoAtoComUsoResponse>();
 
         grupo.MapPut("/{id:guid}", async (Guid id, RenomearTipoAtoRequest request, RenomearTipoAto casoDeUso, CancellationToken cancellationToken) =>
@@ -68,10 +68,38 @@ public static class TipoAtoEndpoints
             .Produces(StatusCodes.Status409Conflict);
 
         grupo.MapPut("/{id:guid}/peso", async (Guid id, DefinirPesoRequest request, DefinirPesoDeComplexidadeDoTipoAto casoDeUso, CancellationToken cancellationToken) =>
-                await casoDeUso.ExecutarAsync(id, request.Peso, cancellationToken) ? Results.NoContent() : Results.NotFound())
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, request.Peso, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoDefinirPesoDeComplexidade.Sucesso => Results.NoContent(),
+                    ResultadoDefinirPesoDeComplexidade.NaoEncontrado => Results.NotFound(),
+                    ResultadoDefinirPesoDeComplexidade.Invalido invalido => Results.BadRequest(new { motivo = invalido.Motivo }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
             .WithName("DefinirPesoDeComplexidadeDoTipoAto")
-            .WithSummary("RF-34f — alimenta o score do conferente (RF-46, Dashboard).")
+            .WithSummary("RF-34f — peso decimal 0,50–2,50 em passos de 0,05; alimenta o score do conferente (RF-46) e a estimativa do tempo de referência (RF-46c).")
             .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
+
+        grupo.MapPut("/{id:guid}/tempo-referencia", async (
+                Guid id, DefinirTempoDeReferenciaRequest request, DefinirTempoDeReferenciaDoTipoAto casoDeUso, CancellationToken cancellationToken) =>
+            {
+                var resultado = await casoDeUso.ExecutarAsync(id, request.Minutos, cancellationToken);
+                return resultado switch
+                {
+                    ResultadoDefinirTempoDeReferencia.Sucesso => Results.NoContent(),
+                    ResultadoDefinirTempoDeReferencia.NaoEncontrado => Results.NotFound(),
+                    ResultadoDefinirTempoDeReferencia.Invalido invalido => Results.BadRequest(new { motivo = invalido.Motivo }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
+                };
+            })
+            .WithName("DefinirTempoDeReferenciaDoTipoAto")
+            .WithSummary("RF-34a — grava o tempo de referência informado (2–240 min); minutos nulo = \"usar histórico\" (volta à mediana, ou à estimativa sem 30 conferências).")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
         grupo.MapPut("/{id:guid}/grupo", async (Guid id, DefinirGrupoRequest request, DefinirGrupoDoTipoAto casoDeUso, CancellationToken cancellationToken) =>
@@ -113,13 +141,18 @@ public static class TipoAtoEndpoints
             .Produces(StatusCodes.Status409Conflict);
     }
 
-    private static TipoAtoResponse ParaResponse(TipoAto tipoAto) => new(tipoAto.Id, tipoAto.Nome, tipoAto.Ativo, tipoAto.Grupo);
+    private static TipoAtoResponse ParaResponse(TipoAto tipoAto) =>
+        new(tipoAto.Id, tipoAto.Nome, tipoAto.Ativo, tipoAto.Grupo, tipoAto.PesoComplexidade);
 
     private static TipoAtoComUsoResponse ParaComUsoResponse(TipoAtoComUso tipo) =>
-        new(tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade, tipo.Grupo, tipo.Volume, tipo.ConferentesComAlcada);
+        new(tipo.Id, tipo.Nome, tipo.Ativo, tipo.PesoComplexidade, tipo.Grupo, tipo.Volume, tipo.ConferentesComAlcada,
+            new TempoReferenciaResponse(
+                tipo.TempoReferencia.Minutos, tipo.TempoReferencia.Origem, tipo.TempoReferencia.InformadoMinutos,
+                tipo.TempoReferencia.MedianaMinutos, tipo.TempoReferencia.ConferenciasNoHistorico));
 }
 
-public sealed record TipoAtoResponse(Guid Id, string Nome, bool Ativo, GrupoTipoAto? Grupo);
+// PesoComplexidade (RF-18a, fatia 5 do Dashboard v2): decimal 0,50–2,50.
+public sealed record TipoAtoResponse(Guid Id, string Nome, bool Ativo, GrupoTipoAto? Grupo, decimal PesoComplexidade);
 
 public sealed record CriarTipoAtoRequest(string Nome);
 
@@ -127,11 +160,23 @@ public sealed record CriarTipoAtoResponse(Guid TipoAtoId);
 
 public sealed record RenomearTipoAtoRequest(string Nome);
 
-public sealed record DefinirPesoRequest(int Peso);
+// Decimal 0,50–2,50, múltiplo de 0,05 (era inteiro até a fatia 5 do Dashboard v2).
+public sealed record DefinirPesoRequest(decimal Peso);
+
+// Nulo = "usar histórico" (apaga o informado).
+public sealed record DefinirTempoDeReferenciaRequest(int? Minutos);
 
 public sealed record DefinirGrupoRequest(GrupoTipoAto? Grupo);
 
 public sealed record TipoAtoComUsoResponse(
-    Guid Id, string Nome, bool Ativo, int PesoComplexidade, GrupoTipoAto? Grupo, int Volume, int ConferentesComAlcada);
+    Guid Id, string Nome, bool Ativo, decimal PesoComplexidade, GrupoTipoAto? Grupo, int Volume, int ConferentesComAlcada,
+    TempoReferenciaResponse TempoReferencia);
+
+// RF-34a/RF-46c. Minutos = referência efetiva; Origem = Informado | Historico | Estimado. MedianaMinutos
+// vem mesmo com valor informado (null = menos de 30 conferências válidas em 12 meses — o "usar
+// histórico" não tem pra onde voltar). ConferenciasNoHistorico = conferências válidas na janela (o N de
+// "mediana de N atos"), depois de descartar as > 4× a estimativa.
+public sealed record TempoReferenciaResponse(
+    int Minutos, OrigemTempoReferencia Origem, int? InformadoMinutos, int? MedianaMinutos, int ConferenciasNoHistorico);
 
 public sealed record PaginaDeTipoAtoComUsoResponse(IReadOnlyList<TipoAtoComUsoResponse> Itens, int Total);

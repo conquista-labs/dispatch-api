@@ -85,6 +85,45 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
                 && p.ConcluidoEm >= desde && p.ConcluidoEm < ate)
             .ToListAsync(cancellationToken);
 
+    // Projeção só do que Protocolo.CalcularDuracao precisa (sem Numero, observação, pausas...): uma query
+    // com o JOIN dos ciclos e um subselect do último ajuste, sustentada pelo índice (status, concluido_em).
+    // A soma fica em memória, na mesma função de domínio da propriedade Duracao — uma conta só, sem
+    // reescrever "ciclos + ajuste" em SQL. "Último ajuste" = maior Id, a mesma ordem em que o EF carrega a
+    // coleção pra Protocolo.Duracao (AjustesDeDuracao[^1]).
+    public async Task<IReadOnlyCollection<DuracaoDeConferencia>> ObterDuracoesConcluidasPorTipoAsync(
+        IReadOnlyCollection<Guid> tipoAtoIds, DateTimeOffset desde, CancellationToken cancellationToken)
+    {
+        if (tipoAtoIds.Count == 0)
+        {
+            return [];
+        }
+
+        var linhas = await dbContext.Protocolos
+            .AsNoTracking()
+            .Where(p => (p.Status == StatusProtocolo.Aprovado || p.Status == StatusProtocolo.Reprovado)
+                && p.ConcluidoEm >= desde
+                && p.TipoAtoId != null && tipoAtoIds.Contains(p.TipoAtoId.Value))
+            .Select(p => new
+            {
+                TipoAtoId = p.TipoAtoId!.Value,
+                p.IniciadoEm,
+                p.ConcluidoEm,
+                Ciclos = p.CiclosAnteriores.Select(c => new { c.IniciadoEm, c.ConcluidoEm }).ToList(),
+                UltimoAjuste = p.AjustesDeDuracao
+                    .OrderByDescending(a => EF.Property<int>(a, "Id"))
+                    .Select(a => (TimeSpan?)a.DuracaoNova)
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+
+        return linhas
+            .Select(l => (l.TipoAtoId, Duracao: Protocolo.CalcularDuracao(
+                l.UltimoAjuste, l.IniciadoEm, l.ConcluidoEm, l.Ciclos.Select(c => c.ConcluidoEm - c.IniciadoEm))))
+            .Where(l => l.Duracao is not null)
+            .Select(l => new DuracaoDeConferencia(l.TipoAtoId, l.Duracao!.Value))
+            .ToList();
+    }
+
     public async Task<IReadOnlyCollection<(Guid RegraAlcadaId, int Total)>> ContarPorRegraAplicadaAsync(
         CancellationToken cancellationToken)
     {

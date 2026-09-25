@@ -27,6 +27,10 @@ public sealed class IntegracaoFixture : IAsyncLifetime
 
     public DispatchApiFactory Factory { get; private set; } = null!;
 
+    // Pra teste que precisa de um banco à parte no mesmo container (ex.: migrar até uma versão antiga,
+    // semear dado no schema de antes e subir a migration de conversão).
+    public string ConnectionString => _postgres.GetConnectionString();
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();

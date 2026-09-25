@@ -38,6 +38,7 @@ public sealed class AdministradorIntegracaoTests(IntegracaoFixture fixture) : In
         { "GET", "/tipos-ato/com-uso" },
         { "PUT", $"/tipos-ato/{IdQualquer}" },
         { "PUT", $"/tipos-ato/{IdQualquer}/peso" },
+        { "PUT", $"/tipos-ato/{IdQualquer}/tempo-referencia" },
         { "PUT", $"/tipos-ato/{IdQualquer}/grupo" },
         { "POST", $"/tipos-ato/{IdQualquer}/ativar" },
         { "POST", $"/tipos-ato/{IdQualquer}/desativar" },

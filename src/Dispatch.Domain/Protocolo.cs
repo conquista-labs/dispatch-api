@@ -103,9 +103,14 @@ public sealed class Protocolo
     // reaberto mostraria só a duração da última rodada, escondendo o tempo real que ficou em
     // conferência desde o início. Um ajuste manual (AjustarDuracao) sobrescreve esse cálculo —
     // o valor mais recente em AjustesDeDuracao, se houver, sempre vence.
-    public TimeSpan? Duracao =>
-        DuracaoAjustada ?? (IniciadoEm is { } inicio && ConcluidoEm is { } fim
-            ? _ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo.Duracao)
+    public TimeSpan? Duracao => CalcularDuracao(DuracaoAjustada, IniciadoEm, ConcluidoEm, _ciclosAnteriores.Select(c => c.Duracao));
+
+    // A mesma conta de Duracao sobre valores soltos — a mediana do tempo de referência (RF-46c) projeta
+    // só estes campos do histórico de 12 meses em vez de materializar cada Protocolo (Infrastructure).
+    public static TimeSpan? CalcularDuracao(
+        TimeSpan? ultimoAjuste, DateTimeOffset? iniciadoEm, DateTimeOffset? concluidoEm, IEnumerable<TimeSpan> ciclosAnteriores) =>
+        ultimoAjuste ?? (iniciadoEm is { } inicio && concluidoEm is { } fim
+            ? ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo)
             : null);
 
     public Protocolo(

@@ -262,7 +262,7 @@ public sealed class ObterDashboard(
     {
         var pesos = protocolosDoConferente
             .Where(p => p.TipoAtoId is not null && catalogo.ContainsKey(p.TipoAtoId.Value))
-            .Select(p => catalogo[p.TipoAtoId!.Value].PesoComplexidade)
+            .Select(p => (double)catalogo[p.TipoAtoId!.Value].PesoComplexidade)
             .ToList();
         return pesos.Count == 0 ? 0 : pesos.Average();
     }

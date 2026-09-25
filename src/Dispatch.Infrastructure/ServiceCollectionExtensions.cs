@@ -147,6 +147,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AtivarTipoAto>();
         services.AddScoped<DesativarTipoAto>();
         services.AddScoped<DefinirPesoDeComplexidadeDoTipoAto>();
+        services.AddScoped<DefinirTempoDeReferenciaDoTipoAto>();
         services.AddScoped<DefinirGrupoDoTipoAto>();
         services.AddScoped<RemoverTipoAto>();
 

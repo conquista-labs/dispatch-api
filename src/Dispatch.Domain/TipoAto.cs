@@ -10,10 +10,15 @@ public sealed class TipoAto
     public string Nome { get; private set; }
     public bool Ativo { get; private set; }
 
-    // RF-34f: alimenta o score do conferente (RF-46, Dashboard). Sem uso ainda (Dashboard não
-    // construído), mas nasce aqui pra não precisar de outra migration quando ele for. Peso
-    // mínimo 1 — não existe "peso zero" no requisito.
-    public int PesoComplexidade { get; private set; }
+    // RF-34f: alimenta a parcela de complexidade do score (RF-46) e a estimativa do tempo de
+    // referência (RF-46c). Decimal 0,50–2,50 em passos de 0,05 (PesoDeComplexidade) desde a fatia 5 do
+    // Dashboard v2 — era inteiro ≥ 1 antes.
+    public decimal PesoComplexidade { get; private set; }
+
+    // RF-34a/RF-46c: tempo de referência informado pelo administrador (2–240 min). Nulo = não
+    // informado — a referência efetiva cai pra mediana do histórico ou pra estimativa, calculadas na
+    // leitura (TempoDeReferencia), nunca gravadas aqui.
+    public int? TempoReferenciaMinutos { get; private set; }
 
     // Nascido nulo quando o tipo entra sozinho pela importação (RF-09 não pede classificação
     // nesse momento) — a distribuidora classifica depois na tela "Tipos de ato". Não existe
@@ -21,12 +26,14 @@ public sealed class TipoAto
     // 5 valores ficam fixos como enum, mesmo padrão de Nivel/Etapa/TipoPrazo.
     public GrupoTipoAto? Grupo { get; private set; }
 
-    public TipoAto(Guid id, string nome, bool ativo = true, int pesoComplexidade = 1, GrupoTipoAto? grupo = null)
+    // O EF também constrói por aqui (constructor binding); o CHECK do banco garante que o que vem de lá
+    // já passa na validação. TempoReferenciaMinutos entra pelo setter privado.
+    public TipoAto(Guid id, string nome, bool ativo = true, decimal pesoComplexidade = PesoDeComplexidade.Padrao, GrupoTipoAto? grupo = null)
     {
         Id = id;
         Nome = nome;
         Ativo = ativo;
-        PesoComplexidade = pesoComplexidade;
+        PesoComplexidade = ValidarPeso(pesoComplexidade);
         Grupo = grupo;
     }
 
@@ -36,7 +43,23 @@ public sealed class TipoAto
 
     public void Desativar() => Ativo = false;
 
-    public void DefinirPesoDeComplexidade(int peso) => PesoComplexidade = peso;
+    // A Application valida antes e devolve 400 com o motivo; validar de novo aqui garante que nenhum
+    // caminho grave um peso fora da regra (mesmo padrão de Configuracao.DefinirMetasEPesos).
+    public void DefinirPesoDeComplexidade(decimal peso) => PesoComplexidade = ValidarPeso(peso);
+
+    public void DefinirTempoDeReferencia(int? minutos)
+    {
+        var motivo = TempoDeReferencia.ValidarInformado(minutos);
+        if (motivo is not null)
+        {
+            throw new ArgumentException(motivo, nameof(minutos));
+        }
+
+        TempoReferenciaMinutos = minutos;
+    }
+
+    private static decimal ValidarPeso(decimal peso) =>
+        PesoDeComplexidade.Validar(peso) is { } motivo ? throw new ArgumentException(motivo, nameof(peso)) : peso;
 
     public void DefinirGrupo(GrupoTipoAto? grupo) => Grupo = grupo;
 }
