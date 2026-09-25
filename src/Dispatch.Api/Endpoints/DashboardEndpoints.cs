@@ -33,7 +33,7 @@ public static class DashboardEndpoints
                 return Results.Ok(ParaResponse(resultado));
             })
             .WithName("ObterDashboard")
-            .WithSummary("KPIs, score (40% volume + 30% prazo + 20% qualidade + 10% complexidade) e desempenho por período (RF-42 a RF-46).")
+            .WithSummary("KPIs (com o mesmo trecho do período anterior), série por dia útil/semana, score (40% volume + 30% prazo + 20% qualidade + 10% complexidade) e desempenho por período de calendário no dia de Brasília (RF-42 a RF-46).")
             .Produces<DashboardResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -91,7 +91,13 @@ public static class DashboardEndpoints
         painel.Gargalo is { } gargalo ? new GargaloHojeResponse(gargalo.EquipeId, gargalo.Quantidade) : null);
 
     private static DashboardResponse ParaResponse(ResultadoDashboard resultado) => new(
-        new KpisResponse(resultado.Kpis.AtosConferidos, resultado.Kpis.PercentualNoPrazo, resultado.Kpis.PercentualAprovado, resultado.Kpis.TempoMedio),
+        resultado.PeriodoInicio,
+        resultado.PeriodoFim,
+        ParaKpisResponse(resultado.Kpis),
+        ParaKpisResponse(resultado.KpisAnterior),
+        new SerieResponse(
+            resultado.Serie.Granularidade,
+            resultado.Serie.Pontos.Select(p => new PontoSerieResponse(p.Inicio, p.Conferidos, p.Estourados, p.Futuro)).ToList()),
         resultado.Desempenho.Select(ParaDesempenhoResponse).ToList(),
         resultado.MediaDaCasa is { } media ? ParaDesempenhoResponse(media) : null,
         resultado.PorTipoAto.Select(t => new DesempenhoTipoAtoResponse(t.TipoAtoId, t.Nome, t.Volume, t.TempoMedio, t.PercentualReprovacao)).ToList(),
@@ -99,20 +105,38 @@ public static class DashboardEndpoints
             .Select(c => new CumprimentoPrazoEquipeResponse(c.EquipeId, c.EquipeNome, c.Etapa, c.Prazo, c.Total, c.PercentualNoPrazo))
             .ToList());
 
+    private static KpisResponse ParaKpisResponse(KpisDashboard k) =>
+        new(k.AtosConferidos, k.PercentualNoPrazo, k.PercentualAprovado, k.PercentualAprovadoNaPrimeira, k.TempoMedio);
+
     private static DesempenhoConferenteResponse ParaDesempenhoResponse(DesempenhoConferente d) => new(
-        d.ConferenteId, d.Nome, d.Nivel, d.Volume, d.TempoMedio, d.PercentualNoPrazo, d.PercentualAprovado, d.ComplexidadeMedia,
-        d.Score, d.Faixa,
+        d.ConferenteId, d.Nome, d.Nivel, d.Volume, d.TempoMedio, d.PercentualNoPrazo, d.PercentualAprovado,
+        d.PercentualAprovadoNaPrimeira, d.ComplexidadeMedia, d.Score, d.Faixa,
         d.Parcelas is { } p ? new ParcelasScoreResponse(p.Volume, p.Prazo, p.Qualidade, p.Complexidade) : null);
 }
 
+// PeriodoInicio/PeriodoFim: o intervalo de calendário usado (instantes UTC; fim = agora). KpisAnterior:
+// mesma conta sobre o mesmo trecho do período anterior (RF-42b) — também na visão restrita, com os
+// números do próprio conferente. Serie: RF-42c (ver SerieDoPeriodo).
 public sealed record DashboardResponse(
+    DateTimeOffset PeriodoInicio,
+    DateTimeOffset PeriodoFim,
     KpisResponse Kpis,
+    KpisResponse KpisAnterior,
+    SerieResponse Serie,
     IReadOnlyList<DesempenhoConferenteResponse> Desempenho,
     DesempenhoConferenteResponse? MediaDaCasa,
     IReadOnlyList<DesempenhoTipoAtoResponse> PorTipoAto,
     IReadOnlyList<CumprimentoPrazoEquipeResponse> CumprimentoPrazoEquipe);
 
-public sealed record KpisResponse(int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, TimeSpan? TempoMedio);
+// PercentualAprovadoNaPrimeira: 0–1, nulo sem nenhuma 1ª conferência (RF-24k) no recorte (RF-43).
+public sealed record KpisResponse(
+    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio);
+
+// Granularidade Dia (Semana/Mes: dias úteis do período inteiro + fim de semana com conferência) ou
+// Semana (Trimestre: uma por segunda-feira). Inicio = dia local de Brasília ("2026-09-01").
+public sealed record SerieResponse(GranularidadeSerie Granularidade, IReadOnlyList<PontoSerieResponse> Pontos);
+
+public sealed record PontoSerieResponse(DateOnly Inicio, int Conferidos, int Estourados, bool Futuro);
 
 // Nome/Nivel/Parcelas nulos quando a linha é "MediaDaCasa" (RF-45 — sem identificar ninguém,
 // sem detalhar parcela de ninguém). Faixa é null nesses dois casos E também na visão restrita
@@ -126,6 +150,7 @@ public sealed record DesempenhoConferenteResponse(
     TimeSpan? TempoMedio,
     double PercentualNoPrazo,
     double PercentualAprovado,
+    double? PercentualAprovadoNaPrimeira,
     double ComplexidadeMedia,
     // Nulo pra quem não é Administrador — nível, score, faixa e parcelas (ADR-0039).
     int? Score,

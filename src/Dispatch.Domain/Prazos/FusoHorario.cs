@@ -7,7 +7,8 @@ namespace Dispatch.Domain;
 // adiantada/atrasada (e, entre 21h e 24h de Brasília, no dia errado). Fixo em America/Sao_Paulo
 // (sem horário de verão desde 2019) — sem TimeZoneInfo/calendário, mesma filosofia de "sem
 // feriado" já usada em Prazo.ProximoDiaUtil. Público porque a Application também precisa de
-// "hoje" (ObterConcluidosHoje, ObterVisaoDistribuicao): é o único lugar que sabe o fuso.
+// "hoje" (ObterConcluidosHoje, ObterVisaoDistribuicao) e o período do Dashboard: é o único lugar
+// que sabe o fuso.
 public static class FusoHorario
 {
     public static readonly TimeSpan Brasilia = TimeSpan.FromHours(-3);
@@ -16,6 +17,13 @@ public static class FusoHorario
 
     // Meia-noite (em Brasília) do dia local do instante, devolvida em UTC — pronta pra comparar
     // com instantes gravados e pra virar parâmetro de query (o Npgsql recusa offset ≠ 0).
-    public static DateTimeOffset InicioDoDiaLocal(DateTimeOffset instante) =>
-        new DateTimeOffset(ParaHorarioLocal(instante).Date, Brasilia).ToUniversalTime();
+    public static DateTimeOffset InicioDoDiaLocal(DateTimeOffset instante) => InicioDoDia(DiaLocal(instante));
+
+    // O dia do calendário de Brasília em que o instante cai — a unidade do período do Dashboard e
+    // da série por dia útil (CalendarioDoPeriodo, SerieDoPeriodo).
+    public static DateOnly DiaLocal(DateTimeOffset instante) => DateOnly.FromDateTime(ParaHorarioLocal(instante).DateTime);
+
+    // Meia-noite (em Brasília) de um dia do calendário local, em UTC.
+    public static DateTimeOffset InicioDoDia(DateOnly diaLocal) =>
+        new DateTimeOffset(diaLocal.ToDateTime(TimeOnly.MinValue), Brasilia).ToUniversalTime();
 }

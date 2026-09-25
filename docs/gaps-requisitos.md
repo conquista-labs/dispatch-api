@@ -34,17 +34,17 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §37 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §34, §35, §37 |
 | 🟡 Parcial | §16, §19, §36 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §39 |
+| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §39 |
 
 **Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
-**Dashboard v2** (ritmo, metas, série, exportação, pesos — §34–§37), um projeto à parte. Fora isso, o
-que resta são itens conhecidos e pequenos (mesclar tipos, RF-01m/n, auditoria de autenticação sem
-leitura).
+**Dashboard v2** (ritmo, metas, exportação, pesos — §34–§37; hoje, variação, série e aprovado na 1ª
+já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
+tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 ---
 
@@ -207,8 +207,8 @@ leitura).
   `rodada`) em `ProtocoloResumo`, no detalhe e em cada linha do histórico; o motivo da não aprovação é a
   `Observacao` da linha reprovada (decisão do dono — `Reprovar` continua sem motivo próprio).
 - **Diverge de**: §8 do documento (coluna `rodada` gravada) — ver as alternativas no ADR.
-- Não destrava §33 sozinho: "aprovado na 1ª" pede o resultado original antes de uma correção, que
-  continua não guardado.
+- Foi a base do §33 (fechado em 2026-09-25): o dono decidiu que vale o resultado atual da linha de 1ª
+  rodada, então o resultado original antes de uma correção continua não guardado e não faz falta.
 
 ### Prazos
 
@@ -277,12 +277,14 @@ leitura).
 
 - Fechado em 2026-09-01 ("Cumprimento de prazo por equipe").
 
-#### §33 🔴 RF-43 — "% aprovado **na 1ª**"
+#### §33 ✅ RF-43 — "% aprovado **na 1ª**"
 
-- **Situação**: usa o resultado **atual** (`Status == Aprovado`) — simplificação consciente registrada
-  no Dashboard: não há histórico do resultado original antes de uma correção, e `CorrigidoEm == null` não
-  é confiável para bonificação.
-- **Onde entraria**: persistir o resultado original / rodada (§22).
+- **Fechado** em 2026-09-25: `percentualAprovadoNaPrimeira` em `kpis`, `kpisAnterior`, `desempenho` e
+  `mediaDaCasa` do `GET /dashboard` — das linhas concluídas no período com `NumeroDaConferencia == 1`
+  (RF-24k, ADR-0038, derivado na leitura — sem gravar resultado original), a fração aprovada agora;
+  correção reprovado→aprovado conta (decisão 3 do dono). `null` sem nenhuma 1ª conferência.
+- **Continua**: a parcela de qualidade do score (20) usa o `percentualAprovado` de todas as linhas.
+  Trocar pelo "aprovado na 1ª" é decisão do dono, não tomada.
 
 #### §34 🔴 RF-46 — pesos do score configuráveis
 
@@ -303,9 +305,13 @@ leitura).
   gargalo por equipe na gestão; "Seu dia" (conferidos hoje, na mão, em risco) no conferente. Regras em
   `docs/patterns/indicadores-e-aprendizado.md`, "Painel de hoje". "Cada número leva à aba da
   Distribuição" é navegação do front.
-- **Em aberto — RF-42b/c**: variação contra o período anterior, metas configuráveis (95%/90%), série
-  por dia útil. Nenhum campo equivalente no `DashboardResponse`.
-- **Como sabemos**: código (42a); requisito (42b/c).
+- **RF-42b variação e RF-42c série fechados** em 2026-09-25: período por calendário no dia de Brasília
+  (ADR-0041), `periodoInicio`/`periodoFim`, `kpisAnterior` sobre o mesmo trecho do período anterior
+  (também na visão restrita), e `serie` por dia útil (semana/mês, período inteiro com `futuro`) ou por
+  semana (trimestre), separando estourados. Sem feriado na série (mesma simplificação do prazo).
+- **Em aberto — RF-42b metas**: barra com meta de "dentro do prazo" e "aprovados na 1ª" (padrão
+  95%/90%, configuráveis) — fatia 2 do Dashboard v2 (migration em `Configuracao`).
+- **Como sabemos**: código.
 
 #### §37 🔴 RF-44 (Dashboard) — exportar CSV
 

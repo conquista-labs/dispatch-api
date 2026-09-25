@@ -6,9 +6,13 @@ namespace Dispatch.Application;
 // protótipo aprovado (o documento de requisitos só nomeia os 4 fatores e os pesos, não define
 // a fórmula matemática exata). Volume e complexidade são normalizados pelo máximo do grupo no
 // período (decisão do protótipo, não do requisito); prazo e qualidade já são frações diretas.
-// "Aprovados" usa o resultado ATUAL (Status == Aprovado), não "aprovado na 1ª vez" — não existe
-// histórico do resultado original antes de uma correção (RF-24a) salvo à parte; documentado
-// como simplificação consciente.
+// "Aprovados" (e a parcela de qualidade do score) usa o resultado ATUAL (Status == Aprovado) de
+// todos os concluídos. "Aprovados na 1ª" (RF-43, decisão 3 do dono) é outro número, só informativo
+// por enquanto: das conferências de 1ª rodada (RF-24k, NumeroDaConferencia == 1) quantas estão
+// aprovadas — correção reprovado→aprovado conta, porque vale o resultado atual da linha.
+//
+// Período por calendário no dia de Brasília (CalendarioDoPeriodo, ADR-0041), com o mesmo trecho do
+// período anterior pra variação (RF-42b) e a série por dia útil/semana (RF-42c).
 public sealed class ObterDashboard(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
@@ -32,9 +36,25 @@ public sealed class ObterDashboard(
         CancellationToken cancellationToken = default)
     {
         var agora = relogio.Agora;
-        var desde = agora.AddDays(-DiasDoPeriodo(periodo));
+        var intervalo = CalendarioDoPeriodo.Atual(periodo, agora);
+        var intervaloAnterior = CalendarioDoPeriodo.MesmoTrechoAnterior(periodo, agora);
 
-        var concluidosNoPeriodo = await protocolos.ObterConcluidosNoPeriodoAsync(desde, agora, cancellationToken);
+        // Duas buscas pela mesma consulta indexada (status, concluido_em), cada uma só com o seu
+        // trecho — uma busca única de inicioAnterior até agora traria de graça o vão entre o fim do
+        // trecho anterior e o início do atual (no dia 15, meio mês que ninguém usa).
+        var concluidosNoPeriodo = await protocolos.ObterConcluidosNoPeriodoAsync(intervalo.Inicio, intervalo.Fim, cancellationToken);
+        var concluidosNoTrechoAnterior = await protocolos.ObterConcluidosNoPeriodoAsync(
+            intervaloAnterior.Inicio, intervaloAnterior.Fim, cancellationToken);
+        // Na visão restrita, o trecho anterior só serve aos KPIs dele (RF-45).
+        IReadOnlyCollection<Protocolo> anteriorDoRecorte = conferenteRestritoId is { } restritoAnterior
+            ? concluidosNoTrechoAnterior.Where(p => p.DonoId == restritoAnterior).ToList()
+            : concluidosNoTrechoAnterior;
+
+        // RF-24k em lote pros dois trechos: uma query pelos números distintos (ADR-0038), não uma por
+        // protocolo. Só serve ao "aprovado na 1ª".
+        var numeroDaConferencia = await NumeroDaConferenciaEmLote.CalcularAsync(
+            protocolos, [.. concluidosNoPeriodo, .. anteriorDoRecorte], cancellationToken);
+
         var catalogoTipos = (await tiposAto.ObterTodosAsync(cancellationToken)).ToDictionary(t => t.Id);
         var todosConferentes = (await conferentes.ObterTodosAsync(cancellationToken)).ToDictionary(c => c.Id);
         var usuarioPorId = (await usuarios.ObterVariosPorIdsAsync(
@@ -62,8 +82,22 @@ public sealed class ObterDashboard(
         // linha de desempenho logo abaixo mostrando só a dele (achado real: os dois pareciam
         // dados desencontrados, cada um lendo uma fonte diferente).
         var kpis = conferenteRestritoId is { } idRestrito
-            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []), temposPorConferente.GetValueOrDefault(idRestrito, []))
-            : CalcularKpis(concluidosNoPeriodo, temposProprios: null);
+            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []), temposPorConferente.GetValueOrDefault(idRestrito, []), numeroDaConferencia)
+            : CalcularKpis(concluidosNoPeriodo, temposProprios: null, numeroDaConferencia);
+
+        // RF-42b: mesma conta sobre o mesmo trecho do período anterior — na visão restrita também,
+        // com os números do próprio conferente (tempo pelos ciclos dele, como no período atual).
+        var kpisAnterior = conferenteRestritoId is { } idRestritoAnterior
+            ? CalcularKpis(
+                anteriorDoRecorte,
+                ConstruirTemposPorConferente(concluidosNoTrechoAnterior).GetValueOrDefault(idRestritoAnterior, []),
+                numeroDaConferencia)
+            : CalcularKpis(concluidosNoTrechoAnterior, temposProprios: null, numeroDaConferencia);
+
+        // RF-42c: série do próprio conferente na visão restrita (mesmo recorte dos KPIs dele).
+        var baseDaSerie = conferenteRestritoId is { } idRestritoSerie ? porDono.GetValueOrDefault(idRestritoSerie, []) : concluidosNoPeriodo;
+        var serie = SerieDoPeriodo.Montar(
+            periodo, agora, baseDaSerie.Select(p => new ConclusaoNaSerie(p.ConcluidoEm!.Value, Estourado: !EstaNoPrazo(p))));
 
         var maxVolume = porDono.Count == 0 ? 0 : porDono.Values.Max(lista => lista.Count);
         var maxComplexidadeMedia = porDono.Count == 0
@@ -82,7 +116,7 @@ public sealed class ObterDashboard(
             .Select(id => CalcularDesempenho(
                 id, todosConferentes[id], usuarioPorId.GetValueOrDefault(todosConferentes[id].UsuarioId),
                 porDono.GetValueOrDefault(id, []), temposPorConferente.GetValueOrDefault(id, []), catalogoTipos, maxVolume,
-                maxComplexidadeMedia, mostrarFaixa: conferenteRestritoId is null))
+                maxComplexidadeMedia, numeroDaConferencia, mostrarFaixa: conferenteRestritoId is null))
             .OrderByDescending(d => d.Score)
             .ToList();
 
@@ -100,7 +134,9 @@ public sealed class ObterDashboard(
                     .OrderBy(d => d.Nome, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(d => d.ConferenteId)
                     .ToList();
-            return new ResultadoDashboard(kpis, desempenhoDaGestao, MediaDaCasa: null, porTipoAto, cumprimentoPrazoEquipe);
+            return new ResultadoDashboard(
+                intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, desempenhoDaGestao, MediaDaCasa: null, porTipoAto,
+                cumprimentoPrazoEquipe);
         }
 
         // RF-45: o conferente só vê os próprios números + a média da casa sem identificar
@@ -110,30 +146,25 @@ public sealed class ObterDashboard(
         var meuDesempenho = todosOsDesempenhos.SingleOrDefault(d => d.ConferenteId == conferenteRestritoId);
         var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho with { Nivel = null }];
         var mediaDaCasa = CalcularMediaDaCasa(todosOsDesempenhos);
-        return new ResultadoDashboard(kpis, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: []);
+        return new ResultadoDashboard(
+            intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: []);
     }
 
     private static DesempenhoConferente SemAvaliacaoDePessoal(DesempenhoConferente d) =>
         d with { Nivel = null, Score = null, Faixa = null, Parcelas = null };
-
-    private static int DiasDoPeriodo(PeriodoDashboard periodo) => periodo switch
-    {
-        PeriodoDashboard.Semana => 7,
-        PeriodoDashboard.Mes => 30,
-        PeriodoDashboard.Trimestre => 90,
-        _ => throw new ArgumentOutOfRangeException(nameof(periodo), periodo, message: null)
-    };
 
     // `temposProprios`: nulo pra visão agregada (o "tempo médio da operação" continua somando o
     // protocolo inteiro, do início ao fim, não importa quantas pessoas passaram por ele — é
     // "quanto tempo esse ato leva", não "quanto tempo essa pessoa trabalhou"); uma lista (mesmo
     // vazia) pra visão restrita de um conferente (RF-45: "os números dele" têm que refletir só
     // os ciclos que ele mesmo fez, ver ConstruirTemposPorConferente).
-    private static KpisDashboard CalcularKpis(IReadOnlyCollection<Protocolo> concluidos, IReadOnlyCollection<TimeSpan>? temposProprios)
+    private static KpisDashboard CalcularKpis(
+        IReadOnlyCollection<Protocolo> concluidos, IReadOnlyCollection<TimeSpan>? temposProprios,
+        IReadOnlyDictionary<Guid, int> numeroDaConferencia)
     {
         if (concluidos.Count == 0)
         {
-            return new KpisDashboard(0, 0, 0, null);
+            return new KpisDashboard(0, 0, 0, PercentualAprovadoNaPrimeira: null, TempoMedio: null);
         }
 
         var noPrazo = concluidos.Count(EstaNoPrazo);
@@ -147,7 +178,21 @@ public sealed class ObterDashboard(
             concluidos.Count,
             (double)noPrazo / concluidos.Count,
             (double)aprovados / concluidos.Count,
+            PercentualAprovadoNaPrimeira(concluidos, numeroDaConferencia),
             tempoMedio);
+    }
+
+    // RF-43 "aprovados na 1ª" (decisão 3 do dono): das linhas concluídas que são a 1ª conferência
+    // daquele Número+etapa (RF-24k), a fração com status Aprovado agora. Nulo sem nenhuma 1ª
+    // conferência — "0%" diria que todas voltaram. Id fora do dicionário = 1ª (o default seguro de
+    // NumeroDaConferenciaEmLote).
+    private static double? PercentualAprovadoNaPrimeira(
+        IReadOnlyCollection<Protocolo> concluidos, IReadOnlyDictionary<Guid, int> numeroDaConferencia)
+    {
+        var primeiras = concluidos.Where(p => numeroDaConferencia.GetValueOrDefault(p.Id, 1) == 1).ToList();
+        return primeiras.Count == 0
+            ? null
+            : (double)primeiras.Count(p => p.Status == StatusProtocolo.Aprovado) / primeiras.Count;
     }
 
     // Achata cada protocolo concluído em (quem, quanto tempo) por ciclo — um ciclo por
@@ -214,7 +259,8 @@ public sealed class ObterDashboard(
     private static DesempenhoConferente CalcularDesempenho(
         Guid conferenteId, Conferente conferente, Usuario? usuario, IReadOnlyCollection<Protocolo> protocolosDoConferente,
         IReadOnlyCollection<TimeSpan> temposProprios,
-        IReadOnlyDictionary<Guid, TipoAto> catalogo, int maxVolume, double maxComplexidadeMedia, bool mostrarFaixa)
+        IReadOnlyDictionary<Guid, TipoAto> catalogo, int maxVolume, double maxComplexidadeMedia,
+        IReadOnlyDictionary<Guid, int> numeroDaConferencia, bool mostrarFaixa)
     {
         var volume = protocolosDoConferente.Count;
         var noPrazo = protocolosDoConferente.Count(EstaNoPrazo);
@@ -239,8 +285,8 @@ public sealed class ObterDashboard(
             : (FaixaBonificacao?)null;
 
         return new DesempenhoConferente(
-            conferenteId, usuario?.Nome ?? "—", conferente.Nivel, volume, tempoMedio, pctNoPrazo, pctAprovado, complexidadeMedia,
-            score, faixa, new ParcelasScore(pontosVolume, pontosPrazo, pontosQualidade, pontosComplexidade));
+            conferenteId, usuario?.Nome ?? "—", conferente.Nivel, volume, tempoMedio, pctNoPrazo, pctAprovado,
+            PercentualAprovadoNaPrimeira(protocolosDoConferente, numeroDaConferencia), complexidadeMedia, score, faixa, new ParcelasScore(pontosVolume, pontosPrazo, pontosQualidade, pontosComplexidade));
     }
 
     // RF-45: linha de comparação sem identificar ninguém — média simples entre quem teve
@@ -255,6 +301,9 @@ public sealed class ObterDashboard(
 
         var duracoesMedias = comVolume.Where(d => d.TempoMedio is not null).Select(d => d.TempoMedio!.Value).ToList();
         TimeSpan? tempoMedio = duracoesMedias.Count > 0 ? TimeSpan.FromTicks((long)duracoesMedias.Average(d => d.Ticks)) : null;
+        // Mesma média simples entre pessoas, só entre quem teve alguma 1ª conferência (null não é 0%).
+        var aprovadosNaPrimeira = comVolume.Where(d => d.PercentualAprovadoNaPrimeira is not null)
+            .Select(d => d.PercentualAprovadoNaPrimeira!.Value).ToList();
 
         return new DesempenhoConferente(
             ConferenteId: Guid.Empty,
@@ -264,6 +313,7 @@ public sealed class ObterDashboard(
             TempoMedio: tempoMedio,
             PercentualNoPrazo: comVolume.Average(d => d.PercentualNoPrazo),
             PercentualAprovado: comVolume.Average(d => d.PercentualAprovado),
+            PercentualAprovadoNaPrimeira: aprovadosNaPrimeira.Count > 0 ? aprovadosNaPrimeira.Average() : null,
             ComplexidadeMedia: comVolume.Average(d => d.ComplexidadeMedia),
             Score: (int)Math.Round(comVolume.Average(d => d.Score ?? 0)),
             Faixa: null,
@@ -312,13 +362,18 @@ public sealed class ObterDashboard(
 }
 
 public sealed record ResultadoDashboard(
+    DateTimeOffset PeriodoInicio,
+    DateTimeOffset PeriodoFim,
     KpisDashboard Kpis,
+    KpisDashboard KpisAnterior,
+    SerieDoPeriodo Serie,
     IReadOnlyList<DesempenhoConferente> Desempenho,
     DesempenhoConferente? MediaDaCasa,
     IReadOnlyList<DesempenhoTipoAto> PorTipoAto,
     IReadOnlyList<CumprimentoPrazoEquipe> CumprimentoPrazoEquipe);
 
-public sealed record KpisDashboard(int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, TimeSpan? TempoMedio);
+public sealed record KpisDashboard(
+    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio);
 
 public sealed record DesempenhoConferente(
     Guid ConferenteId,
@@ -328,6 +383,8 @@ public sealed record DesempenhoConferente(
     TimeSpan? TempoMedio,
     double PercentualNoPrazo,
     double PercentualAprovado,
+    // Nulo sem nenhuma 1ª conferência (RF-24k) entre os protocolos do conferente no período.
+    double? PercentualAprovadoNaPrimeira,
     double ComplexidadeMedia,
     // Nulo pra quem não é Administrador (ADR-0039).
     int? Score,
