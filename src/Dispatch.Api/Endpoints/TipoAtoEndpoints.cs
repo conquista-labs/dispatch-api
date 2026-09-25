@@ -31,10 +31,12 @@ public static class TipoAtoEndpoints
             .WithTags(OpenApiTags.CentralDeRegras)
             .Produces<CriarTipoAtoResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
 
+        // Central de regras: escrever é só do Administrador (RF-30a, ADR-0039). O GET raiz acima continua
+        // aberto a Distribuidora e Conferente (filtros, cards, importação).
         var grupo = app.MapGroup("/tipos-ato")
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithTags(OpenApiTags.CentralDeRegras);
 
         grupo.MapGet("/com-uso", async (

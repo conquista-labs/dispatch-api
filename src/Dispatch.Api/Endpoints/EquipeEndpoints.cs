@@ -16,6 +16,8 @@ public static class EquipeEndpoints
         // grupo — as duas se combinam com E, não OU (cada `[Authorize]`/`RequireAuthorization`
         // aplicado é mais um requisito que TODOS precisam satisfazer) — por isso o grupo não
         // pode ter uma policy só de Distribuidora se alguma rota dele precisa ser mais aberta.
+        // Central de regras: escrever é só do Administrador (RF-30a, ADR-0039). As listagens gerais (GET /equipes e
+        // /escreventes) continuam de Distribuidora e Conferente; o resto virou Administrador.
         var equipesGrupo = app.MapGroup("/equipes").WithTags(OpenApiTags.CentralDeRegras);
 
         equipesGrupo.MapGet("/", async (ListarEquipes casoDeUso, CancellationToken cancellationToken) =>
@@ -44,7 +46,7 @@ public static class EquipeEndpoints
             .WithSummary("RF-35.")
             .Produces<CriarEquipeResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
 
         equipesGrupo.MapPut("/{id:guid}", async (
                 Guid id, EditarEquipeRequest request, EditarEquipe casoDeUso, CancellationToken cancellationToken) =>
@@ -67,7 +69,7 @@ public static class EquipeEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status400BadRequest)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
 
         var escreventesGrupo = app.MapGroup("/escreventes").WithTags(OpenApiTags.CentralDeRegras);
 
@@ -83,7 +85,7 @@ public static class EquipeEndpoints
             .WithName("ListarEscreventesSemEquipe")
             .WithSummary("RF-37.")
             .Produces<IReadOnlyList<EscreventeResponse>>()
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
 
         escreventesGrupo.MapPost("/", async (CriarEscreventeRequest request, CriarEscrevente casoDeUso, CancellationToken cancellationToken) =>
             {
@@ -102,7 +104,7 @@ public static class EquipeEndpoints
             .Produces<CriarEscreventeResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
 
         escreventesGrupo.MapPost("/{id:guid}/mover", async (
                 Guid id, MoverEscreventeRequest request, MoverEscreventeParaEquipe casoDeUso, CancellationToken cancellationToken) =>
@@ -120,7 +122,7 @@ public static class EquipeEndpoints
             .WithSummary("Move o escrevente pra outra equipe, ou tira dele (equipeId nulo) — RF-35/RF-37.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)));
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)));
     }
 
     // Corte de horário é opcional por etapa — os dois horários (corte e vencimento) precisam

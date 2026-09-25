@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Dispatch.Api.OpenApi;
 using Dispatch.Application;
 using Dispatch.Domain;
@@ -8,20 +9,23 @@ public static class RegraAlcadaEndpoints
 {
     public static void MapRegraAlcadaEndpoints(this IEndpointRouteBuilder app)
     {
+        // Leitura: Distribuidora (Regras em vigor, detalhe, Conferentes), com as regras de nível
+        // mascaradas pra quem não é admin. Central de regras: escrever é só do Administrador (RF-30a, ADR-0039).
         var grupo = app.MapGroup("/regras-alcada")
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.CentralDeRegras);
 
-        grupo.MapGet("/", async (ListarRegrasAlcada casoDeUso, IProtocoloRepository protocolos, CancellationToken cancellationToken) =>
+        grupo.MapGet("/", async (
+                ListarRegrasAlcada casoDeUso, IProtocoloRepository protocolos, ClaimsPrincipal usuario, CancellationToken cancellationToken) =>
             {
-                var todas = await casoDeUso.ExecutarAsync(cancellationToken);
+                var todas = await casoDeUso.ExecutarAsync(incluirNivel: usuario.EhAdministrador(), cancellationToken);
                 // Antes: 1 query por regra dentro do foreach (N+1 — achado numa investigação de
                 // lentidão real em produção, ~96 round-trips sequenciais pra ~95 regras). Agora:
                 // 1 query agrupada, independente de N.
                 var usosPorRegraId = (await protocolos.ContarPorRegraAplicadaAsync(cancellationToken))
                     .ToDictionary(c => c.RegraAlcadaId, c => c.Total);
                 var respostas = todas
-                    .Select(regra => ParaResponse(regra, usosPorRegraId.GetValueOrDefault(regra.Id)))
+                    .Select(visivel => ParaResponse(visivel, usosPorRegraId.GetValueOrDefault(visivel.Regra.Id)))
                     .ToList();
                 return Results.Ok(respostas);
             })
@@ -67,6 +71,7 @@ public static class RegraAlcadaEndpoints
                 };
             })
             .WithName("CriarRegraAlcada")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Cria uma regra de alçada — quem (nível ou pessoa) pode/não pode conferir tal tipo/etapa (RF-31).")
             .Produces<CriarRegraAlcadaResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
@@ -75,6 +80,7 @@ public static class RegraAlcadaEndpoints
         grupo.MapPost("/{id:guid}/ativar", async (Guid id, AtivarRegraAlcada casoDeUso, CancellationToken cancellationToken) =>
                 await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound())
             .WithName("AtivarRegraAlcada")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("RF-33.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
@@ -82,6 +88,7 @@ public static class RegraAlcadaEndpoints
         grupo.MapPost("/{id:guid}/desativar", async (Guid id, DesativarRegraAlcada casoDeUso, CancellationToken cancellationToken) =>
                 await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound())
             .WithName("DesativarRegraAlcada")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("RF-33.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
@@ -89,6 +96,7 @@ public static class RegraAlcadaEndpoints
         grupo.MapDelete("/{id:guid}", async (Guid id, RemoverRegraAlcada casoDeUso, CancellationToken cancellationToken) =>
                 await casoDeUso.ExecutarAsync(id, cancellationToken) ? Results.NoContent() : Results.NotFound())
             .WithName("RemoverRegraAlcada")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("RF-33.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
@@ -116,6 +124,7 @@ public static class RegraAlcadaEndpoints
                     resultado.Destino, resultado.ConferenteId, resultado.Motivo));
             })
             .WithName("TestarAlcada")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Simulador \"Testar\" da aba Alçada — quem pode/não pode conferir um caso hipotético e por quê.")
             .Produces<TestarAlcadaResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -163,9 +172,12 @@ public static class RegraAlcadaEndpoints
             : (null, "informe exatamente um entre alvoEtapa, alvoTipoAtoId, alvoEhEquipe, alvoTodosOsAtos, alvoGrupo e alvoEhEquipeEEtapa");
     }
 
-    private static RegraAlcadaResponse ParaResponse(RegraAlcada regra, int usos) => new(
+    private static RegraAlcadaResponse ParaResponse(RegraAlcadaVisivel visivel, int usos) => ParaResponse(
+        visivel.Regra, usos, nivelOculto: visivel.NivelOculto, regraBase: visivel.RegraBase);
+
+    private static RegraAlcadaResponse ParaResponse(RegraAlcada regra, int usos, bool nivelOculto = false, bool regraBase = false) => new(
         regra.Id,
-        (regra.Sujeito as SujeitoAlcada.PorNivel)?.Nivel,
+        nivelOculto ? null : (regra.Sujeito as SujeitoAlcada.PorNivel)?.Nivel,
         (regra.Sujeito as SujeitoAlcada.PorPessoa)?.ConferenteId,
         regra.Permissao,
         // PorEquipeEEtapa (Motor v4) reaproveita as mesmas colunas alvo_etapa/alvo_equipe_id de
@@ -192,7 +204,8 @@ public static class RegraAlcadaEndpoints
         regra.Alvo is AlvoAlcada.PorEquipeEEtapa,
         regra.Origem,
         regra.Ativa,
-        usos);
+        usos,
+        regraBase);
 }
 
 public sealed record CriarRegraAlcadaRequest(
@@ -223,7 +236,10 @@ public sealed record RegraAlcadaResponse(
     bool AlvoEhEquipeEEtapa,
     OrigemRegra Origem,
     bool Ativa,
-    int Usos);
+    int Usos,
+    // Perfil Administrador (ADR-0039): regra por nível vista por quem não é admin — SujeitoNivel
+    // vem null e o front mostra "Regra base da alçada: vale para todos, conforme o cadastro".
+    bool RegraBase = false);
 
 public sealed record TestarAlcadaRequest(Etapa Etapa, Guid TipoAtoId, Guid? EquipeId, Prioridade Prioridade);
 
