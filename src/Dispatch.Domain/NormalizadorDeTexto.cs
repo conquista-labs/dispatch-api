@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace Dispatch.Domain;
 
@@ -30,4 +31,54 @@ public static class NormalizadorDeTexto
 
     private static string CapitalizarPrimeiraLetra(string palavra) =>
         palavra.Length == 0 ? palavra : char.ToUpper(palavra[0], PtBr) + palavra[1..];
+
+    // "É o mesmo nome?" entre o texto cru do relatório e o que já está gravado: ignora caixa,
+    // acento e espaço repetido ("INVENTARIO" = "Inventário", "venda e compra" = "Venda e
+    // Compra"). OrdinalIgnoreCase diferencia acento, e o relatório vem sem acento enquanto o
+    // catálogo tem — cada importação criava um tipo duplicado. Serve de comparador de
+    // Dictionary/SortedSet (Equals, GetHashCode e Compare coerentes entre si).
+    public static StringComparer ComparadorDeNome { get; } = new ComparadorIgnorandoCaixaEAcento();
+
+    // Forma canônica usada pelo comparador: decompõe (FormD — "á" vira "a" + acento combinante),
+    // descarta as marcas combinantes, junta espaços e passa pra maiúscula invariante.
+    private static string ChaveDeComparacao(string texto)
+    {
+        var decomposto = texto.Normalize(NormalizationForm.FormD);
+        var chave = new StringBuilder(decomposto.Length);
+        var espacoPendente = false;
+
+        foreach (var caractere in decomposto)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(caractere) == UnicodeCategory.NonSpacingMark) continue;
+
+            if (char.IsWhiteSpace(caractere))
+            {
+                espacoPendente = chave.Length > 0;
+                continue;
+            }
+
+            if (espacoPendente)
+            {
+                chave.Append(' ');
+                espacoPendente = false;
+            }
+
+            chave.Append(char.ToUpperInvariant(caractere));
+        }
+
+        return chave.ToString();
+    }
+
+    private sealed class ComparadorIgnorandoCaixaEAcento : StringComparer
+    {
+        public override int Compare(string? x, string? y) =>
+            ReferenceEquals(x, y) ? 0
+            : x is null ? -1
+            : y is null ? 1
+            : string.CompareOrdinal(ChaveDeComparacao(x), ChaveDeComparacao(y));
+
+        public override bool Equals(string? x, string? y) => Compare(x, y) == 0;
+
+        public override int GetHashCode(string obj) => ChaveDeComparacao(obj).GetHashCode(StringComparison.Ordinal);
+    }
 }

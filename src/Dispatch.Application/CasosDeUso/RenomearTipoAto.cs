@@ -16,7 +16,8 @@ public sealed class RenomearTipoAto(ITipoAtoRepository tiposAto, IUnitOfWork uni
 
         var nomeNormalizado = NormalizadorDeTexto.ParaNomeProprio(nome);
         var existentes = await tiposAto.ObterTodosAsync(cancellationToken);
-        if (existentes.Any(t => t.Id != tipoAtoId && string.Equals(t.Nome, nomeNormalizado, StringComparison.OrdinalIgnoreCase)))
+        // Mesma comparação da importação (ignora caixa e acento) — corrigir o acento do próprio nome passa.
+        if (existentes.Any(t => t.Id != tipoAtoId && NormalizadorDeTexto.ComparadorDeNome.Equals(t.Nome, nomeNormalizado)))
         {
             return new ResultadoRenomearTipoAto.JaExiste();
         }

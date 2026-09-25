@@ -899,3 +899,25 @@ Testes de Domain para `ServeComoSenhaInicial` e `ExigirTrocaDeSenha`/`RedefinirS
 
 **Subida**: migration no Neon antes do merge; promover a primeira admin (Maria Vittoria) logo depois
 do deploy do front — ver `docs/patterns/deploy.md`, "Ordem de subida".
+
+## 2026-09-25 — "Hoje" no dia de Brasília e tipo de ato casando sem acento
+
+Itens 0.6 e 0.7 do `PLANO-dashboard-v2.md`. Sem migration.
+- **Dia local (0.6)**: `FusoHorario` virou público e ganhou `InicioDoDiaLocal` (meia-noite de Brasília
+  em UTC). `ObterConcluidosHoje` e `ObterVisaoDistribuicao` ("feitos hoje") usavam `Agora.Date` em UTC —
+  o dia virava às 21h de Brasília. O grep achou o mesmo bug em `Prazo`: `FimDoDia` (D+0 vencia às 21h
+  locais, ou no fim do dia seguinte se a entrada fosse depois das 21h) e `ProximoDiaUtil` (dia da
+  semana em UTC: sexta 22h + D+1 vencia no domingo). Os dois passam pelo `FusoHorario`. Vencimentos
+  já gravados ficam como estão (sem recálculo).
+- **Tipo com acento (0.7)**: `NormalizadorDeTexto.ComparadorDeNome` (`StringComparer` que ignora caixa,
+  acento — FormD sem marcas combinantes — e espaço repetido). `ImportarLote` casa o tipo do relatório
+  com ele (prévia e confirmação usam o mesmo dicionário); duplicata por acento já gravada não derruba o
+  `ToDictionary` (vale a ativa, desempate por `Id`). `CriarTipoAto`/`RenomearTipoAto` usam a mesma
+  comparação no "já existe".
+
+Verificado: `FusoHorarioTests` (4), `PrazoTests` (+4, 2 ajustados ao dia local), `NormalizadorDeTextoTests`
+(+9); Application: `ObterConcluidosHojeTests`/`ObterVisaoDistribuicaoTests` com relógio às 22h30–23h
+de Brasília, `ImportarLoteTests` (+5: "INVENTARIO" × "Inventário" na prévia e na confirmação, caixa,
+mesmo tipo novo com e sem acento no lote, catálogo com duplicata), `CriarTipoAtoTests` (+1),
+`RenomearTipoAtoTests` (+2); `DistribuirProtocoloTests` ajustado ao D+0 local. 551 testes
+(167 Domain + 336 Application + 48 Api.Tests), build sem avisos.
