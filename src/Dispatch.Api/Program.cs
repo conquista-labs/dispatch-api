@@ -58,7 +58,9 @@ builder.Services
         // RF-01k: "encerrar todas as sessões abertas" — JWT é stateless por padrão (sem jti,
         // sem blocklist), então isso só existe se checarmos aqui, a cada request autenticado,
         // contra Usuario.SessoesValidasApartirDe (bump feito só na troca de senha). 1 consulta
-        // a mais por request — aceitável pro volume deste sistema (cartório interno).
+        // a mais por request — aceitável pro volume deste sistema (cartório interno). A mesma
+        // consulta recusa conta desativada: antes, um token emitido antes de RemoverConferente ou
+        // DesativarConta continuava valendo até expirar (8h).
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = async context =>
@@ -72,7 +74,7 @@ builder.Services
                 // sempre — só descoberto rodando de verdade (dotnet build/test não pegam isso, o cast
                 // errado só falha em runtime, na primeira chamada autenticada).
                 var emitidoEm = ((Microsoft.IdentityModel.JsonWebTokens.JsonWebToken)context.SecurityToken).IssuedAt;
-                if (usuario is null || DateTime.SpecifyKind(emitidoEm, DateTimeKind.Utc) < usuario.SessoesValidasApartirDe)
+                if (usuario is null || !usuario.Ativo || DateTime.SpecifyKind(emitidoEm, DateTimeKind.Utc) < usuario.SessoesValidasApartirDe)
                 {
                     context.Fail("Sessão encerrada — faça login novamente.");
                 }

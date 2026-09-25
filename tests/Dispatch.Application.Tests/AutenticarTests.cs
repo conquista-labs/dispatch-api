@@ -58,6 +58,34 @@ public class AutenticarTests
         Assert.Equal([Papel.Distribuidora, Papel.Conferente], autenticado.Papeis);
     }
 
+    // ADR-0039: o admin carrega também a claim Distribuidora (acesso de gestão), e o Administrador
+    // vem primeiro — o front usa papeis[0] como papel principal.
+    [Fact]
+    public async Task Administrador_PapeisTrazAdministradorEDistribuidora()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Admin", "admin@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Administrador);
+        var autenticar = NovoCasoDeUso([usuario], out _);
+
+        var resultado = await autenticar.ExecutarAsync("admin@cartorio.com", "senha-correta", origem: null);
+
+        var autenticado = Assert.IsType<ResultadoAutenticacao.Autenticado>(resultado);
+        Assert.Equal([Papel.Administrador, Papel.Distribuidora], autenticado.Papeis);
+    }
+
+    // O caso de produção: a primeira admin também confere.
+    [Fact]
+    public async Task AdministradorComConferenteVinculado_PapeisTrazOsTres()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Admin", "admin@cartorio.com", HashDeSenha.Hash("senha-correta"), Papel.Administrador);
+        var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var autenticar = NovoCasoDeUso([usuario], out _, [conferente]);
+
+        var resultado = await autenticar.ExecutarAsync("admin@cartorio.com", "senha-correta", origem: null);
+
+        var autenticado = Assert.IsType<ResultadoAutenticacao.Autenticado>(resultado);
+        Assert.Equal([Papel.Administrador, Papel.Distribuidora, Papel.Conferente], autenticado.Papeis);
+    }
+
     [Fact]
     public async Task DistribuidoraSemConferenteVinculado_PapeisSoTemDistribuidora()
     {
