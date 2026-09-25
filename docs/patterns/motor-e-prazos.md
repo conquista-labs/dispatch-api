@@ -95,17 +95,23 @@ Ordem de avaliação para um conferente e um caso:
 
 - Prazo **derivado, nunca digitado**: escrevente → equipe → `Equipe.PrazoPara(etapa, referencia)`.
   Escrevente sem equipe → D+1 padrão e sinalizado (`ResolvedorDePrazo`, RF-09).
-- `TipoPrazo`: `UmaHora`, `D0` (fim do dia — modelado como início do dia seguinte), `D1` (24h
+- `TipoPrazo`: `UmaHora`, `D0` (fim do dia **de Brasília** — modelado como a meia-noite local seguinte, 03h UTC), `D1` (24h
   corridas), `D2` (48h), e o transitório `CorteDeHorario` ([ADR-0013](../decisions/0013-prazos-em-horas-corridas-com-dia-util.md)).
-- **Dia útil**: D0/D1/D2 e o corte caindo em sábado/domingo vão para segunda, mesmo horário
-  (`ProximoDiaUtil`). Sem feriados. `UmaHora` nunca é empurrado.
+- **Dia útil**: D0/D1/D2 e o corte caindo em sábado/domingo (dia da semana **de Brasília**) vão para
+  segunda, mesmo horário (`ProximoDiaUtil`). Sem feriados. `UmaHora` nunca é empurrado.
 - **Corte de horário** ([ADR-0037](../decisions/0037-corte-de-horario-por-equipe-e-etapa.md)): se a
   equipe tem (corte, vencimento) para a etapa e a entrada foi depois do corte **em horário de
   Brasília**, o prazo é `Prazo(CorteDeHorario, horarioVencimento)` — vence no horário configurado do
   dia útil seguinte. Senão, o `TipoPrazo` base.
 - **Fuso**: todo instante do sistema é UTC (inclusive `IRelogio.Agora` e o que volta do Postgres).
-  Comparar horário de parede só via `FusoHorario` (UTC−3 fixo). Comparar "16h" direto contra UTC erra
-  por ~3h.
+  Comparar horário de parede só via `FusoHorario` (UTC−3 fixo, público — a Application também usa).
+  Comparar "16h" direto contra UTC erra por ~3h.
+- **Dia local** ("hoje", "fim do dia", dia da semana): `FusoHorario.InicioDoDiaLocal(instante)` devolve
+  a meia-noite de Brasília daquele instante, já em UTC (pronta pra query). **Nunca** `instante.Date` /
+  `new DateTimeOffset(x.Date, x.Offset)` num instante UTC: entre 21h e 24h de Brasília o dia UTC já
+  virou, e o "hoje" zerava às 21h (`ObterConcluidosHoje`, `ObterVisaoDistribuicao`) e o D+0 vencia às
+  21h — ou no dia seguinte, se a entrada fosse depois das 21h. Corrigido em 2026-09-25 (itens 0.6 do
+  `PLANO-dashboard-v2.md`); vencimentos já gravados não foram recalculados.
 - **Referência** = `Protocolo.AndamentoEm` ([ADR-0007](../decisions/0007-vencimento-a-partir-do-andamento.md)):
   importação, recálculo por mudança de prazo da equipe (RF-38, `RecalculoDeVencimentos` — só
   protocolos **abertos**, incluindo Exceção, excluindo Aprovado/Reprovado/Descartado/Excluido) e

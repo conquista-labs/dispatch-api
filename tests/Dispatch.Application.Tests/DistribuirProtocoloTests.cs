@@ -28,7 +28,7 @@ public class DistribuirProtocoloTests
         var resultado = await caso.ExecutarAsync(protocolo, escrevente);
 
         Assert.Equal(TipoPrazo.D0, protocolo.Prazo?.Tipo);
-        Assert.Equal(new DateTimeOffset(Agora.Date, Agora.Offset).AddDays(1), protocolo.VencimentoEm);
+        Assert.Equal(new DateTimeOffset(2026, 8, 27, 0, 0, 0, TimeSpan.FromHours(-3)), protocolo.VencimentoEm); // fim do dia em Brasília
         var atribuido = Assert.IsType<ResultadoDistribuicao.Atribuido>(resultado);
         Assert.Equal(conferente.Id, atribuido.Conferente.Id);
 

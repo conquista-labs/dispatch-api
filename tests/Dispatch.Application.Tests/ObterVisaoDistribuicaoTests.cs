@@ -117,6 +117,32 @@ public class ObterVisaoDistribuicaoTests
         Assert.Equal(2, grupo.Total);
     }
 
+    // "Feitos hoje" conta pelo dia de Brasília: às 22h30 de Brasília (01h30 UTC do dia
+    // seguinte) o concluído às 18h de Brasília ainda é de hoje, e o das 23h da véspera não é.
+    [Fact]
+    public async Task ConcluidosHoje_Entre21hE24hDeBrasilia_ContaPeloDiaLocal()
+    {
+        var conferenteId = Guid.NewGuid();
+        var brasilia = TimeSpan.FromHours(-3);
+        var agora = new DateTimeOffset(2026, 3, 10, 22, 30, 0, brasilia).ToUniversalTime(); // 11/03 01h30 UTC
+
+        var as18h = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        as18h.Aprovar(new DateTimeOffset(2026, 3, 10, 18, 0, 0, brasilia).ToUniversalTime());
+        var as22h = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        as22h.Reprovar(new DateTimeOffset(2026, 3, 10, 22, 0, 0, brasilia).ToUniversalTime());
+        var vespera23h = NovoProtocolo(StatusProtocolo.Atribuido, conferenteId);
+        vespera23h.Aprovar(new DateTimeOffset(2026, 3, 9, 23, 0, 0, brasilia).ToUniversalTime());
+
+        var casoDeUso = new ObterVisaoDistribuicao(
+            new FakeProtocoloRepository([as18h, as22h, vespera23h]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        var grupo = Assert.Single(visao.ConcluidosHojePorConferente);
+        Assert.Equal(conferenteId, grupo.ConferenteId);
+        Assert.Equal(2, grupo.Total);
+    }
+
     [Fact]
     public async Task ConferenteSemConcluidoHojeNaoAparece()
     {

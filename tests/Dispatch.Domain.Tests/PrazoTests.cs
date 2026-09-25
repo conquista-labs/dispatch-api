@@ -31,13 +31,28 @@ public class PrazoTests
         Assert.Equal(referencia.AddHours(1), vencimento); // sábado 00h30, sem ajuste
     }
 
+    // "Fim do dia" é o fim do dia em Brasília (meia-noite local = 03h UTC), não a meia-noite UTC
+    // (que é 21h em Brasília e venceria o D+0 três horas antes).
     [Fact]
     public void D0_VenceNoInicioDoDiaSeguinteQuandoEhDiaUtil()
     {
         var prazo = new Prazo(TipoPrazo.D0);
 
-        var esperado = new DateTimeOffset(QuartaFeira.Date, QuartaFeira.Offset).AddDays(1); // quinta 00h
+        var esperado = new DateTimeOffset(2026, 8, 27, 0, 0, 0, TimeSpan.FromHours(-3)); // quinta 00h Brasília
         Assert.Equal(esperado, prazo.CalcularVencimento(QuartaFeira));
+    }
+
+    // Entre 21h e 24h de Brasília o dia UTC já virou: quarta 22h em Brasília (quinta 01h UTC) ainda
+    // é quarta, então o D+0 vence na meia-noite de quinta em Brasília — não na de sexta.
+    [Fact]
+    public void D0_ReferenciaEntre21hE24hDeBrasilia_VenceNaMeiaNoiteLocalDoMesmoDia()
+    {
+        var quarta22hBrasilia = new DateTimeOffset(2026, 8, 27, 1, 0, 0, TimeSpan.Zero);
+        var prazo = new Prazo(TipoPrazo.D0);
+
+        var vencimento = prazo.CalcularVencimento(quarta22hBrasilia);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 27, 0, 0, 0, TimeSpan.FromHours(-3)), vencimento);
     }
 
     [Fact]
@@ -84,7 +99,7 @@ public class PrazoTests
     }
 
     // D+0 de uma sexta vence no início do sábado (fim do dia de sexta) — sábado não é dia
-    // útil, empurra pra segunda 00h.
+    // útil, empurra pra segunda 00h (de Brasília).
     [Fact]
     public void D0_Sexta_EmpurraDeSabadoParaSegunda()
     {
@@ -92,8 +107,46 @@ public class PrazoTests
 
         var vencimento = prazo.CalcularVencimento(SextaFeira16h);
 
-        Assert.Equal(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.Zero), vencimento); // segunda 00h
-        Assert.Equal(DayOfWeek.Monday, vencimento.DayOfWeek);
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.FromHours(-3)), vencimento); // segunda 00h Brasília
+    }
+
+    // Sexta 22h em Brasília já é sábado em UTC — o D+0 ainda é o da sexta (vence sábado 00h
+    // local, empurra pra segunda 00h local), e não "domingo 21h" como saía pelo dia UTC.
+    [Fact]
+    public void D0_SextaAs22hDeBrasilia_EmpurraParaSegundaMeiaNoiteLocal()
+    {
+        var sexta22hBrasilia = new DateTimeOffset(2026, 8, 29, 1, 0, 0, TimeSpan.Zero);
+        var prazo = new Prazo(TipoPrazo.D0);
+
+        var vencimento = prazo.CalcularVencimento(sexta22hBrasilia);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 0, 0, 0, TimeSpan.FromHours(-3)), vencimento);
+    }
+
+    // O dia da semana do ajuste de dia útil é o de Brasília: sexta 22h local + 24h = sábado 22h
+    // local (domingo 01h UTC) — empurra 2 dias, pra segunda 22h local. Pelo dia UTC empurrava 1
+    // e vencia no domingo 22h.
+    [Fact]
+    public void D1_SextaAs22hDeBrasilia_EmpurraDeSabadoParaSegundaNoHorarioLocal()
+    {
+        var sexta22hBrasilia = new DateTimeOffset(2026, 8, 29, 1, 0, 0, TimeSpan.Zero);
+        var prazo = new Prazo(TipoPrazo.D1);
+
+        var vencimento = prazo.CalcularVencimento(sexta22hBrasilia);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 22, 0, 0, TimeSpan.FromHours(-3)), vencimento);
+    }
+
+    // Quinta 22h local + 24h = sexta 22h local, dia útil — mesmo sendo sábado 01h em UTC, não empurra.
+    [Fact]
+    public void D1_QuintaAs22hDeBrasilia_VenceNaSextaSemEmpurrar()
+    {
+        var quinta22hBrasilia = new DateTimeOffset(2026, 8, 28, 1, 0, 0, TimeSpan.Zero);
+        var prazo = new Prazo(TipoPrazo.D1);
+
+        var vencimento = prazo.CalcularVencimento(quinta22hBrasilia);
+
+        Assert.Equal(quinta22hBrasilia.AddHours(24), vencimento);
     }
 
     // Pedido do dono ("equipe X entra na etapa Y depois das 16h, vence às 10h do dia

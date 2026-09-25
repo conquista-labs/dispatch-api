@@ -31,8 +31,8 @@ public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos, IRel
 
         // "N feitos hoje" (card de conferente) — "hoje" é local a este caso de uso, mesma
         // decisão de ObterConcluidosHoje (Minha fila): só ele decide o que "início do dia"
-        // significa, via IRelogio.
-        var inicioDoDia = new DateTimeOffset(relogio.Agora.Date, relogio.Agora.Offset);
+        // significa, via IRelogio — e é o dia de Brasília (FusoHorario), não o dia UTC.
+        var inicioDoDia = FusoHorario.InicioDoDiaLocal(relogio.Agora);
         var concluidosHojePorConferente = concluidos
             .Where(p => p.DonoId is not null && p.ConcluidoEm >= inicioDoDia)
             .GroupBy(p => p.DonoId!.Value)
