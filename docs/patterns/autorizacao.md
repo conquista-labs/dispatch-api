@@ -55,7 +55,7 @@ metadata:
   continuam só Distribuidora. Sintoma quando falta: 403 silencioso no front e todo protocolo cai em
   "sem equipe".
 - Endpoints que servem os dois papéis e restringem por dentro: `PUT /protocolos/{id}/observacao`
-  (`DefinirObservacao` com `conferenteRestritoId`), `GET /dashboard` (visão restrita RF-45). A
+  (`DefinirObservacao` com `conferenteRestritoId`), `GET /dashboard` (visão restrita RF-45) e `GET /dashboard/hoje` (visão "Seu dia", RF-42a — mesma regra, via `ResolverVisaoRestritaAsync`). A
   checagem é **`usuario.IsInRole(Conferente) && !usuario.IsInRole(Distribuidora)`** — ter
   Distribuidora dá sempre a visão de gestão; ser também Conferente só soma.
 - Distribuidora vendo a fila de alguém: `GET /conferentes/{id}/fila` e `/concluidos-hoje` resolvem o

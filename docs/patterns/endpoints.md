@@ -114,7 +114,7 @@ metadata:
 | `TipoAtoEndpoints` | `/tipos-ato` (`GET` dois papéis), `com-uso`, `{id}`, `peso`, `grupo`, `ativar`, `desativar` | Distribuidora |
 | `EquipeEndpoints` | `/equipes`, `/escreventes` (`GET` dois papéis), `sem-equipe`, `{id}/mover`, `POST /escreventes` | Distribuidora |
 | `SugestaoEndpoints` | `GET /sugestoes`, `POST /sugestoes/gerar`, `/{id}/aplicar`, `/{id}/descartar`, `GET /sugestoes/historico` | Distribuidora |
-| `DashboardEndpoints` | `GET /dashboard?periodo=Semana\|Mes\|Trimestre` | os dois |
+| `DashboardEndpoints` | `GET /dashboard?periodo=Semana\|Mes\|Trimestre`, `GET /dashboard/hoje` (RF-42a) | os dois |
 | `ConfiguracaoEndpoints` | `GET/PUT /config` | Distribuidora |
 | `DevSeedEndpoints` | `POST /dev/seed-e2e` | anônimo, só Development |
 | `Program.cs` | `/health`, `/health/db` | anônimo |
