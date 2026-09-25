@@ -93,6 +93,34 @@ com o hash gerado pelo **mesmo** `PasswordHasher<object>` do `HashDeSenhaAspNetC
 `Autenticar` não reconhece o hash). Feito uma vez para produção (a conta e o Neon sobreviveram à
 migração de host). Em Development, `POST /dev/seed-e2e` cria/reseta as contas fixas de teste.
 
+### Primeiro Administrador (ADR-0039)
+
+Depois do perfil Administrador, criar contas é tela (Contas), mas o **primeiro** admin de um ambiente
+é promoção de uma distribuidora existente, por SQL avulso via skill `prod-ops` (localize a conta por
+nome com um `SELECT`, confirme com o dono, e só então):
+
+```sql
+BEGIN;
+UPDATE usuarios SET papel = 'Administrador', sessoes_validas_apartir_de = now()
+WHERE email = '<email>' AND papel = 'Distribuidora';
+SELECT id, nome, email, papel FROM usuarios WHERE email = '<email>';  -- conferir 1 linha
+COMMIT;
+```
+
+O bump da sessão força novo login, que traz as claims novas. Em produção: Maria Vittoria.
+
+### Ordem de subida de uma mudança de papel/permissão
+
+Exemplo do perfil Administrador, que tinha migration e retirava poder da distribuidora:
+
+1. Migration aplicada no Neon (`prod-ops`) **antes** do merge.
+2. Merge do PR da API → esperar o Render e conferir no `/openapi/v1.json` de produção que o contrato
+   novo está lá.
+3. Merge do PR do front → `netlify deploy --prod --build` a partir do `main` limpo.
+4. Promover o primeiro admin (acima) e pedir o novo login.
+
+Entre o passo 2 e o 4, **ninguém edita regra nem cadastra pessoa** — faça os quatro em sequência.
+
 ## Clonar produção para o Postgres local (anonimizado)
 
 Usado para validar migration com dado real (motor v2) e para análise visual da Central de Regras.

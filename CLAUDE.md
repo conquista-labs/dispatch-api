@@ -52,7 +52,7 @@ abstração está no lugar errado. Detalhes e convenções: `docs/patterns/arqui
 | `docs/patterns/testes.md` | For decidir que teste escrever; antes de declarar pronta uma mudança em persistência/DI/auth; um teste de integração ficar intermitente; medir cobertura |
 | `docs/patterns/deploy.md` | Antes de dar push com migration ou env var nova; aplicar migration no Neon; clonar produção; o Render dizer "live" e a API não responder |
 | `docs/patterns/conceitos-dotnet.md` | For explicar um mecanismo de .NET/EF/ASP.NET ao dono, ou encontrar algo que "parece mágica" |
-| `docs/decisions/` (ADR-0001 a 0038) | Antes de mudar um comportamento que parece estranho — pode ser decisão registrada. Índice abaixo |
+| `docs/decisions/` (ADR-0001 a 0040) | Antes de mudar um comportamento que parece estranho — pode ser decisão registrada. Índice abaixo |
 | `docs/gaps-requisitos.md` | For planejar trabalho novo; um RF parecer não implementado; fechar ou abrir uma lacuna (numeração §N estável) |
 | `docs/historico.md` | Precisar do contexto de uma entrega passada (arquivos, como foi verificado, contagem de testes), ou um comentário no código disser "ver CLAUDE.md, seção X" — a seção está lá com o mesmo título |
 
@@ -64,7 +64,8 @@ vira ADR (skill `/api-adr`), lição nova vai pro pattern doc ou pra skill.**
 - **Arquitetura e infraestrutura**: 0001 Clean Architecture · 0014 Fly.io+Neon (substituído) → 0015
   Render · 0025 `/health` sem banco · 0036 testes de integração e cobertura.
 - **Autenticação**: 0003 JWT próprio sem Identity · 0010 login devolve usuário + `/auth/me` · 0020 TOTP
-  só para recuperação · 0028 uma conta com dois papéis.
+  só para recuperação · 0028 uma conta com dois papéis · 0039 perfil Administrador (claims
+  somadas, corte na Application) · 0040 troca de senha obrigatória no primeiro acesso.
 - **Motor de alçada** (cadeia de supersessão): 0002 v1 → 0017 v2 → 0018 v3 cascata (vigente) · 0024 v4
   equipe-não-faz-etapa → 0030 absoluto fora da cascata.
 - **Importação e prazos**: 0005 CSV com PDF fora · 0006 linha de corte, `Numero` nunca único · 0007
@@ -142,8 +143,9 @@ vars, migration em produção, primeira conta, clone anonimizado): `docs/pattern
 6. **Todo instante é UTC** (o Npgsql recusa offset ≠ 0). Horário de parede ("16h") só via
    `FusoHorario`. → `docs/patterns/motor-e-prazos.md`
 7. **`RequireAuthorization` numa rota combina com E com o do `MapGroup`** — não substitui. Visão
-   restrita é `IsInRole(Conferente) && !IsInRole(Distribuidora)`; papéis no JWT só mudam no próximo
-   login. → `docs/patterns/autorizacao.md`
+   restrita é `IsInRole(Conferente) && !IsInRole(Distribuidora)`; o Administrador carrega também a
+   claim `Distribuidora`, e o que é só dele (e os campos cortados) está tabelado no pattern; papéis no
+   JWT só mudam no próximo login. → `docs/patterns/autorizacao.md`
 8. **Sem `ORDER BY` o Postgres não garante ordem**; desempate sempre por `Id`. Coluna sem FK não ganha
    índice de graça. → `docs/patterns/ef-core.md`
 9. **Back manda o fato cru** (ids, enums, instantes); rótulo e texto são do front. Resposta traduz

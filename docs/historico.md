@@ -866,3 +866,35 @@ Verificado: 16 testes de Domain (`NumeroDaConferenciaTests`, incluindo Theory do
 3 de Application, e `NumeroDaConferenciaIntegracaoTests` pelo fluxo real (importar → pegar → iniciar →
 reprovar → reimportar; número 2 em `/minha-fila`, `/protocolos/distribuicao` e no detalhe, 1 na linha
 anterior). 454 testes (146 Domain + 297 Application + 11 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Perfil Administrador, Contas e troca de senha no primeiro acesso
+
+ADR-0039 e ADR-0040; fecha gaps §1. Feature 3 do `PLANO-melhorias.md`, lado do back.
+- **Papel**: `Papel.Administrador`; `PapeisEfetivos` dá `[Administrador, Distribuidora]` (+ `Conferente`
+  se vinculado); `ClaimsPrincipal.EhAdministrador()`.
+- **Só do admin** (`RequireRole(Administrador)` somado ao do grupo): escritas de `/conferentes`,
+  `/regras-alcada` (inclusive testar), `/tipos-ato` de gestão, `/equipes`/`/escreventes`, `PUT /config`,
+  o grupo `/sugestoes` e o novo `/contas`.
+- **Corte na Application**: `ListarConferentes(incluirNivel)`,
+  `ObterDashboard(incluirAvaliacaoDePessoal = false)` (sem a flag: sem nível/score/faixa/parcelas e por
+  nome; visão restrita perde só o nível), `ListarRegrasAlcada(incluirNivel)` → `RegraAlcadaVisivel` e
+  `RegraBase` na resposta.
+- **Contas**: `CriarConta`, `ListarContas` (`TambemConfere`, `EhVoce`), `DesativarConta` (travas da
+  própria conta / último admin com código próprio, conta de conferente usa `RemoverConferente`);
+  `ContaEndpoints.cs`.
+- **Troca de senha**: `Usuario.TrocarSenhaNoProximoAcesso` (migration `AdicionaTrocarSenhaAUsuario`),
+  `RegrasDeSenha.ServeComoSenhaInicial` (8+), claim `trocar_senha`, middleware no `Program.cs`,
+  `TrocarSenhaInicial` + `POST /auth/trocar-senha`; `trocarSenha` no login e no `/auth/me`.
+  `CadastrarConferente` passou a validar a senha inicial (antes aceitava qualquer uma) e exige a troca.
+- `OnTokenValidated` recusa conta inativa.
+- Seed e2e ganha `distribuidora@` e `administrador@cartorio.com`.
+
+Verificado: `ContasTests` (Application), `AutenticarTests`, `ListarConferentesTests`,
+`ObterDashboardTests`, `ListarRegrasAlcadaTests`, `CadastrarConferenteTests`; integração em
+`AdministradorIntegracaoTests` (403 da distribuidora em 14 rotas, leitura mantida, nível mascarado em
+Conferentes e Regras, score só pro admin, conta nova → troca obrigatória → uso → desativada → 401,
+trava da própria conta) contra o Postgres real; migration aplicada no banco local e smoke pela HTTP.
+502 testes (146 Domain + 326 Application + 30 Api.Tests).
+
+**Subida**: migration no Neon antes do merge; promover a primeira admin (Maria Vittoria) logo depois
+do deploy do front — ver `docs/patterns/deploy.md`, "Ordem de subida".
