@@ -51,7 +51,15 @@ metadata:
 ## Status e erros
 
 - Corpo de erro sempre `{ motivo: "..." }` — inclusive 404 (`Results.NotFound()` vazio foi corrigido
-  na auditoria de qualidade).
+  na auditoria de qualidade). Quando o front precisa reagir diferente a cada desfecho (não só mostrar o
+  texto), o corpo leva também `codigo` em **snake_case** estável — `{ codigo: "senha_fraca", motivo }`
+  (`AuthEndpoints`, `ContaEndpoints`, `/protocolos/importar/converter`). O front decide pelo `codigo`, nunca
+  pelo texto do `motivo`.
+- **Upload de arquivo** (`/protocolos/importar/converter`, [ADR-0045](../decisions/0045-conector-de-relatorio-por-cartorio.md)):
+  `multipart/form-data` com `IFormFile?` (anulável, pra devolver o nosso 400 `arquivo_ausente` em vez do 400
+  vazio do binding), `.DisableAntiforgery()` (sem ele a rota falha em runtime — a autenticação é Bearer, sem
+  cookie, então CSRF não se aplica), limite de tamanho checado no handler (413 com `codigo`) mais
+  `RequestSizeLimitAttribute` como teto do Kestrel (413 sem corpo).
 - 201 com id no corpo para criação (`Results.Created($"/x/{id}", new XResponse(id))`); 204 para
   mutação sem retorno; 404 não encontrado; 409 estado inválido/conflito (duplicado, status errado,
   já pendente); 400 validação de formato; 423 conta bloqueada (recuperação de senha); 401/403 pelo
@@ -105,7 +113,7 @@ metadata:
 | ------- | ---------------- | ----- |
 | `AuthEndpoints` | `POST /auth/login`, `GET /auth/me` | anônimo / autenticado |
 | `TotpEndpoints`, `RecuperacaoSenhaEndpoints` | `/auth/totp/*`, `/auth/recuperar/*` | autenticado / anônimo |
-| `ImportacaoEndpoints` | `POST /protocolos/importar/pre-visualizar`, `/confirmar` | Distribuidora |
+| `ImportacaoEndpoints` | `POST /protocolos/importar/pre-visualizar`, `/confirmar`, `/converter` (upload do `.xls` do cartório) | Distribuidora |
 | `DistribuicaoEndpoints` | `GET /protocolos/distribuicao?loteImportacaoId=` | Distribuidora |
 | `ProtocoloEndpoints` | `/protocolos/{id}/detalhe`, `observacao`, `atribuir`, `descartar`, `devolver-ao-pool`, `atribuir-ao-menos-carregado`, `definir-prioridade`, `reabrir-conferencia`, `ajustar-duracao`, `restaurar`, `PUT/DELETE /protocolos/{id}`, `/protocolos/manual[/simular]`, `redistribuir-pool`, `pedidos-reabertura/*` | Distribuidora (observação: os dois) |
 | `MinhaFilaEndpoints` | `GET /minha-fila`, `/{id}/pegar`, `iniciar`, `pausar`, `retomar`, `concluir`, `corrigir-resultado`, `pedir-reabertura`, `pedidos-reabertura/{id}/cancelar`, `/concluidos-hoje` | Conferente |
@@ -123,4 +131,4 @@ metadata:
 ## Referências
 
 - `arquitetura.md` (a Api nunca injeta repositório direto), `autorizacao.md` (grupos e papéis).
-- ADR-0010, ADR-0029, ADR-0035.
+- ADR-0010, ADR-0029, ADR-0035, ADR-0045.

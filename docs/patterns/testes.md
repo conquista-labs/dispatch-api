@@ -75,6 +75,12 @@ valor com o que foi gravado (`psql`), não só a presença do campo.
   `ImportacaoIntegracaoTests`, `CorteDeHorarioIntegracaoTests` (round-trip do `Prazo` com corte +
   reabertura reusando o `Prazo` recarregado).
 - Escreva teste de integração mirando **bug de histórico documentado**, não cobertura de enfeite.
+- **Conector de relatório** (ADR-0045): o adaptador `.xls` tem teste de **unidade** neste projeto
+  (`Conectores/ConversorRelatorioDeAndamentosXlsTests.cs`, sem banco nem HTTP — é o projeto de teste que já
+  enxerga a Infrastructure) e o endpoint tem integração (`ConverterRelatorioIntegracaoTests`). Os `.xls` de
+  `Conectores/Fixtures/` são **sintéticos, com nomes fictícios**, gerados por `gerar_fixtures.py` (xlwt)
+  reproduzindo o layout real — o relatório de verdade tem dado pessoal e **nunca entra no repositório**. Mudou o
+  layout: ajuste o gerador, regere, e confira o adaptador contra o arquivo real só localmente.
 
 ## Lições de escrita de teste
 
