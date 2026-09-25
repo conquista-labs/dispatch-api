@@ -83,10 +83,14 @@ Ordem de avaliação para um conferente e um caso:
   `ObterMinhaFila`, `AtribuirAoMenosCarregado`, `ObterDetalheProtocolo` precisam de `ITipoAtoRepository`
   porque o caso leva o `TipoAto` inteiro, pelo `.Grupo`).
 - **Leituras agregadas são aproximação**: `ObterAlcancePorConferente` (RF-34) fixa um caso
-  representativo por eixo (etapa `PosConferencia` + sem equipe para "tipos permitidos"; um tipo
-  representativo — o primeiro que a pessoa já alcança, senão o primeiro do catálogo — para etapas e
-  equipes). `ObterCoberturaDeAlcada` (RF-30) reaproveita isso e cruza só com quem está `NaEscala`;
-  "tipo em circulação" = `TipoAtoId` distinto presente nos protocolos. `ListarTiposAtoComUso` também.
+  representativo por eixo — "tipos permitidos": o tipo conta se é permitido em **pelo menos uma
+  etapa** (Pré ou Pós), sem equipe; "etapas": um tipo representativo (o primeiro que a pessoa
+  alcança, senão o primeiro do catálogo), sem equipe; "equipes": esse tipo na **primeira etapa
+  liberada** (senão `PosConferencia`). Nunca fixe uma etapa só para responder "alcança o tipo?": até
+  2026-09-25 era só Pós, e quem tinha "Nega etapa Pós" (só faz pré) aparecia com zero tipos e zero
+  equipes. `ObterCoberturaDeAlcada` (RF-30) reaproveita essa lista e cruza só com quem está
+  `NaEscala`; "tipo em circulação" = `TipoAtoId` distinto presente nos protocolos.
+  `ListarTiposAtoComUso` ("N com alçada") também — por isso a correção na origem vale para os três.
 - `SimularAlcada` roda o motor de verdade sobre um `Protocolo`/`Escrevente` transitórios (com a
   prioridade informada) para devolver o destino real, não uma inferência por contagem.
 - Persistência das regras: ver `ef-core.md` (classe-registro + discriminador + `CHECK`).
