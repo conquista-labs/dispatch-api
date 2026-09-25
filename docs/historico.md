@@ -921,3 +921,25 @@ de Brasília, `ImportarLoteTests` (+5: "INVENTARIO" × "Inventário" na prévia 
 mesmo tipo novo com e sem acento no lote, catálogo com duplicata), `CriarTipoAtoTests` (+1),
 `RenomearTipoAtoTests` (+2); `DistribuirProtocoloTests` ajustado ao D+0 local. 551 testes
 (167 Domain + 336 Application + 48 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Painel de hoje (RF-42a, fatia 1 do Dashboard v2)
+
+`GET /dashboard/hoje` — a faixa "Hoje, agora" da gestão e "Seu dia" do conferente, contrato da fatia 1
+do `PLANO-dashboard-v2.md`. Sem migration.
+- **Caso de uso** `ObterPainelDeHoje` (Application): relógio injetado, "hoje" via
+  `FusoHorario.InicioDoDiaLocal`; risco por `Semaforo.Calcular` com janela fixa de 1h; gargalo pela
+  equipe do escrevente, só quando > 1, "sem equipe" como grupo, empate pelo menor `EquipeId` entre
+  equipes de verdade. Reaproveita `ObterParaVisaoDistribuicaoAsync` (gestão, uma query) e as consultas
+  da Minha fila (conferente). Regras: `docs/patterns/indicadores-e-aprendizado.md`, "Painel de hoje".
+- **Endpoint**: `DashboardEndpoints` virou um `MapGroup("/dashboard")` com a mesma
+  `RequireRole(Distribuidora, Conferente)` para `GET /dashboard` (rota inalterada) e `GET /dashboard/hoje`;
+  a escolha da visão restrita (`IsInRole(Conferente) && !IsInRole(Distribuidora)`, conferente pelo
+  usuário logado, 404 se não houver vínculo) saiu do handler para `ResolverVisaoRestritaAsync`,
+  compartilhado. DI em `ServiceCollectionExtensions`.
+
+Verificado: `ObterPainelDeHojeTests` (12, relógio às 23h e às 10h de Brasília: conferidos só do dia
+local, bordas de estourado/vence em 1h, gargalo >1, "sem equipe" e escrevente fora do cadastro, dois
+empates, visão do conferente); `PainelDeHojeIntegracaoTests` (3: sem token 401, distribuidora → Gestao
+e conferente → Conferente com números de um fluxo real importar → pegar → iniciar → concluir,
+administrador → Gestao). Smoke com `dotnet run` numa porta alternativa e token real das três contas.
+566 testes (167 Domain + 348 Application + 51 Api.Tests), build sem avisos.

@@ -34,8 +34,8 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §36, §37 |
-| 🟡 Parcial | §16, §19 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §37 |
+| 🟡 Parcial | §16, §19, §36 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
@@ -296,12 +296,16 @@ leitura).
   peso. Depende do §26.
 - **Como sabemos**: requisito; grep sem `Ritmo`.
 
-#### §36 🔴 RF-42a–c — "Hoje, agora", tendência e meta, série do período
+#### §36 🟡 RF-42a–c — "Hoje, agora", tendência e meta, série do período
 
-- **O que falta** (não investigado em detalhe): faixa "Hoje, agora"/"Seu dia" com gargalo por equipe,
-  variação contra o período anterior, metas configuráveis (95%/90%), série por dia útil. Nenhum campo
-  equivalente no `DashboardResponse` conhecido.
-- **Como sabemos**: requisito.
+- **RF-42a fechado** em 2026-09-25: `GET /dashboard/hoje` (`ObterPainelDeHoje`) — conferidos hoje (dia
+  de Brasília), na fila (pool · com conferente), em risco (estourados · vencem em 1h), exceções e
+  gargalo por equipe na gestão; "Seu dia" (conferidos hoje, na mão, em risco) no conferente. Regras em
+  `docs/patterns/indicadores-e-aprendizado.md`, "Painel de hoje". "Cada número leva à aba da
+  Distribuição" é navegação do front.
+- **Em aberto — RF-42b/c**: variação contra o período anterior, metas configuráveis (95%/90%), série
+  por dia útil. Nenhum campo equivalente no `DashboardResponse`.
+- **Como sabemos**: código (42a); requisito (42b/c).
 
 #### §37 🔴 RF-44 (Dashboard) — exportar CSV
 

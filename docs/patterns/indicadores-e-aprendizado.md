@@ -53,6 +53,34 @@ metadata:
   score, sozinha, entregaria o ranking. O endpoint passa `usuario.EhAdministrador()`.
 - KPI "custo por ato" não existe (sem dado de custo — e o documento v2 já o removeu, RF-42b).
 
+## Painel de hoje (`GET /dashboard/hoje`, RF-42a)
+
+A faixa "Hoje, agora" (gestão) / "Seu dia" (conferente). Caso de uso próprio (`ObterPainelDeHoje`),
+separado de `ObterDashboard` porque olha o **agora** (trabalho aberto + concluídos do dia), não um
+período de concluídos — e o front a recarrega mais vezes que o resto.
+
+- **Visão**: mesma regra do `GET /dashboard` (`ResolverVisaoRestritaAsync` no `DashboardEndpoints`,
+  compartilhado pelas duas rotas): só Conferente → `visao: "Conferente"`; quem tem Distribuidora
+  (inclui Administrador e conta combo) → `"Gestao"`. Um tipo só; os campos da outra visão vão `null`
+  (gestão: `naMao`; conferente: `naFila`, `excecoes`, `gargalo`).
+- **Hoje** = desde `FusoHorario.InicioDoDiaLocal(agora)` (meia-noite de Brasília). `conferidosHoje` =
+  Aprovado + Reprovado com `ConcluidoEm` hoje (gestão: todos; conferente: `DonoId` dele).
+- **Abertos** = Pool, Atribuído, Conferindo, Exceção. Conferente: só a mão dele (Atribuído + Conferindo;
+  pausado continua Conferindo). `naFila.comConferente` = Atribuído + Conferindo de todos.
+- **Em risco**: `Semaforo.Calcular` com a faixa de urgência fixa em 1h (`ObterPainelDeHoje.JanelaDeRisco`)
+  — Vermelho = estourado (`vencimento < agora`), Laranja = vence em 1h (`agora ≤ vencimento < agora+1h`).
+  Reaproveitar o semáforo garante que "estourado" aqui é o mesmo vermelho do card. Sem vencimento
+  gravado: fora das duas contagens.
+- **Gargalo**: entre os abertos em risco, agrupa pela equipe **do escrevente** (escrevente sem equipe,
+  ou fora do cadastro, = grupo `equipeId: null`); devolve o maior **só se > 1**. Empate: menor `EquipeId`
+  (`Guid.CompareTo`) entre equipes de verdade; "sem equipe" só vence se estiver sozinho no topo (leitura
+  adotada — o contrato só dizia "menor equipeId"). O front resolve o nome da equipe.
+- **Consultas** (sem N+1): gestão = `ObterParaVisaoDistribuicaoAsync(null, inicioDoDia)` (uma query:
+  abertos sem corte + concluídos de hoje) + `escreventes.ObterTodosAsync` só quando há >1 em risco;
+  conferente = `ObterAtribuidosAAsync` + `ObterEmConferenciaPorConferenteAsync` +
+  `ObterConcluidosPorConferenteAsync`.
+- `atualizadoEm` = o `agora` do `IRelogio` usado no cálculo.
+
 ## Aprendizado sem IA (RF-39 a RF-41)
 
 Sem tabela `evento_decisao` ([ADR-0009](../decisions/0009-aprendizado-sem-tabela-evento-decisao.md)).
