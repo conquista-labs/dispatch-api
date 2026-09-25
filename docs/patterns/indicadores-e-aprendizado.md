@@ -1,6 +1,6 @@
 ---
 name: indicadores-e-aprendizado
-description: Fórmulas e interpretações do Dashboard (período de calendário, variação, série, aprovado na 1ª, score, faixa, visão restrita, tempo por ciclo) e do módulo de aprendizado sem IA (quatro propostas, limiares, dedup, descarte com memória, índice de confiança)
+description: Fórmulas e interpretações do Dashboard (período de calendário, variação, série, aprovado na 1ª, score, faixa, visão restrita, tempo por ciclo, tempo de referência, ritmo) e do módulo de aprendizado sem IA (quatro propostas, limiares, dedup, descarte com memória, índice de confiança)
 metadata:
   type: pattern
   domains: [dominio, dashboard, aprendizado, metricas]
@@ -51,7 +51,8 @@ metadata:
   `pV·(volume/volumeMáxDoGrupo) + pP·%noPrazo + pQ·%aprovado + pC·(complexidadeMédia/complexidadeMáxDoGrupo)`,
   com os **pesos da Configuração** (RF-46, [ADR-0042](../decisions/0042-metas-e-pesos-do-score-na-configuracao.md);
   padrão 40/30/20/10, inteiros ≥ 0 que **somam 100** — `PesosDoScore`, Domain). Volume e complexidade
-  normalizados pelo melhor do grupo; complexidade = peso médio do `TipoAto` (`PesoComplexidade`, RF-34f).
+  normalizados pelo melhor do grupo; complexidade = peso médio do `TipoAto` (`PesoComplexidade`, RF-34f —
+  decimal 0,50–2,50 em passos de 0,05 desde 2026-09-25, `PesoDeComplexidade`; era inteiro ≥ 1).
   As 4 parcelas vão **já ponderadas** (cada uma de 0 ao seu peso, "32.4 / 40"). Os pesos valem **na
   leitura**: trocar um peso muda o score de qualquer período consultado depois, inclusive meses fechados
   (sem histórico de pesos — risco registrado no ADR-0042).
@@ -74,11 +75,28 @@ metadata:
   D+1); ordenado pelo pior percentual primeiro (igual ao protótipo). `Prazo` do grupo é só informativo.
 - **Desempenho por tipo de ato**: volume, tempo médio, % reprovação.
 - **Tempo** ([ADR-0032](../decisions/0032-tempo-de-conferencia-por-ciclo.md)): `TempoMedio` por
-  conferente vem dos **ciclos que a pessoa fez** (`ConstruirTemposPorConferente`); KPIs agregados e
+  conferente vem dos **ciclos que a pessoa fez** (`ConstruirTemposPorConferente`, somando `Protocolo.TemposPorConferente()`); KPIs agregados e
   "por tipo" somam o protocolo inteiro. Quem fez ciclo mas não é dono de nada aparece com `Volume: 0`.
   Protocolo com ajuste manual atribui a duração inteira ao dono atual
   ([ADR-0035](../decisions/0035-ajuste-manual-de-duracao.md)). Volume/score/prazo/aprovação/complexidade
   continuam do dono atual.
+- **Tempo de referência (RF-46c, RF-34a)** — [ADR-0043](../decisions/0043-tempo-de-referencia-calculado-na-leitura.md):
+  `TempoDeReferencia.Calcular` (Domain). Precedência: `TipoAto.TempoReferenciaMinutos` (informado pelo
+  admin, 2–240) → **mediana** das durações (`Protocolo.Duracao`: ciclos + ajuste) das Aprovado/Reprovado
+  dos **últimos 12 meses**, se houver **≥ 30 válidas** → **estimativa** `round(TempoMedioPorAtoMinutos ×
+  peso)`. Válida = duração **≤ 4× a estimativa** (não "a referência" — circular; decisão do dono). Arredonda
+  "pra longe do zero" (22,5 → 23), mínimo 1 min. `MedianaMinutos` sai mesmo com informado;
+  `ConferenciasNoHistorico` = válidas. Calculada **na leitura, sem cache**, uma query projetada por listagem
+  (`ObterDuracoesConcluidasPorTipoAsync` + `ReferenciasDeTempoEmLote`): Tipos de ato só pros tipos da página;
+  Dashboard pros tipos dos dois trechos. A referência é **a de agora**, também pro trecho anterior.
+- **Ritmo (RF-46a/b)** — [ADR-0044](../decisions/0044-ritmo-so-dos-atos-concluidos.md): `Ritmo.Calcular`
+  (Domain) = **Σ tempo real ÷ Σ referência** (razão de somas). Por pessoa (`CalculoDeRitmo.DoConferente`):
+  só os atos que ela **concluiu** (dono atual), tempo = `Protocolo.TempoDe(pessoa)` (ciclos dela; com ajuste
+  manual, o ajuste inteiro). Operação (`kpis.ritmo` da gestão): Σ `Duracao` inteira. Ato sem tipo ou sem
+  tempo fica fora; sem elegível = `null`. `tempoMedioReferencia` = Σ referência ÷ nº de atos elegíveis.
+  Média da casa: média simples de quem tem ritmo. Em **todas** as visões (distribuidora vê ritmo, não
+  score). `meuTempoPorTipo` (só visão restrita; `null` na gestão): os mesmos atos elegíveis por tipo, mais
+  volume primeiro (empate: nome, id) — `{ tipoAtoId, nome, atos, meuTempoMedio, referenciaMinutos }`.
 - **Visão restrita (RF-45)**, quando o token é só Conferente: linha do próprio conferente (com nome e
   parcelas, sem o próprio `Nivel` — ADR-0039) + linha "média da casa" (`Nome`/`Nivel`/`Parcelas`
   nulos); **`Faixa` nula nas duas**
@@ -143,5 +161,5 @@ Sem tabela `evento_decisao` ([ADR-0009](../decisions/0009-aprendizado-sem-tabela
 
 ## Referências
 
-- ADR-0009, ADR-0012, ADR-0032, ADR-0035, ADR-0038, ADR-0041.
-- `docs/gaps-requisitos.md` (ritmo, metas, pesos configuráveis, exportar CSV).
+- ADR-0009, ADR-0012, ADR-0032, ADR-0035, ADR-0038, ADR-0041, ADR-0042, ADR-0043, ADR-0044.
+- `docs/gaps-requisitos.md` (§26 tempo de referência, §35 ritmo, §37 exportar CSV).

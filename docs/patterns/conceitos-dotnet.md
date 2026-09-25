@@ -68,6 +68,12 @@ metadata:
   `OwnsMany` cria tabela filha (ciclos, pausas, ajustes). Backing field `_nome` achado por convenção.
 - **Migrations**: classes C# geradas (`Up`/`Down`) versionando o schema; `dotnet ef migrations add` e
   `dotnet ef database update`. Equivalem às migrations do Prisma, mas editáveis (backfill, `InsertData`).
+- **Migration que converte dado**: o `AlterColumn` gerado faz só o cast do Postgres; quando o valor
+  precisa de um mapa (peso inteiro → decimal, `ConverteTempoDeReferenciaEPesoDecimalEmTiposAto`), troque-o
+  por `migrationBuilder.Sql("ALTER ... TYPE ... USING (CASE ...)")`. Pra testar contra Postgres real:
+  `db.GetService<IMigrator>().MigrateAsync("<migration anterior>")`, semeia no schema antigo, `MigrateAsync()`.
+- **`HasPrecision(3, 2)`** → `numeric(3,2)`; o `decimal` do C# volta exato (sem o erro de ponto flutuante
+  do `double`) e o System.Text.Json serializa com a escala do banco (`1.50`).
 - **`IUnitOfWork`** (porta do projeto, não do EF): um `SaveChanges` por caso de uso — equivalente
   explícito ao `prisma.$transaction([...])`.
 
@@ -80,6 +86,10 @@ metadata:
 - **`private set` + métodos**: entidade controla as próprias transições.
 - **`Guid?`/`TimeOnly?`**: nullable value types. Cuidado: `Dictionary<Guid, Guid>.GetValueOrDefault`
   devolve `Guid.Empty`, não `null`.
+- **`Math.Round` é bancário por padrão** (`MidpointRounding.ToEven`: 22,5 → 22, 23,5 → 24). "Arredondar"
+  no sentido escolar é `MidpointRounding.AwayFromZero` (22,5 → 23) — usado no tempo de referência.
+- **`decimal` vs `double`**: `decimal` é base 10 — `1.35m % 0.05m == 0` é verdade; em `double` não seria.
+  Literal `decimal` leva sufixo `m`.
 - **`PasswordHasher<TUser>`**: hasher do Identity usável sozinho; o `TUser` é só extensibilidade.
 
 ## Testes

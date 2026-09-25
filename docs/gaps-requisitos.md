@@ -34,16 +34,16 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §35, §37 |
-| 🟡 Parcial | §16, §19 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §27, §37 |
+| 🟡 Parcial | §16, §19, §26 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §36, §39 |
+| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §35, §36, §39 |
 
 **Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
-**Dashboard v2** (ritmo e exportação — §35, §37; hoje, variação, série, aprovado na 1ª, metas e pesos
-configuráveis já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
+**Dashboard v2** (só a exportação — §37; hoje, variação, série, aprovado na 1ª, metas e pesos
+configuráveis, tempo de referência e ritmo já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
 tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 ---
@@ -231,12 +231,20 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 - **Como sabemos**: CLAUDE.md ("Tipos de ato — CRUD completo": "próximo passo, não foi esquecido").
 - **Onde entraria**: caso de uso `MesclarTiposAto`; sem FK em `TipoAtoId`, a migração é da aplicação.
 
-#### §26 🔴 RF-34a/RF-34g — tempo de referência e origem do tipo
+#### §26 🟡 RF-34a/RF-34g — tempo de referência e origem do tipo
 
-- **O que falta**: tempo de referência por tipo com origem (informado · mediana de N atos · estimado),
-  stepper e "usar histórico"; origem do tipo (catálogo, manual, reconhecido via importação). Já existe
-  contagem de uso e de conferentes com alçada (`ListarTiposAtoComUso`).
-- **Como sabemos**: requisito; grep sem `TempoReferencia`. Base também do §35.
+- **Tempo de referência fechado** em 2026-09-25 ([ADR-0043](decisions/0043-tempo-de-referencia-calculado-na-leitura.md)):
+  `tempo_referencia_minutos` (informado, 2–240) em `tipos_ato`; referência efetiva calculada na leitura
+  (informado → mediana dos últimos 12 meses com ≥ 30 conferências, descartando as > 4× a estimativa →
+  estimativa `round(TempoMedioPorAtoMinutos × peso)` — decisões do dono sobre o texto do RF-46c);
+  `tempoReferencia { minutos, origem, informadoMinutos, medianaMinutos, conferenciasNoHistorico }` no
+  `GET /tipos-ato/com-uso`; `PUT /tipos-ato/{id}/tempo-referencia` (nulo = "usar histórico"). Peso de
+  complexidade decimal 0,50–2,50 (RF-34f) e `pesoComplexidade` no `GET /tipos-ato` (RF-18a).
+- **Continua em aberto**: (a) o "indicador no topo" que conta os tipos ainda em estimativa (RF-34a) — com
+  a tela paginada no servidor, o front só vê a página; o contrato da fatia 5 não o incluiu (sairia barato:
+  um campo na página, a mesma query sem filtro de página); (b) a origem do tipo (catálogo, manual,
+  reconhecido via importação — RF-34g), que não tem coluna.
+- **Como sabemos**: código.
 
 #### §27 🔴 RF-32a–c — construtor guiado: efeito antes de criar, regra parecida, "Por quê"
 
@@ -295,12 +303,18 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 - **Continua fora**: os limiares de faixa 85/70 são fixos (o requisito não pede configuráveis). Os pesos
   valem na leitura — trocar reescreve o score de períodos já fechados (sem vigência; risco no ADR-0042).
 
-#### §35 🔴 RF-46a–c — ritmo no lugar de tempo médio; tempo por tipo do conferente
+#### §35 ✅ RF-46a–c — ritmo no lugar de tempo médio; tempo por tipo do conferente
 
-- **O que falta**: ritmo = tempo real ÷ tempo esperado (soma dos tempos de referência), tabela "seu tempo
-  por tipo", precedência informado → mediana (≥30 conferências, sem outliers >4×) → estimativa 15 min ×
-  peso. Depende do §26.
-- **Como sabemos**: requisito; grep sem `Ritmo`.
+- **Fechado** em 2026-09-25 ([ADR-0044](decisions/0044-ritmo-so-dos-atos-concluidos.md)): `ritmo` e
+  `tempoMedioReferencia` em cada linha de `desempenho` (todas as visões) e na `mediaDaCasa` (média
+  simples), `kpis.ritmo`/`kpisAnterior.ritmo`, e `meuTempoPorTipo` na visão restrita. Ritmo = Σ tempo dos
+  ciclos da pessoa nos atos que ela concluiu ÷ Σ referência (RF-46c, §26) desses atos; operação = Σ
+  duração ÷ Σ referência; ato sem tipo fora; `null` sem ato elegível.
+- **Divergências conscientes**: estimativa usa `TempoMedioPorAtoMinutos` (não 15 fixo) e o descarte é
+  > 4× a estimativa (não "a referência") — decisões do dono (ADR-0043). A referência aplicada é a de
+  agora, também ao trecho anterior. "Tempo considerado: de Iniciar conferência até a decisão" = os ciclos
+  (pausa não conta — ADR-0033), ou o ajuste manual (ADR-0035).
+- **Como sabemos**: código.
 
 #### §36 ✅ RF-42a–c — "Hoje, agora", tendência e meta, série do período
 
