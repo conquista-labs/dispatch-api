@@ -563,7 +563,7 @@ public class ObterDashboardTests
 
         var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
 
-        Assert.Equal(new KpisDashboard(0, 0, 0, null, null), resultado.KpisAnterior);
+        Assert.Equal(new KpisDashboard(0, 0, 0, null, null, null), resultado.KpisAnterior);
         Assert.Null(resultado.Kpis.PercentualAprovadoNaPrimeira);
     }
 

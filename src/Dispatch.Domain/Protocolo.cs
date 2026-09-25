@@ -113,6 +113,33 @@ public sealed class Protocolo
             ? ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo)
             : null);
 
+    // ADR-0032/0035: o tempo deste ato repartido por quem o conferiu — um item por ciclo já encerrado
+    // (CiclosAnteriores, cada um de quem o fez) mais o ciclo final (do dono atual). Com ajuste manual, o
+    // valor corrigido substitui a conta inteira e vai todo pro dono atual. Base do tempo médio por
+    // conferente e do ritmo (RF-46a) no Dashboard.
+    public IReadOnlyList<(Guid ConferenteId, TimeSpan Duracao)> TemposPorConferente()
+    {
+        if (_ajustesDeDuracao.Count > 0)
+        {
+            return DonoId is { } donoAjustado && Duracao is { } duracaoAjustada ? [(donoAjustado, duracaoAjustada)] : [];
+        }
+
+        var tempos = _ciclosAnteriores.Select(c => (c.ConferenteId, c.Duracao)).ToList();
+        if (DonoId is { } dono && IniciadoEm is { } inicio && ConcluidoEm is { } fim)
+        {
+            tempos.Add((dono, fim - inicio));
+        }
+
+        return tempos;
+    }
+
+    // Soma dos pedaços deste ato que foram de `conferenteId`; nulo se nenhum foi.
+    public TimeSpan? TempoDe(Guid conferenteId)
+    {
+        var dele = TemposPorConferente().Where(t => t.ConferenteId == conferenteId).ToList();
+        return dele.Count == 0 ? null : dele.Aggregate(TimeSpan.Zero, (soma, t) => soma + t.Duracao);
+    }
+
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,
         Prioridade prioridade = Prioridade.Normal, Guid? loteImportacaoId = null, string? tipoAtoNomeOriginal = null)

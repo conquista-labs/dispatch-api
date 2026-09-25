@@ -105,15 +105,19 @@ public static class DashboardEndpoints
             .Select(c => new CumprimentoPrazoEquipeResponse(c.EquipeId, c.EquipeNome, c.Etapa, c.Prazo, c.Total, c.PercentualNoPrazo))
             .ToList(),
         resultado.Metas is { } metas ? new MetasDashboardResponse(metas.NoPrazo, metas.AprovadoNaPrimeira) : null,
-        resultado.Pesos is { } pesos ? new PesosScoreResponse(pesos.Volume, pesos.Prazo, pesos.Qualidade, pesos.Complexidade) : null);
+        resultado.Pesos is { } pesos ? new PesosScoreResponse(pesos.Volume, pesos.Prazo, pesos.Qualidade, pesos.Complexidade) : null,
+        resultado.MeuTempoPorTipo?
+            .Select(t => new MeuTempoPorTipoResponse(t.TipoAtoId, t.Nome, t.Atos, t.MeuTempoMedio, t.ReferenciaMinutos))
+            .ToList());
 
     private static KpisResponse ParaKpisResponse(KpisDashboard k) =>
-        new(k.AtosConferidos, k.PercentualNoPrazo, k.PercentualAprovado, k.PercentualAprovadoNaPrimeira, k.TempoMedio);
+        new(k.AtosConferidos, k.PercentualNoPrazo, k.PercentualAprovado, k.PercentualAprovadoNaPrimeira, k.TempoMedio, k.Ritmo);
 
     private static DesempenhoConferenteResponse ParaDesempenhoResponse(DesempenhoConferente d) => new(
         d.ConferenteId, d.Nome, d.Nivel, d.Volume, d.TempoMedio, d.PercentualNoPrazo, d.PercentualAprovado,
         d.PercentualAprovadoNaPrimeira, d.ComplexidadeMedia, d.Score, d.Faixa,
-        d.Parcelas is { } p ? new ParcelasScoreResponse(p.Volume, p.Prazo, p.Qualidade, p.Complexidade) : null);
+        d.Parcelas is { } p ? new ParcelasScoreResponse(p.Volume, p.Prazo, p.Qualidade, p.Complexidade) : null,
+        d.Ritmo, d.TempoMedioReferencia);
 }
 
 // PeriodoInicio/PeriodoFim: o intervalo de calendário usado (instantes UTC; fim = agora). KpisAnterior:
@@ -130,7 +134,14 @@ public sealed record DashboardResponse(
     IReadOnlyList<DesempenhoTipoAtoResponse> PorTipoAto,
     IReadOnlyList<CumprimentoPrazoEquipeResponse> CumprimentoPrazoEquipe,
     MetasDashboardResponse? Metas,
-    PesosScoreResponse? Pesos);
+    PesosScoreResponse? Pesos,
+    // RF-46b: só na visão restrita; null na de gestão.
+    IReadOnlyList<MeuTempoPorTipoResponse>? MeuTempoPorTipo);
+
+// RF-46b "Seu tempo por tipo de ato": tipos que a pessoa concluiu no período, mais volume primeiro.
+// Nome vem resolvido pela mesma razão de DesempenhoTipoAtoResponse. MeuTempoMedio = média do tempo dos
+// ciclos dela nesses atos; ReferenciaMinutos = referência efetiva do tipo hoje (RF-46c).
+public sealed record MeuTempoPorTipoResponse(Guid TipoAtoId, string Nome, int Atos, TimeSpan MeuTempoMedio, int ReferenciaMinutos);
 
 // RF-42b: metas da Configuração (frações 0–1) pra barra de "Dentro do prazo" e "Aprovados na 1ª".
 // Só na visão de gestão (decisão 4 do dono); null na visão restrita do conferente.
@@ -141,8 +152,11 @@ public sealed record MetasDashboardResponse(double NoPrazo, double AprovadoNaPri
 public sealed record PesosScoreResponse(int Volume, int Prazo, int Qualidade, int Complexidade);
 
 // PercentualAprovadoNaPrimeira: 0–1, nulo sem nenhuma 1ª conferência (RF-24k) no recorte (RF-43).
+// Ritmo (RF-46a): gestão = Σ duração ÷ Σ referência de todos os atos com tipo; visão restrita = o da
+// pessoa. Nulo sem ato elegível.
 public sealed record KpisResponse(
-    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio);
+    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio,
+    double? Ritmo);
 
 // Granularidade Dia (Semana/Mes: dias úteis do período inteiro + fim de semana com conferência) ou
 // Semana (Trimestre: uma por segunda-feira). Inicio = dia local de Brasília ("2026-09-01").
@@ -167,7 +181,12 @@ public sealed record DesempenhoConferenteResponse(
     // Nulo pra quem não é Administrador — nível, score, faixa e parcelas (ADR-0039).
     int? Score,
     FaixaBonificacao? Faixa,
-    ParcelasScoreResponse? Parcelas);
+    ParcelasScoreResponse? Parcelas,
+    // RF-46a: todas as visões. Ritmo = Σ tempo dos ciclos da pessoa nos atos que ela concluiu ÷ Σ
+    // referência desses atos (nulo sem ato elegível); TempoMedioReferencia = Σ referência ÷ nº de atos.
+    // Na média da casa: média simples entre quem tem valor.
+    double? Ritmo,
+    TimeSpan? TempoMedioReferencia);
 
 public sealed record ParcelasScoreResponse(double Volume, double Prazo, double Qualidade, double Complexidade);
 

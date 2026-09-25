@@ -15,6 +15,11 @@ namespace Dispatch.Application;
 //
 // Período por calendário no dia de Brasília (CalendarioDoPeriodo, ADR-0041), com o mesmo trecho do
 // período anterior pra variação (RF-42b) e a série por dia útil/semana (RF-42c).
+//
+// Ritmo (RF-46a/b, ADR-0044): tempo real ÷ tempo de referência (RF-46c) dos atos. Por pessoa, só os atos
+// que ela concluiu (dono atual), com o tempo dos ciclos DELA neles (Protocolo.TempoDe) — decisão do
+// dono. Na operação (KPI da gestão), a Duracao inteira de cada ato. Ato sem tipo fica fora. As
+// referências são as de AGORA (mediana dos últimos 12 meses), aplicadas também ao trecho anterior.
 public sealed class ObterDashboard(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,
@@ -62,6 +67,16 @@ public sealed class ObterDashboard(
             protocolos, [.. concluidosNoPeriodo, .. anteriorDoRecorte], cancellationToken);
 
         var catalogoTipos = (await tiposAto.ObterTodosAsync(cancellationToken)).ToDictionary(t => t.Id);
+
+        // RF-46c: uma query pelo histórico de 12 meses de todos os tipos que aparecem nos dois trechos.
+        var tiposUsados = concluidosNoPeriodo.Concat(concluidosNoTrechoAnterior)
+            .Where(p => p.TipoAtoId is { } tipoId && catalogoTipos.ContainsKey(tipoId))
+            .Select(p => catalogoTipos[p.TipoAtoId!.Value])
+            .DistinctBy(t => t.Id)
+            .ToList();
+        var referencias = await ReferenciasDeTempoEmLote.CalcularAsync(
+            protocolos, tiposUsados, config.TempoMedioPorAtoMinutos, agora, cancellationToken);
+        var ritmos = new CalculoDeRitmo(referencias);
         var todosConferentes = (await conferentes.ObterTodosAsync(cancellationToken)).ToDictionary(c => c.Id);
         var usuarioPorId = (await usuarios.ObterVariosPorIdsAsync(
                 todosConferentes.Values.Select(c => c.UsuarioId).ToList(), cancellationToken))
@@ -88,8 +103,10 @@ public sealed class ObterDashboard(
         // linha de desempenho logo abaixo mostrando só a dele (achado real: os dois pareciam
         // dados desencontrados, cada um lendo uma fonte diferente).
         var kpis = conferenteRestritoId is { } idRestrito
-            ? CalcularKpis(porDono.GetValueOrDefault(idRestrito, []), temposPorConferente.GetValueOrDefault(idRestrito, []), numeroDaConferencia)
-            : CalcularKpis(concluidosNoPeriodo, temposProprios: null, numeroDaConferencia);
+            ? CalcularKpis(
+                porDono.GetValueOrDefault(idRestrito, []), temposPorConferente.GetValueOrDefault(idRestrito, []), numeroDaConferencia,
+                ritmos.DoConferente(porDono.GetValueOrDefault(idRestrito, []), idRestrito)?.Valor)
+            : CalcularKpis(concluidosNoPeriodo, temposProprios: null, numeroDaConferencia, ritmos.DaOperacao(concluidosNoPeriodo)?.Valor);
 
         // RF-42b: mesma conta sobre o mesmo trecho do período anterior — na visão restrita também,
         // com os números do próprio conferente (tempo pelos ciclos dele, como no período atual).
@@ -97,8 +114,9 @@ public sealed class ObterDashboard(
             ? CalcularKpis(
                 anteriorDoRecorte,
                 ConstruirTemposPorConferente(concluidosNoTrechoAnterior).GetValueOrDefault(idRestritoAnterior, []),
-                numeroDaConferencia)
-            : CalcularKpis(concluidosNoTrechoAnterior, temposProprios: null, numeroDaConferencia);
+                numeroDaConferencia,
+                ritmos.DoConferente(anteriorDoRecorte, idRestritoAnterior)?.Valor)
+            : CalcularKpis(concluidosNoTrechoAnterior, temposProprios: null, numeroDaConferencia, ritmos.DaOperacao(concluidosNoTrechoAnterior)?.Valor);
 
         // RF-42c: série do próprio conferente na visão restrita (mesmo recorte dos KPIs dele).
         var baseDaSerie = conferenteRestritoId is { } idRestritoSerie ? porDono.GetValueOrDefault(idRestritoSerie, []) : concluidosNoPeriodo;
@@ -122,7 +140,8 @@ public sealed class ObterDashboard(
             .Select(id => CalcularDesempenho(
                 id, todosConferentes[id], usuarioPorId.GetValueOrDefault(todosConferentes[id].UsuarioId),
                 porDono.GetValueOrDefault(id, []), temposPorConferente.GetValueOrDefault(id, []), catalogoTipos, maxVolume,
-                maxComplexidadeMedia, numeroDaConferencia, pesos, mostrarFaixa: conferenteRestritoId is null))
+                maxComplexidadeMedia, numeroDaConferencia, pesos, mostrarFaixa: conferenteRestritoId is null,
+                ritmos.DoConferente(porDono.GetValueOrDefault(id, []), id)))
             .OrderByDescending(d => d.Score)
             .ToList();
 
@@ -144,7 +163,7 @@ public sealed class ObterDashboard(
             // score — sem Administrador, a distribuidora não vê score (ADR-0039), então nem os pesos.
             return new ResultadoDashboard(
                 intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, desempenhoDaGestao, MediaDaCasa: null, porTipoAto,
-                cumprimentoPrazoEquipe, Metas: config.Metas, Pesos: incluirAvaliacaoDePessoal ? pesos : null);
+                cumprimentoPrazoEquipe, Metas: config.Metas, Pesos: incluirAvaliacaoDePessoal ? pesos : null, MeuTempoPorTipo: null);
         }
 
         // RF-45: o conferente só vê os próprios números + a média da casa sem identificar
@@ -154,11 +173,12 @@ public sealed class ObterDashboard(
         var meuDesempenho = todosOsDesempenhos.SingleOrDefault(d => d.ConferenteId == conferenteRestritoId);
         var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho with { Nivel = null }];
         var mediaDaCasa = CalcularMediaDaCasa(todosOsDesempenhos);
+        var meuTempoPorTipo = ritmos.PorTipo(porDono.GetValueOrDefault(conferenteRestritoId.Value, []), conferenteRestritoId.Value, catalogoTipos);
         // O conferente vê o próprio score com as parcelas (RF-45), então recebe os pesos (o máximo de
         // cada parcela); a meta não — "só a gestão vê a barra de meta" (decisão 4 do dono).
         return new ResultadoDashboard(
             intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: [],
-            Metas: null, Pesos: pesos);
+            Metas: null, Pesos: pesos, MeuTempoPorTipo: meuTempoPorTipo);
     }
 
     private static DesempenhoConferente SemAvaliacaoDePessoal(DesempenhoConferente d) =>
@@ -171,11 +191,11 @@ public sealed class ObterDashboard(
     // os ciclos que ele mesmo fez, ver ConstruirTemposPorConferente).
     private static KpisDashboard CalcularKpis(
         IReadOnlyCollection<Protocolo> concluidos, IReadOnlyCollection<TimeSpan>? temposProprios,
-        IReadOnlyDictionary<Guid, int> numeroDaConferencia)
+        IReadOnlyDictionary<Guid, int> numeroDaConferencia, double? ritmo)
     {
         if (concluidos.Count == 0)
         {
-            return new KpisDashboard(0, 0, 0, PercentualAprovadoNaPrimeira: null, TempoMedio: null);
+            return new KpisDashboard(0, 0, 0, PercentualAprovadoNaPrimeira: null, TempoMedio: null, Ritmo: null);
         }
 
         var noPrazo = concluidos.Count(EstaNoPrazo);
@@ -190,7 +210,8 @@ public sealed class ObterDashboard(
             (double)noPrazo / concluidos.Count,
             (double)aprovados / concluidos.Count,
             PercentualAprovadoNaPrimeira(concluidos, numeroDaConferencia),
-            tempoMedio);
+            tempoMedio,
+            ritmo);
     }
 
     // RF-43 "aprovados na 1ª" (decisão 3 do dono): das linhas concluídas que são a 1ª conferência
@@ -226,30 +247,13 @@ public sealed class ObterDashboard(
             lista.Add(duracao);
         }
 
+        // A repartição por ciclo (e o ajuste manual indo inteiro pro dono atual) mora no Domain
+        // (Protocolo.TemposPorConferente) — o ritmo usa a mesma conta, ato a ato.
         foreach (var protocolo in concluidos)
         {
-            // Ajuste manual (pedido do dono: distribuidora corrige o tempo final de um
-            // protocolo) substitui a conta por ciclo inteira — o valor corrigido vai inteiro
-            // pro dono atual, não fica misturado com os pedaços "originais" que a própria
-            // correção considerou errados.
-            if (protocolo.AjustesDeDuracao.Count > 0)
+            foreach (var (conferenteId, duracao) in protocolo.TemposPorConferente())
             {
-                if (protocolo.DonoId is { } donoAjustado && protocolo.Duracao is { } duracaoAjustada)
-                {
-                    Adiciona(donoAjustado, duracaoAjustada);
-                }
-
-                continue;
-            }
-
-            foreach (var ciclo in protocolo.CiclosAnteriores)
-            {
-                Adiciona(ciclo.ConferenteId, ciclo.Duracao);
-            }
-
-            if (protocolo.DonoId is { } donoId && protocolo.IniciadoEm is { } inicio && protocolo.ConcluidoEm is { } fim)
-            {
-                Adiciona(donoId, fim - inicio);
+                Adiciona(conferenteId, duracao);
             }
         }
 
@@ -271,7 +275,7 @@ public sealed class ObterDashboard(
         Guid conferenteId, Conferente conferente, Usuario? usuario, IReadOnlyCollection<Protocolo> protocolosDoConferente,
         IReadOnlyCollection<TimeSpan> temposProprios,
         IReadOnlyDictionary<Guid, TipoAto> catalogo, int maxVolume, double maxComplexidadeMedia,
-        IReadOnlyDictionary<Guid, int> numeroDaConferencia, PesosDoScore pesos, bool mostrarFaixa)
+        IReadOnlyDictionary<Guid, int> numeroDaConferencia, PesosDoScore pesos, bool mostrarFaixa, RitmoCalculado? ritmo)
     {
         var volume = protocolosDoConferente.Count;
         var noPrazo = protocolosDoConferente.Count(EstaNoPrazo);
@@ -299,7 +303,9 @@ public sealed class ObterDashboard(
 
         return new DesempenhoConferente(
             conferenteId, usuario?.Nome ?? "—", conferente.Nivel, volume, tempoMedio, pctNoPrazo, pctAprovado,
-            PercentualAprovadoNaPrimeira(protocolosDoConferente, numeroDaConferencia), complexidadeMedia, score, faixa, new ParcelasScore(pontosVolume, pontosPrazo, pontosQualidade, pontosComplexidade));
+            PercentualAprovadoNaPrimeira(protocolosDoConferente, numeroDaConferencia), complexidadeMedia, score, faixa,
+            new ParcelasScore(pontosVolume, pontosPrazo, pontosQualidade, pontosComplexidade),
+            ritmo?.Valor, ritmo?.TempoMedioReferencia);
     }
 
     // RF-45: linha de comparação sem identificar ninguém — média simples entre quem teve
@@ -317,6 +323,9 @@ public sealed class ObterDashboard(
         // Mesma média simples entre pessoas, só entre quem teve alguma 1ª conferência (null não é 0%).
         var aprovadosNaPrimeira = comVolume.Where(d => d.PercentualAprovadoNaPrimeira is not null)
             .Select(d => d.PercentualAprovadoNaPrimeira!.Value).ToList();
+        // RF-46a: média simples dos ritmos de quem tem valor; a referência média, idem (é o "mesmo
+        // conjunto" da frase do RF-46b, na média da casa).
+        var referenciasMedias = comVolume.Where(d => d.TempoMedioReferencia is not null).Select(d => d.TempoMedioReferencia!.Value).ToList();
 
         return new DesempenhoConferente(
             ConferenteId: Guid.Empty,
@@ -330,7 +339,9 @@ public sealed class ObterDashboard(
             ComplexidadeMedia: comVolume.Average(d => d.ComplexidadeMedia),
             Score: (int)Math.Round(comVolume.Average(d => d.Score ?? 0)),
             Faixa: null,
-            Parcelas: null);
+            Parcelas: null,
+            Ritmo: Ritmo.MediaSimples(comVolume.Select(d => d.Ritmo)),
+            TempoMedioReferencia: referenciasMedias.Count > 0 ? TimeSpan.FromTicks((long)referenciasMedias.Average(d => d.Ticks)) : null);
     }
 
     private static IReadOnlyList<DesempenhoTipoAto> CalcularPorTipoAto(
@@ -388,10 +399,14 @@ public sealed record ResultadoDashboard(
     MetasDoDashboard? Metas,
     // RF-46: pra quem vê score (Administrador; o próprio conferente na visão restrita); null pra
     // distribuidora sem Administrador.
-    PesosDoScore? Pesos);
+    PesosDoScore? Pesos,
+    // RF-46b: só na visão restrita ("Seu tempo por tipo de ato"); null na de gestão.
+    IReadOnlyList<MeuTempoPorTipo>? MeuTempoPorTipo);
 
+// Ritmo (RF-46a): nulo sem nenhum ato elegível (com tipo e com tempo medido) no recorte.
 public sealed record KpisDashboard(
-    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio);
+    int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio,
+    double? Ritmo);
 
 public sealed record DesempenhoConferente(
     Guid ConferenteId,
@@ -407,7 +422,16 @@ public sealed record DesempenhoConferente(
     // Nulo pra quem não é Administrador (ADR-0039).
     int? Score,
     FaixaBonificacao? Faixa,
-    ParcelasScore? Parcelas);
+    ParcelasScore? Parcelas,
+    // RF-46a: em TODAS as visões (a distribuidora também vê — não é avaliação de pessoal). Nulo sem ato
+    // elegível. TempoMedioReferencia = Σ referência ÷ nº de atos elegíveis (o "a referência para o mesmo
+    // conjunto seria 21 min" do RF-46b).
+    double? Ritmo,
+    TimeSpan? TempoMedioReferencia);
+
+// RF-46b: uma linha por tipo que a pessoa conferiu (concluiu) no período, por volume. MeuTempoMedio =
+// média do tempo DELA nesses atos (ciclos dela); ReferenciaMinutos = referência efetiva do tipo agora.
+public sealed record MeuTempoPorTipo(Guid TipoAtoId, string Nome, int Atos, TimeSpan MeuTempoMedio, int ReferenciaMinutos);
 
 // Pontos já ponderados (cada um sobre o peso da sua parcela na Configuração, padrão 40/30/20/10), não
 // percentuais crus — o front mostra "32.4 / 40" com o máximo vindo de `Pesos`.
