@@ -20,8 +20,8 @@ com as travas.
 3. **Leia antes de escrever.** Toda escrita começa com um `SELECT` que mostra quantas linhas e quais
    seriam afetadas. Número diferente do esperado → pare e pergunte.
 4. **Uma coisa por vez**, e confira o resultado antes da próxima.
-5. **Push no `main` do api é deploy** (Render, auto-deploy). A migration que o código novo precisa
-   tem de estar aplicada no Neon **antes** do push.
+5. **Merge no `main` do api é deploy** (Render, auto-deploy). A migration que o código novo precisa
+   tem de estar aplicada no Neon **antes** do merge do PR.
 
 ## Aplicar migration no Neon
 
@@ -33,7 +33,7 @@ com as travas.
 3. Com a confirmação: `dotnet ef database update --project src/Dispatch.Infrastructure
    --startup-project src/Dispatch.Api --connection "$NEON_URL"`.
 4. Confira: `SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1 DESC LIMIT 3;`.
-5. Só então o push (skill `api-commit`).
+5. Só então o merge do PR (skill `api-commit`).
 
 ## SQL avulso documentado
 
@@ -58,7 +58,8 @@ análise; depois rode `POST /dev/seed-e2e` pra recriar as contas de teste (o clo
 
 ## Conferir um deploy
 
-1. Depois do push: `curl -s https://lab-dispatch-api.onrender.com/health` até responder (cold start
+1. Depois do merge: o OpenAPI de produção (`/openapi/v1.json`) mostra o campo/rota nova quando a
+   versão entrou; `curl -s https://lab-dispatch-api.onrender.com/health` até responder (cold start
    do plano free leva segundos; logo após o primeiro deploy, minutos de 404/`no-server` são normais).
 2. `curl -s https://lab-dispatch-api.onrender.com/health/db` — 200 confirma o Neon.
 3. `x-render-routing: no-server` com o log dizendo "live" é mismatch de porta (`PORT=8080`), não
