@@ -334,6 +334,7 @@ public static class MinhaFilaEndpoints
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
+        protocolo.TipoAtoNomeOriginal,
         protocolo.EscreventeId,
         protocolo.Etapa,
         protocolo.Prioridade,

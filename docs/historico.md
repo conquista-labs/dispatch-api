@@ -1063,3 +1063,11 @@ três visões, `meuTempoPorTipo` em camelCase); `AdministradorIntegracaoTests` (
 run` na porta 5299 e token real das três contas (com-uso com `tempoReferencia`, PUT peso/tempo 204, 400s
 com motivo, 404, 403 distribuidora, dashboard nas três visões com ritmo; dado local restaurado). 723
 testes (266 Domain + 386 Application + 71 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Nome original do tipo no `ProtocoloResumo`
+
+`ProtocoloResumo` ganhou `tipoAtoNomeOriginal` (logo depois de `tipoAtoId`; preenchido só com tipo
+desconhecido), pro card de exceção "tipo desconhecido" mostrar o nome como veio no relatório — chega em
+`GET /protocolos/distribuicao`, `/minha-fila` e `/conferentes/{id}/fila`. Sem migration. Verificado:
+`TipoAtoNomeOriginalIntegracaoTests` (legado semeado no banco + tipo conhecido importado). 724 testes
+(266 Domain + 386 Application + 72 Api.Tests), build sem avisos.

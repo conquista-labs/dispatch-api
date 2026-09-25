@@ -46,6 +46,10 @@ public sealed record ProtocoloResumo(
     Guid Id,
     string Numero,
     Guid? TipoAtoId,
+    // Nome do tipo como veio no relatório — só preenchido quando TipoAtoId é nulo (tipo
+    // desconhecido, RF-09), mesma regra de Protocolo.TipoAtoNomeOriginal. Sem ele o card de
+    // exceção "tipo desconhecido" não tinha o que mostrar no tipo de ato (o detalhe já expunha).
+    string? TipoAtoNomeOriginal,
     Guid EscreventeId,
     Etapa Etapa,
     Prioridade Prioridade,
