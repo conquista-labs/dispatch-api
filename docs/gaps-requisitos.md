@@ -34,16 +34,16 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §34, §35, §37 |
-| 🟡 Parcial | §16, §19, §36 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §35, §37 |
+| 🟡 Parcial | §16, §19 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §39 |
+| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §36, §39 |
 
 **Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
-**Dashboard v2** (ritmo, metas, exportação, pesos — §34–§37; hoje, variação, série e aprovado na 1ª
-já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
+**Dashboard v2** (ritmo e exportação — §35, §37; hoje, variação, série, aprovado na 1ª, metas e pesos
+configuráveis já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
 tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 ---
@@ -250,8 +250,8 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 - ✅ Fechado em 2026-09-03 (ADR-0023): 12 constantes editáveis via `GET`/`PUT /config`.
 - ⚪ Divergência: linha única tipada em vez de `config(chave, valor)`. Ainda **fora** dela: modo de
-  operação (§12), pesos do score (§34), metas (§36), janela de 30 dias (§18), `DuracaoTipica` (estrutura,
-  de propósito).
+  operação (§12), janela de 30 dias (§18), `DuracaoTipica` (estrutura, de propósito). Metas do Dashboard
+  e pesos do score entraram em 2026-09-25 (ADR-0042).
 
 ### Aprendizado
 
@@ -286,10 +286,14 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 - **Continua**: a parcela de qualidade do score (20) usa o `percentualAprovado` de todas as linhas.
   Trocar pelo "aprovado na 1ª" é decisão do dono, não tomada.
 
-#### §34 🔴 RF-46 — pesos do score configuráveis
+#### §34 ✅ RF-46 — pesos do score configuráveis
 
-- Pesos 40/30/20/10 e limiares de faixa 85/70 estão no código (`ObterDashboard`).
-- **Onde entraria**: `Configuracao` (a seção 8 lista "pesos do score" em `config`).
+- **Fechado** em 2026-09-25 ([ADR-0042](decisions/0042-metas-e-pesos-do-score-na-configuracao.md)):
+  `pesoVolume`/`pesoPrazo`/`pesoQualidade`/`pesoComplexidade` em `Configuracao` (inteiros ≥ 0 que somam
+  100; só o Administrador edita, `PUT /config`), `ObterDashboard` calcula com eles e devolve `pesos` a
+  quem vê score.
+- **Continua fora**: os limiares de faixa 85/70 são fixos (o requisito não pede configuráveis). Os pesos
+  valem na leitura — trocar reescreve o score de períodos já fechados (sem vigência; risco no ADR-0042).
 
 #### §35 🔴 RF-46a–c — ritmo no lugar de tempo médio; tempo por tipo do conferente
 
@@ -298,7 +302,7 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
   peso. Depende do §26.
 - **Como sabemos**: requisito; grep sem `Ritmo`.
 
-#### §36 🟡 RF-42a–c — "Hoje, agora", tendência e meta, série do período
+#### §36 ✅ RF-42a–c — "Hoje, agora", tendência e meta, série do período
 
 - **RF-42a fechado** em 2026-09-25: `GET /dashboard/hoje` (`ObterPainelDeHoje`) — conferidos hoje (dia
   de Brasília), na fila (pool · com conferente), em risco (estourados · vencem em 1h), exceções e
@@ -309,8 +313,10 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
   (ADR-0041), `periodoInicio`/`periodoFim`, `kpisAnterior` sobre o mesmo trecho do período anterior
   (também na visão restrita), e `serie` por dia útil (semana/mês, período inteiro com `futuro`) ou por
   semana (trimestre), separando estourados. Sem feriado na série (mesma simplificação do prazo).
-- **Em aberto — RF-42b metas**: barra com meta de "dentro do prazo" e "aprovados na 1ª" (padrão
-  95%/90%, configuráveis) — fatia 2 do Dashboard v2 (migration em `Configuracao`).
+- **RF-42b metas fechado** em 2026-09-25 (ADR-0042): `metaNoPrazo`/`metaAprovadoNaPrimeira` em
+  `Configuracao` (frações 0,50–1,00, padrão 0,95/0,90; só o Administrador edita) e `metas` no
+  `GET /dashboard` só na visão de gestão (decisão 4 do dono — o conferente não vê meta). A barra é do
+  front.
 - **Como sabemos**: código.
 
 #### §37 🔴 RF-44 (Dashboard) — exportar CSV

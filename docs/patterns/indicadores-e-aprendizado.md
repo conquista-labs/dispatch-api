@@ -48,12 +48,25 @@ metadata:
   conferência (não é 0%). Na média da casa, média simples entre quem tem valor. Números em lote:
   `NumeroDaConferenciaEmLote` sobre os dois trechos juntos, uma query.
 - **Score** (fórmula do **protótipo**; o requisito só nomeia fatores e pesos):
-  `40·(volume/volumeMáxDoGrupo) + 30·%noPrazo + 20·%aprovado + 10·(complexidadeMédia/complexidadeMáxDoGrupo)`.
-  Volume e complexidade normalizados pelo melhor do grupo; complexidade = peso médio do `TipoAto`
-  (`PesoComplexidade`, RF-34f). As 4 parcelas vão **já ponderadas** ("32.4 / 40").
-- **Faixa**: `≥85` Integral, `≥70` Parcial, abaixo Fora (limiares do protótipo).
+  `pV·(volume/volumeMáxDoGrupo) + pP·%noPrazo + pQ·%aprovado + pC·(complexidadeMédia/complexidadeMáxDoGrupo)`,
+  com os **pesos da Configuração** (RF-46, [ADR-0042](../decisions/0042-metas-e-pesos-do-score-na-configuracao.md);
+  padrão 40/30/20/10, inteiros ≥ 0 que **somam 100** — `PesosDoScore`, Domain). Volume e complexidade
+  normalizados pelo melhor do grupo; complexidade = peso médio do `TipoAto` (`PesoComplexidade`, RF-34f).
+  As 4 parcelas vão **já ponderadas** (cada uma de 0 ao seu peso, "32.4 / 40"). Os pesos valem **na
+  leitura**: trocar um peso muda o score de qualquer período consultado depois, inclusive meses fechados
+  (sem histórico de pesos — risco registrado no ADR-0042).
+- **`pesos`** (`{ volume, prazo, qualidade, complexidade }`, o máximo de cada parcela): só pra quem vê
+  score — Administrador e o próprio conferente na visão restrita; `null` pra distribuidora (ADR-0039).
+- **`metas`** (RF-42b, `{ noPrazo, aprovadoNaPrimeira }`, frações 0,50–1,00, padrão 0,95/0,90 —
+  `MetasDoDashboard`, Domain): **só na visão de gestão** (decisão 4 do dono: o conferente não vê meta);
+  `null` na restrita. O back só informa a meta; a barra e a cor são do front.
+- **Configuração**: `GET /config` (Distribuidora) devolve os 6; `PUT /config` (só Administrador) os
+  aceita **opcionais** — ausente/`null` mantém o atual, campo a campo; o conjunto resultante é validado
+  (400 `{ motivo }` via `MetasOuPesosInvalidos`). `ObterDashboard` lê pela `ObterAsync` cacheada.
+- **Faixa**: `≥85` Integral, `≥70` Parcial, abaixo Fora (limiares do protótipo) — **fixos**, não
+  configuráveis; é por isso que os pesos precisam somar 100.
 - **Qualidade no score**: `percentualAprovado` (todas as linhas, resultado atual) continua sendo a
-  parcela de 20 — o "aprovado na 1ª" é só KPI/coluna por enquanto. Trocar a parcela é decisão do dono
+  parcela de qualidade (`pesoQualidade`, padrão 20) — o "aprovado na 1ª" é só KPI/coluna por enquanto. Trocar a parcela é decisão do dono
   (mexe em bonificação).
 - **"No prazo"**: `EstaNoPrazo` único, reaproveitado por KPIs, desempenho e cumprimento por equipe.
 - **Cumprimento de prazo por equipe** (RF-43): agrupado por `(EquipeId do escrevente, Etapa)` —
