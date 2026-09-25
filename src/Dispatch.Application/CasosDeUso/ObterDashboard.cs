@@ -21,8 +21,15 @@ public sealed class ObterDashboard(
     private const int ScoreIntegral = 85;
     private const int ScoreParcial = 70;
 
+    // `incluirAvaliacaoDePessoal` (perfil Administrador, ADR-0039, RF-43a): nível, score, faixa e
+    // parcelas só saem pra um token de Administrador. O default é fechado — quem não passa a flag
+    // não vê. Sem ela, a gestão recebe a lista ordenada por NOME: a ordem por score, sozinha, já
+    // entregaria o ranking mesmo com o campo nulo.
     public async Task<ResultadoDashboard> ExecutarAsync(
-        PeriodoDashboard periodo, Guid? conferenteRestritoId, CancellationToken cancellationToken = default)
+        PeriodoDashboard periodo,
+        Guid? conferenteRestritoId,
+        bool incluirAvaliacaoDePessoal = false,
+        CancellationToken cancellationToken = default)
     {
         var agora = relogio.Agora;
         var desde = agora.AddDays(-DiasDoPeriodo(periodo));
@@ -86,16 +93,28 @@ public sealed class ObterDashboard(
             var todosEscreventes = (await escreventes.ObterTodosAsync(cancellationToken)).ToDictionary(e => e.Id);
             var todasEquipes = (await equipes.ObterTodasAsync(cancellationToken)).ToDictionary(e => e.Id);
             var cumprimentoPrazoEquipe = CalcularCumprimentoPrazoPorEquipe(concluidosNoPeriodo, todosEscreventes, todasEquipes);
-            return new ResultadoDashboard(kpis, todosOsDesempenhos, MediaDaCasa: null, porTipoAto, cumprimentoPrazoEquipe);
+            var desempenhoDaGestao = incluirAvaliacaoDePessoal
+                ? todosOsDesempenhos
+                : todosOsDesempenhos
+                    .Select(SemAvaliacaoDePessoal)
+                    .OrderBy(d => d.Nome, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(d => d.ConferenteId)
+                    .ToList();
+            return new ResultadoDashboard(kpis, desempenhoDaGestao, MediaDaCasa: null, porTipoAto, cumprimentoPrazoEquipe);
         }
 
         // RF-45: o conferente só vê os próprios números + a média da casa sem identificar
         // ninguém — nunca a lista completa com nomes de colegas.
+        // O próprio score e as parcelas continuam (RF-45 pede); o próprio nível não (ADR-0039: o
+        // cargo só sai pra Administrador). A média da casa é calculada antes, sobre a lista cheia.
         var meuDesempenho = todosOsDesempenhos.SingleOrDefault(d => d.ConferenteId == conferenteRestritoId);
-        var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho];
+        var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho with { Nivel = null }];
         var mediaDaCasa = CalcularMediaDaCasa(todosOsDesempenhos);
         return new ResultadoDashboard(kpis, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: []);
     }
+
+    private static DesempenhoConferente SemAvaliacaoDePessoal(DesempenhoConferente d) =>
+        d with { Nivel = null, Score = null, Faixa = null, Parcelas = null };
 
     private static int DiasDoPeriodo(PeriodoDashboard periodo) => periodo switch
     {
@@ -246,7 +265,7 @@ public sealed class ObterDashboard(
             PercentualNoPrazo: comVolume.Average(d => d.PercentualNoPrazo),
             PercentualAprovado: comVolume.Average(d => d.PercentualAprovado),
             ComplexidadeMedia: comVolume.Average(d => d.ComplexidadeMedia),
-            Score: (int)Math.Round(comVolume.Average(d => d.Score)),
+            Score: (int)Math.Round(comVolume.Average(d => d.Score ?? 0)),
             Faixa: null,
             Parcelas: null);
     }
@@ -310,7 +329,8 @@ public sealed record DesempenhoConferente(
     double PercentualNoPrazo,
     double PercentualAprovado,
     double ComplexidadeMedia,
-    int Score,
+    // Nulo pra quem não é Administrador (ADR-0039).
+    int? Score,
     FaixaBonificacao? Faixa,
     ParcelasScore? Parcelas);
 

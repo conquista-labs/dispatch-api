@@ -13,7 +13,7 @@ internal sealed class TagDescriptionsDocumentTransformer : IOpenApiDocumentTrans
         document.Tags = new HashSet<OpenApiTag>
         {
             new() { Name = OpenApiTags.Autenticacao, Description = "Login por e-mail e senha (RF-01/RF-02) — devolve o token JWT usado nos demais endpoints." },
-            new() { Name = OpenApiTags.Conferentes, Description = "Cadastro, edição, presença na escala e remoção de conferentes (RF-25 a RF-27). Só Distribuidora." },
+            new() { Name = OpenApiTags.Conferentes, Description = "Conferentes (RF-25 a RF-30). Leitura e presença na escala: Distribuidora. Cadastro, vínculo, edição de perfil/nível/jornada e remoção: só Administrador (ADR-0039). O nível só aparece pra Administrador." },
             new() { Name = OpenApiTags.Protocolos, Description = "Motor de distribuição — resolve prazo e decide o destino de um protocolo. Só Distribuidora." },
             new() { Name = OpenApiTags.Importacao, Description = "Importação de lote de protocolos (RF-05 a RF-12) — prévia e confirmação. Só Distribuidora." },
             new() { Name = OpenApiTags.CentralDeRegras, Description = "Alçada e prazos por equipe (RF-31 a RF-38). Só Distribuidora." },

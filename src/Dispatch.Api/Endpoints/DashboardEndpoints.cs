@@ -36,7 +36,8 @@ public static class DashboardEndpoints
                     conferenteRestritoId = conferente.Id;
                 }
 
-                var resultado = await casoDeUso.ExecutarAsync(periodo, conferenteRestritoId, cancellationToken);
+                var resultado = await casoDeUso.ExecutarAsync(
+                    periodo, conferenteRestritoId, incluirAvaliacaoDePessoal: usuario.EhAdministrador(), cancellationToken);
                 return Results.Ok(ParaResponse(resultado));
             })
             .WithName("ObterDashboard")
@@ -84,7 +85,8 @@ public sealed record DesempenhoConferenteResponse(
     double PercentualNoPrazo,
     double PercentualAprovado,
     double ComplexidadeMedia,
-    int Score,
+    // Nulo pra quem não é Administrador — nível, score, faixa e parcelas (ADR-0039).
+    int? Score,
     FaixaBonificacao? Faixa,
     ParcelasScoreResponse? Parcelas);
 
