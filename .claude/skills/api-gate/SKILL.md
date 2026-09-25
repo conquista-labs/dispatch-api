@@ -1,5 +1,5 @@
 ---
-name: gate
+name: api-gate
 description: Roda a cadeia de verificação completa do dispatch-api uma vez, no fim de uma tarefa — build, suíte de testes (unidade + integração), relatório de cobertura — e persegue o que ela apontar. Use quando terminar uma mudança, antes de commitar, ou quando o usuário pedir "roda tudo", "está tudo verde?", "confere antes de subir".
 ---
 
