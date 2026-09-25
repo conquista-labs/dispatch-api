@@ -7,7 +7,9 @@ namespace Dispatch.Application;
 public sealed record MinhaFila(
     IReadOnlyList<Protocolo> PoolDisponivel,
     IReadOnlyList<Protocolo> Atribuidos,
-    IReadOnlyList<Protocolo> EmConferencia);
+    IReadOnlyList<Protocolo> EmConferencia,
+    // RF-24k: protocoloId → nº da conferência (1 = primeira), das três colunas.
+    IReadOnlyDictionary<Guid, int> NumeroDaConferencia);
 
 public sealed class ObterMinhaFila(
     IProtocoloRepository protocolos,
@@ -42,6 +44,9 @@ public sealed class ObterMinhaFila(
             .ToList();
         var emConferencia = await protocolos.ObterEmConferenciaPorConferenteAsync(conferente.Id, cancellationToken);
 
-        return new MinhaFila(poolDisponivel, atribuidos, emConferencia.ToList());
+        var numeroDaConferencia = await NumeroDaConferenciaEmLote.CalcularAsync(
+            protocolos, [.. poolDisponivel, .. atribuidos, .. emConferencia], cancellationToken);
+
+        return new MinhaFila(poolDisponivel, atribuidos, emConferencia.ToList(), numeroDaConferencia);
     }
 }

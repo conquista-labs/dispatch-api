@@ -160,6 +160,10 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
     public Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(_protocolos.Where(p => numeros.Contains(p.Numero)).ToList());
 
+    public Task<IReadOnlyCollection<RegistroDoNumero>> ObterRegistrosPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<RegistroDoNumero>>(
+            _protocolos.Where(p => numeros.Contains(p.Numero)).Select(RegistroDoNumero.De).ToList());
+
     public Task<IReadOnlyCollection<Protocolo>> ObterAtribuidosAAsync(Guid conferenteId, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<Protocolo>>(
             _protocolos.Where(p => p.Status == StatusProtocolo.Atribuido && p.DonoId == conferenteId).ToList());

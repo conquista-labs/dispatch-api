@@ -29,10 +29,19 @@ public sealed class ObterDetalheProtocolo(
         // Histórico de conferências (pedido do dono, não é RF numerado): outras linhas com o
         // mesmo Número (RF-07, Numero não é único de propósito) — a mais recente primeiro,
         // mesmo padrão de "quem vence primeiro no topo" já usado no pool.
-        var historico = (await protocolos.ObterPorNumerosAsync([protocolo.Numero], cancellationToken))
+        var linhasDoNumero = await protocolos.ObterPorNumerosAsync([protocolo.Numero], cancellationToken);
+        var historico = linhasDoNumero
             .Where(p => p.Id != protocolo.Id)
             .OrderByDescending(p => p.AndamentoEm)
             .ToList();
+
+        // RF-24k: o nº da conferência do protocolo e de cada linha do histórico, reaproveitando as
+        // linhas que já vieram acima (nenhuma query a mais).
+        var registros = linhasDoNumero.Select(RegistroDoNumero.De).ToList();
+        var numeroDaConferencia = historico.Append(protocolo)
+            .ToDictionary(
+                p => p.Id,
+                p => ResolvedorDeContinuidade.NumeroDaConferencia(RegistroDoNumero.De(p), registros));
 
         // Tipo desconhecido (TipoAtoId nulo, ou removido do catálogo) nunca é elegível — não
         // tem alvo pra resolver regra nenhuma contra.
@@ -40,7 +49,8 @@ public sealed class ObterDetalheProtocolo(
         {
             var negado = new DecisaoAlcada(ResultadoAlcada.Negado, RegraAplicada: null);
             return new ResultadoDetalheProtocolo(
-                protocolo, conferentesNaEscala.Select(c => new AvaliacaoCandidatoComTrilha(c, negado, [])).ToList(), historico);
+                protocolo, conferentesNaEscala.Select(c => new AvaliacaoCandidatoComTrilha(c, negado, [])).ToList(), historico,
+                numeroDaConferencia);
         }
 
         var caso = new CasoAlcada(protocolo.Etapa, tipo, equipeDoEscreventeId);
@@ -49,7 +59,7 @@ public sealed class ObterDetalheProtocolo(
                 c, ResolvedorAlcada.Resolver(c, caso, regrasAtivas), ResolvedorAlcada.Explicar(c, caso, regrasAtivas)))
             .ToList();
 
-        return new ResultadoDetalheProtocolo(protocolo, avaliacoes, historico);
+        return new ResultadoDetalheProtocolo(protocolo, avaliacoes, historico, numeroDaConferencia);
     }
 }
 
@@ -61,4 +71,8 @@ public sealed record AvaliacaoCandidatoComTrilha(Conferente Conferente, DecisaoA
 }
 
 public sealed record ResultadoDetalheProtocolo(
-    Protocolo Protocolo, IReadOnlyList<AvaliacaoCandidatoComTrilha> Avaliacoes, IReadOnlyList<Protocolo> HistoricoConferencias);
+    Protocolo Protocolo,
+    IReadOnlyList<AvaliacaoCandidatoComTrilha> Avaliacoes,
+    IReadOnlyList<Protocolo> HistoricoConferencias,
+    // RF-24k: protocoloId → nº da conferência, do próprio protocolo e de cada linha do histórico.
+    IReadOnlyDictionary<Guid, int> NumeroDaConferencia);

@@ -99,4 +99,29 @@ public class ObterMinhaFilaTests
         Assert.Equal([atribuido.Id], fila.Atribuidos.Select(p => p.Id));
         Assert.Equal([emConferencia.Id], fila.EmConferencia.Select(p => p.Id));
     }
+
+    // RF-24k: o mesmo Número voltando depois de uma linha Reprovada na mesma etapa é a 2ª.
+    [Fact]
+    public async Task NumeroDaConferencia_ContaReprovadosAnterioresDoMesmoNumero()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var ontem = DateTimeOffset.UtcNow.AddDays(-1);
+
+        var reprovadaAntes = new Protocolo(Guid.NewGuid(), "263546", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, ontem);
+        reprovadaAntes.AtribuirA(conferente.Id, ontem);
+        reprovadaAntes.IniciarConferencia(ontem);
+        reprovadaAntes.Reprovar(ontem);
+        var voltou = new Protocolo(Guid.NewGuid(), "263546", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+        var primeiraVez = new Protocolo(Guid.NewGuid(), "777777", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, DateTimeOffset.UtcNow);
+
+        var casoDeUso = new ObterMinhaFila(
+            new FakeProtocoloRepository([reprovadaAntes, voltou, primeiraVez]), new FakeEscreventeRepository([]),
+            new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]));
+
+        var fila = await casoDeUso.ExecutarAsync(conferente);
+
+        Assert.Equal(2, fila.NumeroDaConferencia[voltou.Id]);
+        Assert.Equal(1, fila.NumeroDaConferencia[primeiraVez.Id]);
+    }
 }

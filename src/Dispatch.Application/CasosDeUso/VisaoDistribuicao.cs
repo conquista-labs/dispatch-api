@@ -16,7 +16,9 @@ public sealed record VisaoDistribuicao(
     // "N feitos hoje" (card de conferente, aba "Por conferente") — diferente de Concluidos
     // acima (todo o histórico, usado pela aba "Por status"), esta lista já vem filtrada por
     // ConcluidoEm >= início do dia. Só entra quem tem pelo menos 1 concluído hoje.
-    IReadOnlyList<ConcluidosHojeDoConferente> ConcluidosHojePorConferente);
+    IReadOnlyList<ConcluidosHojeDoConferente> ConcluidosHojePorConferente,
+    // RF-24k: protocoloId → nº da conferência (1 = primeira), de todos os protocolos da visão.
+    IReadOnlyDictionary<Guid, int> NumeroDaConferencia);
 
 public sealed record GrupoPorConferente(Guid ConferenteId, IReadOnlyList<Protocolo> Protocolos);
 

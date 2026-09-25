@@ -72,6 +72,11 @@ public interface IProtocoloRepository
     // várias linhas ao longo do tempo (reprocessamento, RF-07).
     Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken);
 
+    // RF-24k ("2ª conferência"): o mesmo histórico, mas projetado no recorte leve que a regra
+    // precisa — uma listagem inteira (Minha fila, Distribuição) busca os seus números numa query
+    // só, sem carregar as coleções filhas (ciclos, pausas, ajustes) de cada linha.
+    Task<IReadOnlyCollection<RegistroDoNumero>> ObterRegistrosPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken);
+
     // RF-30: "tipos em circulação" pro aviso de cobertura de alçada — só os TipoAtoId distintos,
     // resolvido como SELECT DISTINCT no banco em vez de carregar a tabela protocolos inteira
     // pra memória só pra extrair isso (achado na mesma auditoria de performance dos índices).

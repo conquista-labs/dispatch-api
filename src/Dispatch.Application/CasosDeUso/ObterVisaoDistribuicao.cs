@@ -39,6 +39,9 @@ public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos, IRel
             .Select(grupo => new ConcluidosHojeDoConferente(grupo.Key, grupo.Count()))
             .ToList();
 
-        return new VisaoDistribuicao(pool, atribuidos, emConferencia, concluidos, excecoes, porConferente, concluidosHojePorConferente);
+        var numeroDaConferencia = await NumeroDaConferenciaEmLote.CalcularAsync(protocolos, todos, cancellationToken);
+
+        return new VisaoDistribuicao(
+            pool, atribuidos, emConferencia, concluidos, excecoes, porConferente, concluidosHojePorConferente, numeroDaConferencia);
     }
 }

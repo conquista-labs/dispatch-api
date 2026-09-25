@@ -204,4 +204,23 @@ public class ObterVisaoDistribuicaoTests
         Assert.Empty(visao.Concluidos);
         Assert.Empty(visao.Excecoes);
     }
+
+    // RF-24k: nº da conferência pra toda a visão, inclusive o próprio Reprovado (que é a 1ª).
+    [Fact]
+    public async Task NumeroDaConferencia_ContaReprovadosAnterioresDoMesmoNumero()
+    {
+        var agora = DateTimeOffset.UtcNow;
+        var ontem = agora.AddDays(-1);
+        var reprovadaAntes = new Protocolo(Guid.NewGuid(), "263546", Guid.NewGuid(), Guid.NewGuid(), Etapa.PosConferencia, ontem);
+        reprovadaAntes.AtribuirA(Guid.NewGuid(), ontem);
+        reprovadaAntes.IniciarConferencia(ontem);
+        reprovadaAntes.Reprovar(ontem);
+        var voltou = new Protocolo(Guid.NewGuid(), "263546", Guid.NewGuid(), Guid.NewGuid(), Etapa.PosConferencia, agora);
+        var casoDeUso = new ObterVisaoDistribuicao(new FakeProtocoloRepository([reprovadaAntes, voltou]), new FakeRelogio(agora));
+
+        var visao = await casoDeUso.ExecutarAsync(loteImportacaoId: null);
+
+        Assert.Equal(2, visao.NumeroDaConferencia[voltou.Id]);
+        Assert.Equal(1, visao.NumeroDaConferencia[reprovadaAntes.Id]);
+    }
 }
