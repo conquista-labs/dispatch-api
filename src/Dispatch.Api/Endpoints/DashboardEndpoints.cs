@@ -33,7 +33,7 @@ public static class DashboardEndpoints
                 return Results.Ok(ParaResponse(resultado));
             })
             .WithName("ObterDashboard")
-            .WithSummary("KPIs (com o mesmo trecho do período anterior), série por dia útil/semana, score (40% volume + 30% prazo + 20% qualidade + 10% complexidade) e desempenho por período de calendário no dia de Brasília (RF-42 a RF-46).")
+            .WithSummary("KPIs (com o mesmo trecho do período anterior), série por dia útil/semana, score com os pesos da Configuração (padrão 40% volume + 30% prazo + 20% qualidade + 10% complexidade), metas (só gestão) e desempenho por período de calendário no dia de Brasília (RF-42 a RF-46).")
             .Produces<DashboardResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -103,7 +103,9 @@ public static class DashboardEndpoints
         resultado.PorTipoAto.Select(t => new DesempenhoTipoAtoResponse(t.TipoAtoId, t.Nome, t.Volume, t.TempoMedio, t.PercentualReprovacao)).ToList(),
         resultado.CumprimentoPrazoEquipe
             .Select(c => new CumprimentoPrazoEquipeResponse(c.EquipeId, c.EquipeNome, c.Etapa, c.Prazo, c.Total, c.PercentualNoPrazo))
-            .ToList());
+            .ToList(),
+        resultado.Metas is { } metas ? new MetasDashboardResponse(metas.NoPrazo, metas.AprovadoNaPrimeira) : null,
+        resultado.Pesos is { } pesos ? new PesosScoreResponse(pesos.Volume, pesos.Prazo, pesos.Qualidade, pesos.Complexidade) : null);
 
     private static KpisResponse ParaKpisResponse(KpisDashboard k) =>
         new(k.AtosConferidos, k.PercentualNoPrazo, k.PercentualAprovado, k.PercentualAprovadoNaPrimeira, k.TempoMedio);
@@ -126,7 +128,17 @@ public sealed record DashboardResponse(
     IReadOnlyList<DesempenhoConferenteResponse> Desempenho,
     DesempenhoConferenteResponse? MediaDaCasa,
     IReadOnlyList<DesempenhoTipoAtoResponse> PorTipoAto,
-    IReadOnlyList<CumprimentoPrazoEquipeResponse> CumprimentoPrazoEquipe);
+    IReadOnlyList<CumprimentoPrazoEquipeResponse> CumprimentoPrazoEquipe,
+    MetasDashboardResponse? Metas,
+    PesosScoreResponse? Pesos);
+
+// RF-42b: metas da Configuração (frações 0–1) pra barra de "Dentro do prazo" e "Aprovados na 1ª".
+// Só na visão de gestão (decisão 4 do dono); null na visão restrita do conferente.
+public sealed record MetasDashboardResponse(double NoPrazo, double AprovadoNaPrimeira);
+
+// RF-46: pesos do score (somam 100) = o máximo de cada parcela em `Parcelas`. Pra quem vê score:
+// Administrador e o próprio conferente na visão restrita; null pra distribuidora (ADR-0039).
+public sealed record PesosScoreResponse(int Volume, int Prazo, int Qualidade, int Complexidade);
 
 // PercentualAprovadoNaPrimeira: 0–1, nulo sem nenhuma 1ª conferência (RF-24k) no recorte (RF-43).
 public sealed record KpisResponse(

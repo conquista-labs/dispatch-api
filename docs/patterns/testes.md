@@ -61,8 +61,10 @@ valor com o que foi gravado (`psql`), não só a presença do campo.
 - Login real via `POST /dev/seed-e2e` (mesmo endpoint do `globalSetup` do Playwright do front).
 - **Re-semear invalida tokens antigos**: o seed reseta a senha, o que bumpa
   `SessoesValidasApartirDe` (RF-01k). Pegar token de Distribuidora, logar como Conferente (que re-semeia)
-  e voltar a usar o token antigo dá 401 intermitente — reautentique logo antes do passo que precisa
-  (flake corrigido em `c928ceb`, suíte rodada 5× seguidas).
+  e voltar a usar o token antigo dava 401 intermitente (sempre que um segundo virava entre os logins).
+  Desde 2026-09-25 `IntegracaoTestBase.AutenticarComoAsync` **semeia uma vez por teste** e só loga nas
+  chamadas seguintes — clientes de papéis diferentes convivem no mesmo teste. Chamar `/dev/seed-e2e` à
+  mão no meio de um teste traz o problema de volta.
 - Quando um teste falha com status HTTP inesperado, a mensagem do `Assert` traz o corpo da resposta;
   em Development o `DeveloperExceptionPage` devolve a stack trace real.
 - `Program.cs` termina com `public partial class Program;` (top-level statements geram classe

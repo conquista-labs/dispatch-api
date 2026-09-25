@@ -974,3 +974,39 @@ visões, fluxo real importar → pegar → iniciar → concluir; trimestre por s
 na porta 5299 e token real (administrador e conferente, Mes e Trimestre; 401 sem token, 400 com
 período inválido): soma da série = `atosConferidos`. 608 testes (196 Domain + 359 Application + 53
 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Metas e pesos do score configuráveis (fatia 2 do Dashboard v2)
+
+Contrato da fatia 2 do `PLANO-dashboard-v2.md` (RF-42b metas, RF-46), decisão 4 do dono.
+[ADR-0042](decisions/0042-metas-e-pesos-do-score-na-configuracao.md).
+- **Domain**: `MetasDoDashboard` (frações 0,50–1,00, padrão 0,95/0,90) e `PesosDoScore` (inteiros ≥ 0
+  que somam 100, padrão 40/30/20/10), com `Validar()` → motivo. `Configuracao` ganha `MetaNoPrazo`,
+  `MetaAprovadoNaPrimeira`, `PesoVolume`, `PesoPrazo`, `PesoQualidade`, `PesoComplexidade`, as leituras
+  `Metas`/`Pesos` e `DefinirMetasEPesos` (lança se inválido).
+- **Migration** `AdicionaMetasEPesosEmConfiguracao`: 6 colunas `NOT NULL` com `DEFAULT` = os valores de
+  antes (editado sobre o 0 gerado pelo EF; sem `HasDefaultValue` no modelo). **Precisa ir ao Neon antes
+  do merge.**
+- **`PUT /config`** (só Administrador): os 6 opcionais (ausente/`null` = mantém o atual); inválido → 400
+  `{ motivo }` (`ResultadoAtualizarConfiguracao.MetasOuPesosInvalidos`), nada muda. **`GET /config`**
+  devolve os 6.
+- **`GET /dashboard`**: score com os pesos da Configuração (parcelas de 0 ao peso; faixas 85/70 fixas);
+  `metas` só na gestão; `pesos` pra Administrador e visão restrita, `null` pra distribuidora.
+  `ObterDashboard` recebe `IConfiguracaoRepository` (leitura cacheada).
+- **Testes de integração**: `IntegracaoTestBase.AutenticarComoAsync` passa a semear **uma vez por
+  teste** — re-semear redefinia a senha e encerrava o token de outro cliente do mesmo teste
+  (`SessoesValidasApartirDe`), 401 intermitente que apareceu em `DashboardIntegracaoTests` e
+  `PainelDeHojeIntegracaoTests` (`docs/patterns/testes.md`).
+- Gaps §34 e §36 fechados; §28 atualizado.
+
+Verificado: `MetasEPesosTests` (18: padrões, bordas 0,50/1,00, NaN, percentual inteiro por engano,
+soma ≠ 100 com a soma no motivo, negativo somando 100, `DefinirMetasEPesos` válido e recusado sem
+mudar nada); `AtualizarConfiguracaoTests` (+7: PUT sem os 6 mantém, PUT parcial troca só o que veio,
+os 6 gravados, quatro inválidos sem mudar nenhum dos 18); `ObterDashboardTests` (+6: score/faixa/parcelas
+com pesos padrão e com 10/20/30/40, peso zero, metas/pesos por visão); `ConfiguracaoIntegracaoTests`
+(7: GET com os padrões da migration, PUT com e sem os campos novos relido no Postgres, quatro 400 com
+motivo, distribuidora 403 com corpo válido); `DashboardIntegracaoTests` (+1: metas/pesos por visão e
+score recalculado depois do PUT, cache invalidado). Migration aplicada no Postgres local. Smoke com
+`dotnet run` na porta 5299 e token real das três contas (PUT antigo 204, 400 soma 110 e meta 95, 403
+distribuidora, dashboard por papel, pesos 10/20/30/40 mudando score e faixa, configuração restaurada).
+Suíte de integração rodada 4× seguidas sem falha. 647 testes (214 Domain + 372 Application + 61
+Api.Tests), build sem avisos.

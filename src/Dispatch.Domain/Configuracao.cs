@@ -36,6 +36,20 @@ public sealed class Configuracao
     public int LimiarRiscoQualidadeCasos { get; private set; }
     public double LimiarRiscoQualidadeReprovacao { get; private set; }
 
+    // RF-42b: metas do Dashboard (frações 0–1). RF-46: pesos do score (inteiros que somam 100).
+    // Colunas planas (não owned type) pra seguir o resto da tabela; os tipos de valor MetasDoDashboard
+    // e PesosDoScore são a leitura e a validação. Fora do construtor de propósito: nascem com os
+    // padrões do protótipo e mudam só por DefinirMetasEPesos (o EF preenche pelos setters privados).
+    public double MetaNoPrazo { get; private set; } = MetasDoDashboard.Padrao.NoPrazo;
+    public double MetaAprovadoNaPrimeira { get; private set; } = MetasDoDashboard.Padrao.AprovadoNaPrimeira;
+    public int PesoVolume { get; private set; } = PesosDoScore.Padrao.Volume;
+    public int PesoPrazo { get; private set; } = PesosDoScore.Padrao.Prazo;
+    public int PesoQualidade { get; private set; } = PesosDoScore.Padrao.Qualidade;
+    public int PesoComplexidade { get; private set; } = PesosDoScore.Padrao.Complexidade;
+
+    public MetasDoDashboard Metas => new(MetaNoPrazo, MetaAprovadoNaPrimeira);
+    public PesosDoScore Pesos => new(PesoVolume, PesoPrazo, PesoQualidade, PesoComplexidade);
+
     public Configuracao(
         Guid id, TimeSpan faixaAtencao, TimeSpan faixaUrgente, int limiteDeAtosSimultaneos, TimeSpan janelaDeCorrecao,
         int diasDeMemoriaDescarte, double tempoMedioPorAtoMinutos, int limiarTipoDesconhecido, int limiarPrazoIrrealCasos,
@@ -75,5 +89,25 @@ public sealed class Configuracao
         LimiarEscreventeOrfao = limiarEscreventeOrfao;
         LimiarRiscoQualidadeCasos = limiarRiscoQualidadeCasos;
         LimiarRiscoQualidadeReprovacao = limiarRiscoQualidadeReprovacao;
+    }
+
+    // Separado de AtualizarValores porque o PUT aceita os 6 como opcionais (ausente = mantém): quem
+    // chama resolve o que veio contra os valores atuais e manda o conjunto inteiro. Valida de novo aqui
+    // (a Application já validou e devolveu 400 com motivo) pra que nenhum caminho deixe a linha com
+    // pesos que não somam 100 — o score inteiro dependeria disso.
+    public void DefinirMetasEPesos(MetasDoDashboard metas, PesosDoScore pesos)
+    {
+        var motivo = metas.Validar() ?? pesos.Validar();
+        if (motivo is not null)
+        {
+            throw new ArgumentException(motivo);
+        }
+
+        MetaNoPrazo = metas.NoPrazo;
+        MetaAprovadoNaPrimeira = metas.AprovadoNaPrimeira;
+        PesoVolume = pesos.Volume;
+        PesoPrazo = pesos.Prazo;
+        PesoQualidade = pesos.Qualidade;
+        PesoComplexidade = pesos.Complexidade;
     }
 }

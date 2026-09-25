@@ -89,7 +89,7 @@ Invariante: **o nível só sai do servidor num token de Administrador**.
 | Leitura | Flag | Sem a flag |
 | ------- | ---- | ---------- |
 | `GET /conferentes` (`ListarConferentes`) | `incluirNivel` | `nivel: null` (jornada continua) |
-| `GET /dashboard` (`ObterDashboard`) | `incluirAvaliacaoDePessoal` (default `false`) | `nivel`, `score`, `faixa`, `parcelas` null; lista **por nome** (ordem por score entregaria o ranking). Visão restrita do conferente: mantém o próprio score, só perde o nível |
+| `GET /dashboard` (`ObterDashboard`) | `incluirAvaliacaoDePessoal` (default `false`) | `nivel`, `score`, `faixa`, `parcelas` e `pesos` null; lista **por nome** (ordem por score entregaria o ranking). Visão restrita do conferente: mantém o próprio score e os `pesos`, só perde o nível (e não recebe `metas`, que é só da gestão) |
 | `GET /regras-alcada` (`ListarRegrasAlcada`) | `incluirNivel` | regra por nível sai com `sujeitoNivel: null`; `regraBase: true` quando não é equipe+etapa |
 
 A trilha do detalhe do protocolo não é cortada: o painel só usa `regraAplicadaId`, resolvido contra a

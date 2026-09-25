@@ -1,3 +1,5 @@
+using Dispatch.Domain;
+
 namespace Dispatch.Application.Tests;
 
 public class AtualizarConfiguracaoTests
@@ -47,5 +49,81 @@ public class AtualizarConfiguracaoTests
 
         Assert.IsType<ResultadoAtualizarConfiguracao.ValorInvalido>(resultado);
         Assert.Equal(faixaAtencaoOriginal, original.FaixaAtencao);
+    }
+
+    // Os 12 valores operacionais válidos, iguais aos do fake — os testes abaixo só variam metas/pesos.
+    private static Task<ResultadoAtualizarConfiguracao> AtualizarAsync(
+        AtualizarConfiguracao casoDeUso, double? metaNoPrazo = null, double? metaAprovadoNaPrimeira = null,
+        int? pesoVolume = null, int? pesoPrazo = null, int? pesoQualidade = null, int? pesoComplexidade = null,
+        int faixaAtencaoMinutos = 240) =>
+        casoDeUso.ExecutarAsync(
+            TimeSpan.FromMinutes(faixaAtencaoMinutos), TimeSpan.FromMinutes(60), 1, TimeSpan.FromMinutes(15), 30, 18, 5, 8, 0.6, 3, 6, 0.5,
+            metaNoPrazo, metaAprovadoNaPrimeira, pesoVolume, pesoPrazo, pesoQualidade, pesoComplexidade);
+
+    [Fact]
+    public async Task SemMetasNemPesos_MantemOsAtuais()
+    {
+        // O front anterior manda o PUT só com os 12 — não pode zerar pesos nem metas.
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+        atual.DefinirMetasEPesos(new MetasDoDashboard(0.85, 0.80), new PesosDoScore(25, 25, 25, 25));
+
+        var resultado = await AtualizarAsync(casoDeUso, faixaAtencaoMinutos: 180);
+
+        Assert.IsType<ResultadoAtualizarConfiguracao.Sucesso>(resultado);
+        Assert.Equal(TimeSpan.FromMinutes(180), atual.FaixaAtencao);
+        Assert.Equal(new MetasDoDashboard(0.85, 0.80), atual.Metas);
+        Assert.Equal(new PesosDoScore(25, 25, 25, 25), atual.Pesos);
+    }
+
+    [Fact]
+    public async Task SoParteDasMetasEPesos_TrocaOQueVeioEMantemORestante()
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+
+        // 40/30/20/10 → volume 30, complexidade 20 (prazo e qualidade ficam): soma 100.
+        var resultado = await AtualizarAsync(casoDeUso, metaNoPrazo: 0.9, pesoVolume: 30, pesoComplexidade: 20);
+
+        Assert.IsType<ResultadoAtualizarConfiguracao.Sucesso>(resultado);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+        Assert.Equal(new MetasDoDashboard(0.9, 0.90), atual.Metas);
+        Assert.Equal(new PesosDoScore(30, 30, 20, 20), atual.Pesos);
+    }
+
+    [Fact]
+    public async Task OsSeisInformados_GravaTodos()
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+
+        var resultado = await AtualizarAsync(casoDeUso, 0.5, 1.0, 0, 50, 50, 0);
+
+        Assert.IsType<ResultadoAtualizarConfiguracao.Sucesso>(resultado);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+        Assert.Equal(new MetasDoDashboard(0.5, 1.0), atual.Metas);
+        Assert.Equal(new PesosDoScore(0, 50, 50, 0), atual.Pesos);
+    }
+
+    [Theory]
+    [InlineData(null, null, 50, null, null, null, "somar 100")] // 50+30+20+10 = 110
+    [InlineData(null, null, 50, 30, 30, -10, "pesoComplexidade")] // soma 100 com negativo
+    [InlineData(0.4, null, null, null, null, null, "metaNoPrazo")]
+    [InlineData(null, 1.2, null, null, null, null, "metaAprovadoNaPrimeira")]
+    public async Task MetasOuPesosInvalidos_DevolveMotivoENaoMudaNada(
+        double? metaNoPrazo, double? metaAprovadoNaPrimeira, int? pesoVolume, int? pesoPrazo, int? pesoQualidade,
+        int? pesoComplexidade, string trechoDoMotivo)
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+
+        var resultado = await AtualizarAsync(
+            casoDeUso, metaNoPrazo, metaAprovadoNaPrimeira, pesoVolume, pesoPrazo, pesoQualidade, pesoComplexidade,
+            faixaAtencaoMinutos: 180);
+
+        var invalido = Assert.IsType<ResultadoAtualizarConfiguracao.MetasOuPesosInvalidos>(resultado);
+        Assert.Contains(trechoDoMotivo, invalido.Motivo);
+        // Nem os 12 operacionais (que vieram válidos) nem metas/pesos mudam.
+        Assert.Equal(TimeSpan.FromHours(4), atual.FaixaAtencao);
+        Assert.Equal(MetasDoDashboard.Padrao, atual.Metas);
+        Assert.Equal(PesosDoScore.Padrao, atual.Pesos);
     }
 }

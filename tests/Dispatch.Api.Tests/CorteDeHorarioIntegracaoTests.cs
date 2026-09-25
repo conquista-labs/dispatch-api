@@ -55,11 +55,9 @@ public sealed class CorteDeHorarioIntegracaoTests(IntegracaoFixture fixture) : I
             HttpStatusCode.NoContent,
             (await conferente.PostAsJsonAsync($"/minha-fila/{protocoloId}/concluir", new { aprovado = true })).StatusCode);
 
-        // `AutenticarComoAsync` re-semeia (POST /dev/seed-e2e) toda vez que é chamado — a
-        // chamada acima (Conferente) reseta as 3 contas de novo, o que pode invalidar o token
-        // da distribuidora obtido no início do teste (SessoesValidasApartirDe bumped depois de
-        // IssuedAt do token antigo, RF-01k). Reautentica pra garantir um token emitido depois
-        // do último seed — achado como flake real rodando a suíte inteira várias vezes.
+        // Reautenticação herdada de quando `AutenticarComoAsync` re-semeava a cada chamada (e o seed
+        // encerrava o token da distribuidora obtido antes — SessoesValidasApartirDe, RF-01k). Hoje o
+        // seed roda uma vez por teste (IntegracaoTestBase); a linha ficou por ser inofensiva.
         distribuidora = await AutenticarComoAsync(Papel.Distribuidora);
 
         var reabriu = await distribuidora.PostAsync($"/protocolos/{protocoloId}/reabrir-conferencia", content: null);
