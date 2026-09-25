@@ -9,4 +9,9 @@ public static class ClaimsPrincipalExtensions
 {
     public static Guid ObterUsuarioId(this ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    // Perfil Administrador (ADR-0039): o endpoint passa isso pro caso de uso como flag, e é a
+    // Application que corta nível/score — assim o corte é testável com fakes, sem HttpContext.
+    public static bool EhAdministrador(this ClaimsPrincipal principal) =>
+        principal.IsInRole(nameof(Dispatch.Domain.Papel.Administrador));
 }

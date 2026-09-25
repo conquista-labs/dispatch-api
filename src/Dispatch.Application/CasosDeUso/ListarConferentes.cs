@@ -8,9 +8,13 @@ namespace Dispatch.Application;
 // identidade).
 // RF-28: "capacidade estimada" = jornada ÷ tempo médio por ato. O tempo médio (documento de
 // requisitos, seção 11, premissas) vem da tabela `config` (seção 8).
+//
+// Perfil Administrador (ADR-0039, RF-29a): o nível (cargo) só sai pra um token de Administrador —
+// sem a flag, `Nivel` vem null. A flag é obrigatória (sem default) pra que um chamador novo não
+// vaze o cargo por esquecimento.
 public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuarioRepository usuarios, IConfiguracaoRepository configuracao)
 {
-    public async Task<IReadOnlyList<ConferenteComUsuario>> ExecutarAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ConferenteComUsuario>> ExecutarAsync(bool incluirNivel, CancellationToken cancellationToken = default)
     {
         var todosConferentes = await conferentes.ObterTodosAsync(cancellationToken);
         var usuarioIds = todosConferentes.Select(c => c.UsuarioId).ToList();
@@ -29,7 +33,7 @@ public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuari
                 var capacidadeEstimada = Math.Max(1, (int)Math.Round(conferente.JornadaHoras * 60 / tempoMedioPorAtoMinutos));
                 return new ConferenteComUsuario(
                     conferente.Id, usuario.Nome, usuario.Email, usuario.Ativo,
-                    conferente.Nivel, conferente.JornadaHoras, conferente.NaEscala, conferente.CargaAtual, capacidadeEstimada);
+                    incluirNivel ? conferente.Nivel : null, conferente.JornadaHoras, conferente.NaEscala, conferente.CargaAtual, capacidadeEstimada);
             })
             // Sem isso a ordem vinha da leitura crua do Postgres, que não é garantida estável
             // entre uma chamada e outra sem ORDER BY — a lista "pulava" de posição a cada
@@ -44,4 +48,4 @@ public sealed class ListarConferentes(IConferenteRepository conferentes, IUsuari
 }
 
 public sealed record ConferenteComUsuario(
-    Guid Id, string Nome, string Email, bool Ativo, Nivel Nivel, double JornadaHoras, bool NaEscala, int CargaAtual, int CapacidadeEstimada);
+    Guid Id, string Nome, string Email, bool Ativo, Nivel? Nivel, double JornadaHoras, bool NaEscala, int CargaAtual, int CapacidadeEstimada);

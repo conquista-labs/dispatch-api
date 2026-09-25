@@ -20,6 +20,8 @@ public sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
         // aqui, mesmo padrão de Ativo acima).
         builder.Property(u => u.TentativasLoginFalhas);
         builder.Property(u => u.BloqueadoAte);
+        // Mesma armadilha de propriedade com setter privado: declarar explícito pro EF ligar.
+        builder.Property(u => u.TrocarSenhaNoProximoAcesso).HasDefaultValue(false);
 
         builder.HasIndex(u => u.Email).IsUnique();
     }

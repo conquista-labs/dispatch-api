@@ -7,4 +7,7 @@ public abstract record ResultadoCadastroConferente
     public sealed record Sucesso(Guid ConferenteId) : ResultadoCadastroConferente;
 
     public sealed record EmailJaCadastrado : ResultadoCadastroConferente;
+
+    // Menos de RegrasDeSenha.ComprimentoMinimoSenhaInicial caracteres.
+    public sealed record SenhaInicialCurta : ResultadoCadastroConferente;
 }

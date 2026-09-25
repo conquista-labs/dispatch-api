@@ -13,7 +13,7 @@ public class ListarConferentesTests
         var casoDeUso = new ListarConferentes(
             new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         var item = Assert.Single(resultado);
         Assert.Equal(conferente.Id, item.Id);
@@ -38,7 +38,7 @@ public class ListarConferentesTests
         var casoDeUso = new ListarConferentes(
             new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         Assert.Equal(1, Assert.Single(resultado).CapacidadeEstimada);
     }
@@ -48,7 +48,7 @@ public class ListarConferentesTests
     {
         var casoDeUso = new ListarConferentes(new FakeConferenteRepository([]), new FakeUsuarioRepository([]), new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         Assert.Empty(resultado);
     }
@@ -65,7 +65,7 @@ public class ListarConferentesTests
         var casoDeUso = new ListarConferentes(
             new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         Assert.Empty(resultado);
     }
@@ -82,7 +82,7 @@ public class ListarConferentesTests
             new FakeConferenteRepository([conferenteB, conferenteA]), new FakeUsuarioRepository([usuarioB, usuarioA]),
             new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         Assert.Equal(["Aline", "Beatriz"], resultado.Select(c => c.Nome));
     }
@@ -104,8 +104,25 @@ public class ListarConferentesTests
             new FakeConferenteRepository([conferente2, conferente1]), new FakeUsuarioRepository([usuario2, usuario1]),
             new FakeConfiguracaoRepository());
 
-        var resultado = await casoDeUso.ExecutarAsync();
+        var resultado = await casoDeUso.ExecutarAsync(incluirNivel: true);
 
         Assert.Equal([conferente1.Id, conferente2.Id], resultado.Select(c => c.Id));
+    }
+
+    // ADR-0039 / RF-29a: sem a flag de administrador o cargo não sai — o resto continua igual
+    // (a distribuidora vê jornada, carga e presença).
+    [Fact]
+    public async Task SemFlagDeAdministrador_NivelVemNulo()
+    {
+        var usuario = new Usuario(Guid.NewGuid(), "Márcio Gomes", "marcio@cartorio.com", "hash", Papel.Conferente);
+        var conferente = new Conferente(Guid.NewGuid(), usuario.Id, Nivel.Senior, 6, naEscala: true, cargaAtual: 2);
+        var casoDeUso = new ListarConferentes(
+            new FakeConferenteRepository([conferente]), new FakeUsuarioRepository([usuario]), new FakeConfiguracaoRepository());
+
+        var item = Assert.Single(await casoDeUso.ExecutarAsync(incluirNivel: false));
+
+        Assert.Null(item.Nivel);
+        Assert.Equal(6, item.JornadaHoras);
+        Assert.Equal(2, item.CargaAtual);
     }
 }

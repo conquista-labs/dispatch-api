@@ -10,8 +10,10 @@ public static class SugestaoEndpoints
 {
     public static void MapSugestaoEndpoints(this IEndpointRouteBuilder app)
     {
+        // Aprendizado (RF-39 a 41) é da Central completa, só do Administrador (RF-30a, ADR-0039) —
+        // inclusive a leitura: a evidência de "tipo desconhecido" cita o nível de quem resolveu.
         var grupo = app.MapGroup("/sugestoes")
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithTags(OpenApiTags.CentralDeRegras);
 
         grupo.MapPost("/gerar", async (GerarSugestoes casoDeUso, CancellationToken cancellationToken) =>

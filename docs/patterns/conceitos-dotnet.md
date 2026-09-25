@@ -43,6 +43,16 @@ metadata:
 - **Autenticação/autorização**: `ClaimsPrincipal` é o usuário do request; `ClaimTypes.Role` alimenta
   `RequireRole`/`IsInRole` sem policy customizada. `RequireAuthorization` empilhado combina com E.
   `JwtBearerOptions.Events.OnTokenValidated` é o gancho para validação extra do token.
+- **`RequireRole(a, b)` é OU; políticas empilhadas são E.** Dentro de uma chamada, qualquer um dos
+  papéis basta; a policy do `MapGroup` + a da rota precisam passar as duas. É assim que uma rota
+  "só do Administrador" vive num grupo de Distribuidora sem mexer nas outras (ADR-0039).
+- **`FallbackPolicy`** (`AddAuthorization(o => o.FallbackPolicy = ...)`) só vale para endpoint **sem
+  nenhuma** política própria — não é um "filtro global" das rotas que já têm `RequireAuthorization`.
+- **Pipeline de middleware**: cada `app.Use...` é um elo que roda em ordem, podendo seguir (`next()`)
+  ou responder e parar. A ordem é o contrato: `UseAuthentication` preenche `context.User`,
+  `UseAuthorization` aplica as policies. Um `app.Use(async (context, next) => ...)` entre os dois vê o
+  usuário já identificado e age em **toda** rota antes das policies — é o bloqueio da troca de senha
+  obrigatória (ADR-0040).
 - **`IMemoryCache`**: cache em memória do processo (`AddMemoryCache()`), usado para a configuração.
 
 ## EF Core

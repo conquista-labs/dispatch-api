@@ -22,6 +22,11 @@ public sealed class Usuario
     public int TentativasLoginFalhas { get; private set; }
     public DateTimeOffset? BloqueadoAte { get; private set; }
 
+    // RF-45 (perfil Administrador): conta criada por outra pessoa (Contas, ou um conferente
+    // cadastrado) entra com uma senha inicial e troca no primeiro acesso. Enquanto ligado, o token
+    // só vale pra trocar a senha (ADR-0040). Qualquer troca de senha desliga.
+    public bool TrocarSenhaNoProximoAcesso { get; private set; }
+
     public Usuario(Guid id, string nome, string email, string senhaHash, Papel papel, bool ativo = true)
     {
         Id = id;
@@ -34,6 +39,8 @@ public sealed class Usuario
 
     // RF-25 "remover": soft delete, não apaga a linha — mantém rastro de quem conferiu o quê.
     public void Desativar() => Ativo = false;
+
+    public void ExigirTrocaDeSenha() => TrocarSenhaNoProximoAcesso = true;
 
     // RF-25 "editar" — nome/e-mail são do Usuario, não do Conferente (que só sabe nível/jornada/
     // escala). Unicidade de e-mail é responsabilidade de quem chama isso (precisa checar contra
@@ -52,6 +59,7 @@ public sealed class Usuario
     public void RedefinirSenha(string novoHash, DateTimeOffset agora)
     {
         SenhaHash = novoHash;
+        TrocarSenhaNoProximoAcesso = false;
         SessoesValidasApartirDe = agora.AddTicks(-(agora.Ticks % TimeSpan.TicksPerSecond));
     }
 

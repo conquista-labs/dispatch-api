@@ -43,10 +43,14 @@ metadata:
   ([ADR-0035](../decisions/0035-ajuste-manual-de-duracao.md)). Volume/score/prazo/aprovação/complexidade
   continuam do dono atual.
 - **Visão restrita (RF-45)**, quando o token é só Conferente: linha do próprio conferente (com nome e
-  parcelas) + linha "média da casa" (`Nome`/`Nivel`/`Parcelas` nulos); **`Faixa` nula nas duas**
+  parcelas, sem o próprio `Nivel` — ADR-0039) + linha "média da casa" (`Nome`/`Nivel`/`Parcelas`
+  nulos); **`Faixa` nula nas duas**
   (leitura conservadora de "sem faixa de bônus"); `PorTipoAto` e `CumprimentoPrazoEquipe` vazios;
   **`Kpis` calculados só sobre os protocolos do próprio conferente** (vazava o total da operação até
   2026-09-15).
+- **Visão de gestão sem Administrador (RF-43a)**: `ObterDashboard(incluirAvaliacaoDePessoal: false)`
+  (o default) tira `Nivel`/`Score`/`Faixa`/`Parcelas` de toda linha e ordena **por nome** — a ordem por
+  score, sozinha, entregaria o ranking. O endpoint passa `usuario.EhAdministrador()`.
 - KPI "custo por ato" não existe (sem dado de custo — e o documento v2 já o removeu, RF-42b).
 
 ## Aprendizado sem IA (RF-39 a RF-41)

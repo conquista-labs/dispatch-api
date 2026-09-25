@@ -12,6 +12,10 @@ public sealed class UsuarioRepository(DispatchDbContext dbContext) : IUsuarioRep
     public async Task<Usuario?> ObterPorIdAsync(Guid id, CancellationToken cancellationToken) =>
         await dbContext.Usuarios.SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyCollection<Usuario>> ObterPorPapeisAsync(
+        IReadOnlyCollection<Papel> papeis, CancellationToken cancellationToken) =>
+        await dbContext.Usuarios.Where(u => papeis.Contains(u.Papel)).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<Usuario>> ObterVariosPorIdsAsync(
         IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         await dbContext.Usuarios.Where(u => ids.Contains(u.Id)).ToListAsync(cancellationToken);

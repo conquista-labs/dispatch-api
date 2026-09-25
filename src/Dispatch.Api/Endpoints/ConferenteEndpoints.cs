@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Dispatch.Api.OpenApi;
 using Dispatch.Application;
 using Dispatch.Domain;
@@ -12,10 +13,10 @@ public static class ConferenteEndpoints
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora)))
             .WithTags(OpenApiTags.Conferentes);
 
-        grupo.MapGet("/", async (ListarConferentes casoDeUso, CancellationToken cancellationToken) =>
-                Results.Ok(await casoDeUso.ExecutarAsync(cancellationToken)))
+        grupo.MapGet("/", async (ListarConferentes casoDeUso, ClaimsPrincipal usuario, CancellationToken cancellationToken) =>
+                Results.Ok(await casoDeUso.ExecutarAsync(incluirNivel: usuario.EhAdministrador(), cancellationToken)))
             .WithName("ListarConferentes")
-            .WithSummary("Lista todos os conferentes com nome/e-mail — front usa pra resolver identidade em qualquer tela que só tem conferenteId (RF-25).")
+            .WithSummary("Lista todos os conferentes com nome/e-mail — front usa pra resolver identidade em qualquer tela que só tem conferenteId (RF-25). `nivel` só vem pra Administrador (ADR-0039).")
             .Produces<IReadOnlyList<ConferenteComUsuario>>();
 
         grupo.MapPost("/", async (
@@ -32,10 +33,15 @@ public static class ConferenteEndpoints
                         Results.Created($"/conferentes/{sucesso.ConferenteId}", new CadastrarConferenteResponse(sucesso.ConferenteId)),
                     ResultadoCadastroConferente.EmailJaCadastrado =>
                         Results.Conflict(new { motivo = "e-mail já cadastrado" }),
+                    ResultadoCadastroConferente.SenhaInicialCurta => Results.BadRequest(
+                        new { motivo = $"a senha inicial precisa ter pelo menos {RegrasDeSenha.ComprimentoMinimoSenhaInicial} caracteres" }),
                     _ => throw new InvalidOperationException($"Resultado de cadastro não mapeado: {resultado.GetType().Name}")
                 };
             })
             .WithName("CadastrarConferente")
+            // Cadastro de pessoas é só do Administrador (RF-29a/ADR-0039) — soma (E) com o
+            // RequireRole(Distribuidora) do grupo; o admin carrega as duas claims.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Cadastra um conferente (RF-25) — cria também o usuário de login (papel Conferente).")
             .Produces<CadastrarConferenteResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status409Conflict);
@@ -60,6 +66,9 @@ public static class ConferenteEndpoints
                 };
             })
             .WithName("VincularConferenteAUsuario")
+            // Cadastro de pessoas é só do Administrador (RF-29a/ADR-0039) — soma (E) com o
+            // RequireRole(Distribuidora) do grupo; o admin carrega as duas claims.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Dá a capacidade de conferente a uma conta já existente (ex.: uma distribuidora que também confere) — busca por e-mail, não cria usuário novo.")
             .Produces<CadastrarConferenteResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound)
@@ -81,6 +90,9 @@ public static class ConferenteEndpoints
                 };
             })
             .WithName("EditarPerfilConferente")
+            // Cadastro de pessoas é só do Administrador (RF-29a/ADR-0039) — soma (E) com o
+            // RequireRole(Distribuidora) do grupo; o admin carrega as duas claims.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Edita nome e e-mail de um conferente (RF-25).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
@@ -96,6 +108,9 @@ public static class ConferenteEndpoints
                 return encontrado ? Results.NoContent() : Results.NotFound();
             })
             .WithName("EditarNivelEJornadaConferente")
+            // Cadastro de pessoas é só do Administrador (RF-29a/ADR-0039) — soma (E) com o
+            // RequireRole(Distribuidora) do grupo; o admin carrega as duas claims.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Edita nível e jornada de um conferente (RF-25/RF-26).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
@@ -123,6 +138,9 @@ public static class ConferenteEndpoints
                 return encontrado ? Results.NoContent() : Results.NotFound();
             })
             .WithName("RemoverConferente")
+            // Cadastro de pessoas é só do Administrador (RF-29a/ADR-0039) — soma (E) com o
+            // RequireRole(Distribuidora) do grupo; o admin carrega as duas claims.
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Remove um conferente (RF-25) — desativa o usuário e tira da escala.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);

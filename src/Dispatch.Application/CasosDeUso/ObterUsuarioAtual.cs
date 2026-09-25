@@ -16,8 +16,9 @@ public sealed class ObterUsuarioAtual(IUsuarioRepository usuarios, IConferenteRe
         }
 
         var papeis = await PapeisEfetivos.ObterAsync(usuario, conferentes, cancellationToken);
-        return new UsuarioAtual(usuario.Id, usuario.Nome, usuario.Email, papeis);
+        return new UsuarioAtual(usuario.Id, usuario.Nome, usuario.Email, papeis, usuario.TrocarSenhaNoProximoAcesso);
     }
 }
 
-public sealed record UsuarioAtual(Guid Id, string Nome, string Email, IReadOnlyList<Papel> Papeis);
+// TrocarSenha (ADR-0040): o boot do front (F5) também precisa saber que a troca está pendente.
+public sealed record UsuarioAtual(Guid Id, string Nome, string Email, IReadOnlyList<Papel> Papeis, bool TrocarSenha = false);

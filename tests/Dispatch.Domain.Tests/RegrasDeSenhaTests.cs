@@ -27,4 +27,14 @@ public class RegrasDeSenhaTests
         Assert.False(RegrasDeSenha.EhForte("curta"));
         Assert.False(RegrasDeSenha.EhForte("senha1234567890"));
     }
+
+    // RF-45: a senha inicial (definida por quem cria a conta) só precisa de 8 caracteres — ela vale
+    // até o primeiro acesso, quando a regra forte passa a valer (ADR-0040).
+    [Theory]
+    [InlineData("")]
+    [InlineData("sete777")]
+    public void ServeComoSenhaInicial_FalsoAbaixoDe8(string senha) => Assert.False(RegrasDeSenha.ServeComoSenhaInicial(senha));
+
+    [Fact]
+    public void ServeComoSenhaInicial_VerdadeiroCom8OuMais() => Assert.True(RegrasDeSenha.ServeComoSenhaInicial("abcd-e12"));
 }

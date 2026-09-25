@@ -17,7 +17,7 @@ public sealed class RegraAlcadaIntegracaoTests(IntegracaoFixture fixture) : Inte
     [Fact]
     public async Task AtivarEDesativar_PersistemDeVerdadeNoBanco()
     {
-        var cliente = await AutenticarComoAsync(Papel.Distribuidora);
+        var cliente = await AutenticarComoAsync(Papel.Administrador);
         var regraId = await CriarRegraAsync(cliente);
 
         Assert.True(await EstaAtivaAsync(cliente, regraId));
@@ -34,7 +34,7 @@ public sealed class RegraAlcadaIntegracaoTests(IntegracaoFixture fixture) : Inte
     [Fact]
     public async Task DoisAlvosAoMesmoTempo_RejeitadoPelaApi()
     {
-        var cliente = await AutenticarComoAsync(Papel.Distribuidora);
+        var cliente = await AutenticarComoAsync(Papel.Administrador);
 
         var resposta = await cliente.PostAsJsonAsync("/regras-alcada", new
         {

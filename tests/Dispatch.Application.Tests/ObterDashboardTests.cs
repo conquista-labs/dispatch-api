@@ -56,7 +56,7 @@ public class ObterDashboardTests
         var protocolo = NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1));
         var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario]);
 
-        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
 
         var desempenho = Assert.Single(resultado.Desempenho);
         Assert.Equal("Ana", desempenho.Nome);
@@ -85,7 +85,7 @@ public class ObterDashboardTests
             .ToList();
         var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [tipo], [usuarioA, usuarioB]);
 
-        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
 
         var ana = resultado.Desempenho.Single(d => d.Nome == "Ana");
         var bruno = resultado.Desempenho.Single(d => d.Nome == "Bruno");
@@ -105,7 +105,7 @@ public class ObterDashboardTests
             conferente.Id, tipo.Id, Agora.AddDays(-1), aprovado: false, vencimentoEm: Agora.AddDays(-2));
         var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario]);
 
-        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
 
         var desempenho = Assert.Single(resultado.Desempenho);
         Assert.Equal(50, desempenho.Score);
@@ -308,5 +308,58 @@ public class ObterDashboardTests
 
         var desempenho = Assert.Single(resultado.Desempenho);
         Assert.Equal(TimeSpan.FromMinutes(45), desempenho.TempoMedio);
+    }
+
+    // ADR-0039 / RF-43a — o teste que pega o vazamento: Bruno tem score maior que Ana, então a
+    // ordem por score (Bruno, Ana) e a ordem por nome (Ana, Bruno) diferem. Sem a flag de
+    // administrador, a distribuidora recebe por nome e sem nível/score/faixa/parcelas.
+    [Fact]
+    public async Task SemFlagDeAdministrador_OrdenaPorNomeESemAvaliacao()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id, Nivel.Junior);
+        var conferenteB = NovoConferente(usuarioB.Id, Nivel.Senior);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 1);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, tipo.Id, Agora.AddDays(-1), aprovado: false),
+            NovoProtocoloConcluido(conferenteB.Id, tipo.Id, Agora.AddDays(-1)),
+            NovoProtocoloConcluido(conferenteB.Id, tipo.Id, Agora.AddDays(-2)),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [tipo], [usuarioA, usuarioB]);
+
+        var comoAdmin = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+        Assert.Equal(["Bruno", "Ana"], comoAdmin.Desempenho.Select(d => d.Nome));
+
+        var comoDistribuidora = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+        Assert.Equal(["Ana", "Bruno"], comoDistribuidora.Desempenho.Select(d => d.Nome));
+        Assert.All(comoDistribuidora.Desempenho, d =>
+        {
+            Assert.Null(d.Nivel);
+            Assert.Null(d.Score);
+            Assert.Null(d.Faixa);
+            Assert.Null(d.Parcelas);
+        });
+        // O que não é avaliação de pessoal continua: volume, prazo, aprovação.
+        Assert.Equal([1, 2], comoDistribuidora.Desempenho.Select(d => d.Volume));
+    }
+
+    // RF-45 + ADR-0039: o conferente vê o próprio score e as parcelas, mas não o próprio nível.
+    [Fact]
+    public async Task VisaoRestrita_MantemOProprioScoreMasNaoONivel()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id, Nivel.Senior);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 1);
+        var casoDeUso = NovoCasoDeUso(
+            [NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1))], [conferente], [tipo], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: conferente.Id);
+
+        var meu = Assert.Single(resultado.Desempenho);
+        Assert.Null(meu.Nivel);
+        Assert.NotNull(meu.Score);
+        Assert.NotNull(meu.Parcelas);
     }
 }

@@ -11,5 +11,6 @@ internal static class OpenApiTags
     public const string CentralDeRegras = "Central de Regras";
     public const string MinhaFila = "Minha Fila";
     public const string Dashboard = "Dashboard";
+    public const string Contas = "Contas";
     public const string Sistema = "Sistema";
 }

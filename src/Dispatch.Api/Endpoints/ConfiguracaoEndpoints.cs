@@ -39,6 +39,7 @@ public static class ConfiguracaoEndpoints
                 };
             })
             .WithName("AtualizarConfiguracao")
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
             .WithSummary("Substitui os 12 valores juntos — sem edição parcial, mesmo padrão de PUT já usado em Equipe/TipoAto.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status400BadRequest);

@@ -1,6 +1,6 @@
 ---
 name: autorizacao
-description: Como papéis viram claims, grupos RequireRole e como combinam, visões restritas, PapeisEfetivos, validação do JWT com SessoesValidasApartirDe, bloqueio de login, TOTP/recuperação e auditoria de autenticação
+description: Como papéis viram claims (inclusive o Administrador que carrega Distribuidora), grupos RequireRole e como combinam, o que é só do admin e que campo é cortado pra quem não é, troca de senha obrigatória, visões restritas, PapeisEfetivos, validação do JWT com SessoesValidasApartirDe, bloqueio de login, TOTP/recuperação e auditoria de autenticação
 metadata:
   type: pattern
   domains: [autenticacao, autorizacao, jwt, seguranca]
@@ -12,7 +12,10 @@ metadata:
 > Decisões: [ADR-0003](../decisions/0003-autenticacao-jwt-propria-sem-aspnet-identity.md) (JWT
 > próprio), [ADR-0010](../decisions/0010-login-devolve-usuario-e-auth-me.md) (`/auth/me`),
 > [ADR-0020](../decisions/0020-totp-so-para-recuperacao-de-senha.md) (TOTP/recuperação),
-> [ADR-0028](../decisions/0028-uma-conta-com-dois-papeis.md) (dois papéis). Regra da casa: a
+> [ADR-0028](../decisions/0028-uma-conta-com-dois-papeis.md) (dois papéis),
+> [ADR-0039](../decisions/0039-perfil-administrador.md) (Administrador),
+> [ADR-0040](../decisions/0040-troca-de-senha-obrigatoria-no-primeiro-acesso.md) (troca de senha no
+> primeiro acesso). Regra da casa: a
 > restrição entre papéis é **sempre no servidor** (RNF-04), nunca só na interface.
 
 ## Quando ler
@@ -23,12 +26,15 @@ metadata:
 
 ## Papéis → claims
 
-- Papéis: `Distribuidora`, `Conferente` (`Dispatch.Domain/Usuarios/Papel.cs`). O documento v2 já fala
-  em `Administrador` — ainda não existe (ver gaps).
+- Papéis gravados: `Distribuidora`, `Conferente`, `Administrador` (`Dispatch.Domain/Usuarios/Papel.cs`).
 - `EmissorDeTokenJwt` emite **uma claim `ClaimTypes.Role` por papel efetivo** + `NameIdentifier`
   (`Usuario.Id`) + `iat` explícito.
 - **Papéis efetivos** (`PapeisEfetivos`, Application): `Usuario.Papel`, mais `Conferente` se existir
-  `Conferente` com aquele `UsuarioId`. Calculado no login e no `/auth/me`.
+  `Conferente` com aquele `UsuarioId`. **`Administrador` vira `[Administrador, Distribuidora]`** — a
+  claim `Distribuidora` significa "tem acesso de gestão", e o admin passa em todo grupo de gestão sem
+  nenhuma rota mudar (ADR-0039). A ordem importa: o front usa `papeis[0]`. Calculado no login e no
+  `/auth/me`.
+- No endpoint, "é admin?" é `usuario.EhAdministrador()` (`ClaimsPrincipalExtensions`).
 - **Claims ficam fixas até novo login.** Vincular uma conta como conferente não muda o token atual —
   a pessoa precisa logar de novo. `/auth/me` reflete o banco.
 - Ler o usuário no endpoint: parâmetro `ClaimsPrincipal usuario` (minimal API resolve sozinha, sem
@@ -55,7 +61,54 @@ metadata:
 - Distribuidora vendo a fila de alguém: `GET /conferentes/{id}/fila` e `/concluidos-hoje` resolvem o
   `Conferente` pelo id da URL; os casos de uso (`ObterMinhaFila`/`ObterConcluidosHoje`) nunca
   dependeram de "quem está logado".
-- `POST /dev/seed-e2e` é anônimo e só existe em Development (gate no `Program.cs`).
+- `POST /dev/seed-e2e` é anônimo e só existe em Development (gate no `Program.cs`). Semeia também
+  `distribuidora@` e `administrador@cartorio.com` (senha `Senha123!`).
+
+### O que é só do Administrador (§3, RF-29a, RF-30a, 6.8)
+
+Rota dentro de grupo de Distribuidora ganha `.RequireAuthorization(p => p.RequireRole(nameof(Papel.Administrador)))`
+— combina com **E** com o do grupo, então a distribuidora leva 403. Grupo inteiro do admin troca o
+papel do próprio grupo.
+
+| Onde | Só Administrador | Continua Distribuidora |
+| ---- | ---------------- | ---------------------- |
+| `/conferentes` | cadastrar, vincular, editar perfil, nível/jornada, remover | listar, presença, `alcance`, fila de alguém |
+| `/regras-alcada` | criar, ativar, desativar, remover, testar | listar |
+| `/tipos-ato` | criar, grupo de gestão (`com-uso`, editar, ativar/desativar, remover) | `GET /tipos-ato` |
+| `/equipes`, `/escreventes` | todas as escritas e `sem-equipe` | listagens |
+| `/config` | `PUT` | `GET` |
+| `/sugestoes` | o grupo todo | — |
+| `/contas` | o grupo todo (RF-44 a 47) | — |
+
+### Campos cortados pra quem não é admin
+
+O corte mora na **Application**, por uma flag que o endpoint passa com `usuario.EhAdministrador()` —
+nunca no endpoint escolhendo campo, e nunca só no front. Flag com default fechado (ou obrigatória).
+Invariante: **o nível só sai do servidor num token de Administrador**.
+
+| Leitura | Flag | Sem a flag |
+| ------- | ---- | ---------- |
+| `GET /conferentes` (`ListarConferentes`) | `incluirNivel` | `nivel: null` (jornada continua) |
+| `GET /dashboard` (`ObterDashboard`) | `incluirAvaliacaoDePessoal` (default `false`) | `nivel`, `score`, `faixa`, `parcelas` null; lista **por nome** (ordem por score entregaria o ranking). Visão restrita do conferente: mantém o próprio score, só perde o nível |
+| `GET /regras-alcada` (`ListarRegrasAlcada`) | `incluirNivel` | regra por nível sai com `sujeitoNivel: null`; `regraBase: true` quando não é equipe+etapa |
+
+A trilha do detalhe do protocolo não é cortada: o painel só usa `regraAplicadaId`, resolvido contra a
+lista já mascarada; a trilha por camada só aparece no simulador Testar (admin). Inferência residual
+aceita — ver ADR-0039.
+
+### Troca de senha obrigatória (RF-45, ADR-0040)
+
+- Conta criada por outra pessoa (`CriarConta`, `CadastrarConferente`) nasce com senha inicial de 8+
+  (`RegrasDeSenha.ServeComoSenhaInicial`) e `Usuario.TrocarSenhaNoProximoAcesso`; qualquer
+  `RedefinirSenha` desliga a flag.
+- O token dessa conta carrega a claim `trocar_senha` (`ClaimsDoDispatch.TrocarSenha`), e login e
+  `/auth/me` devolvem `trocarSenha: true`.
+- Um **middleware** entre `UseAuthentication` e `UseAuthorization` (`Program.cs`) só deixa esse token
+  chamar `/auth/me` e `POST /auth/trocar-senha`; o resto recebe 403
+  `{ codigo: "troca_de_senha_obrigatoria" }`. Rota nova que precise funcionar durante a troca entra em
+  `RotasLiberadasComTrocaDeSenhaPendente`.
+- `POST /auth/trocar-senha { senhaAtual, novaSenha }` exige senha forte (RF-01j) e devolve `{ token }`
+  novo, sem a claim. 400 com `codigo` `senha_atual_incorreta` / `senha_fraca`.
 
 ## Validação do JWT e sessões
 
@@ -64,7 +117,9 @@ metadata:
   decidido com o dono em 2026-09-11 (`appsettings.Development.json` e `render.yaml`; em produção o
   valor real é a env var do dashboard do Render).
 - `JwtBearerOptions.Events.OnTokenValidated` busca o `Usuario` e rejeita o token se
-  `IssuedAt < Usuario.SessoesValidasApartirDe` (RF-01k). Custo: 1 consulta por request autenticado.
+  `IssuedAt < Usuario.SessoesValidasApartirDe` (RF-01k) **ou se a conta está inativa** (desativada em
+  Contas ou conferente removido perde o acesso na hora, não em 8h). Custo: 1 consulta por request
+  autenticado.
 - **Gotcha**: ASP.NET Core 10 valida com `Microsoft.IdentityModel.JsonWebTokens.JsonWebToken`, não
   `JwtSecurityToken`. Cast para o tipo antigo compila e explode em runtime (`InvalidCastException`) na
   primeira chamada autenticada.
@@ -111,5 +166,5 @@ coluna `varchar(64)` (cabe IPv6 e lista separada por vírgula). Todo `ExecutarAs
 
 ## Referências
 
-- ADR-0003, ADR-0010, ADR-0020, ADR-0028.
-- `docs/gaps-requisitos.md` (RF-01m/n, administrador, bloqueio por origem, Argon2id).
+- ADR-0003, ADR-0010, ADR-0020, ADR-0028, ADR-0039, ADR-0040.
+- `docs/gaps-requisitos.md` (RF-01m/n, bloqueio por origem, Argon2id).

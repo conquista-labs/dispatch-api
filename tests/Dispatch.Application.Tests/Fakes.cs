@@ -140,6 +140,9 @@ internal sealed class FakeUsuarioRepository : IUsuarioRepository
     public Task<bool> ExisteComEmailAsync(string email, CancellationToken cancellationToken) =>
         Task.FromResult(_usuarios.Any(u => u.Email == email));
 
+    public Task<IReadOnlyCollection<Usuario>> ObterPorPapeisAsync(IReadOnlyCollection<Papel> papeis, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyCollection<Usuario>>(_usuarios.Where(u => papeis.Contains(u.Papel)).ToList());
+
     public void Adicionar(Usuario usuario) => _usuarios.Add(usuario);
 }
 

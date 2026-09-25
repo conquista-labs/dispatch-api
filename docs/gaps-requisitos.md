@@ -34,17 +34,17 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §1, §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §36, §37 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §36, §37 |
 | 🟡 Parcial | §16, §19 |
 | ❔ Não verificado | §5, §6, §9, §11 |
-| ⏸ Adiado | §18, §24, §29, §40 |
+| ⏸ Adiado | §18, §24, §29, §40, §43 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §10, §14, §15, §17, §20, §22, §23, §32, §39 |
+| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §39 |
 
-**Leitura rápida.** O documento v2 cresceu bem além do que o back cobre em duas frentes: **papel
-Administrador + Contas** (§1, que arrasta RF-01n) e **Dashboard v2** (ritmo, metas, série, exportação,
-pesos — §34–§37). As duas são projetos à parte, não correções pontuais. Fora isso, o que resta são
-itens conhecidos e pequenos (mesclar tipos, rodada, auditoria de autenticação sem leitura).
+**Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
+**Dashboard v2** (ritmo, metas, série, exportação, pesos — §34–§37), um projeto à parte. Fora isso, o
+que resta são itens conhecidos e pequenos (mesclar tipos, RF-01m/n, auditoria de autenticação sem
+leitura).
 
 ---
 
@@ -52,21 +52,20 @@ itens conhecidos e pequenos (mesclar tipos, rodada, auditoria de autenticação 
 
 ### Autenticação e contas
 
-#### §1 🔴 Papel Administrador, tela Contas e o que a distribuidora não deve ver
+#### §1 ✅ Papel Administrador, tela Contas e o que a distribuidora não deve ver
 
-- **Requisito**: seção 3 (três papéis: administrador, distribuidora, conferente; "para a distribuidora a
-  API não devolve nível, score nem faixa, e rejeita escrita em regras, conferentes e contas"); 6.8
-  Contas — RF-44 a RF-48 (numeração repetida no documento: lista de contas, criar conta com senha
-  inicial e `trocar_senha` no primeiro acesso, desativar, travas, sinalização); RF-30a (Central só
-  leitura para distribuidora); RF-43a (Produção por conferente sem nível/score/faixa); RF-29a (para a
-  distribuidora, Conferentes vira só presença).
-- **O que falta**: `Papel` só tem `Distribuidora` e `Conferente` — a Distribuidora hoje **é** o
-  administrador (edita regras, cadastra conferentes, vê score e faixa). Não há `Contas`, `trocar_senha`,
-  nem restrição de leitura de score/faixa para gestão não-admin.
-- **Como sabemos**: código (`Dispatch.Domain/Usuarios/Papel.cs`; grep sem `Administrador`/`TrocarSenha`);
-  requisito.
-- **Onde entraria**: `Papel.Administrador`, policies por grupo revistas (`docs/patterns/autorizacao.md`),
-  `UsuarioResponse`/Dashboard filtrando campos por papel, casos de uso de conta. Provavelmente ADR.
+- **Requisito**: seção 3 (três papéis; "para a distribuidora a API não devolve nível, score nem faixa, e
+  rejeita escrita em regras, conferentes e contas"); 6.8 Contas — RF-44 a RF-48; RF-30a (Central só
+  leitura para distribuidora); RF-43a (Produção por conferente sem nível/score/faixa); RF-29a
+  (Conferentes vira só presença).
+- **Fechado em 2026-09-25** — [ADR-0039](decisions/0039-perfil-administrador.md) e
+  [ADR-0040](decisions/0040-troca-de-senha-obrigatoria-no-primeiro-acesso.md): `Papel.Administrador`
+  (carrega também a claim `Distribuidora`), escritas de regras/conferentes/catálogo/sugestões e o grupo
+  `/contas` só do admin, nível/score/faixa cortados na Application, senha inicial 8+ com troca
+  obrigatória no primeiro acesso, conta desativada perde o token. Tabelas em
+  `docs/patterns/autorizacao.md`.
+- **Fora desta entrega**: reativar conta e trocar o papel de uma conta existente; a inferência residual
+  das regras de nível (§43); RF-01n (§3) continua em aberto.
 
 #### §2 🔴 RF-01m — liberação sem autenticador pela distribuidora
 
@@ -346,4 +345,13 @@ não como coluna (ADR-0028).
 
 Fora do back: RF-03, RF-04, RF-05c/d, RF-12, RF-18e (filtros — client-side, sem endpoint), RF-18c,
 RF-24e–j, RF-24f (filtros da fila — só precisou abrir `GET /equipes|escreventes|tipos-ato` ao
-Conferente), RF-30a (demonstração), RF-30b–d, RNF-05 a RNF-13. Ver `../dispatch-web/CLAUDE.md`.
+Conferente), RF-30b–d, RNF-05 a RNF-13. Ver `../dispatch-web/CLAUDE.md`.
+
+#### §43 ⏸ Inferência residual do nível nas Regras em vigor
+
+- **O que falta**: a distribuidora não recebe o nível de ninguém (ADR-0039), mas ainda percebe que uma
+  "Regra base da alçada" nega uns conferentes e outros não, e o "quem pode conferir" do detalhe mostra
+  quem está barrado — dá pra inferir o grupo, não o cargo.
+- **Como sabemos**: código (`ListarRegrasAlcada`, `ObterDetalheProtocolo`), análise da Feature 3.
+- **Onde entraria**: um sujeito `SujeitoAlcada.Todos` para regras que valem pra todos, deixando as de
+  nível só como exceções visíveis ao admin. **Reavaliar** se o dono achar a inferência um problema.

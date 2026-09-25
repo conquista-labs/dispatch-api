@@ -43,6 +43,7 @@ public sealed class Autenticar(
 
         var papeis = await PapeisEfetivos.ObterAsync(usuario, conferentes, cancellationToken);
         return new ResultadoAutenticacao.Autenticado(
-            emissorDeToken.EmitirToken(usuario, papeis), usuario.Id, usuario.Nome, usuario.Email, papeis);
+            emissorDeToken.EmitirToken(usuario, papeis), usuario.Id, usuario.Nome, usuario.Email, papeis,
+            usuario.TrocarSenhaNoProximoAcesso);
     }
 }
