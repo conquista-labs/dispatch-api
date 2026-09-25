@@ -25,5 +25,17 @@ public sealed class ConfiguracaoConfiguration : IEntityTypeConfiguration<Configu
         builder.Property(c => c.LimiarEscreventeOrfao);
         builder.Property(c => c.LimiarRiscoQualidadeCasos);
         builder.Property(c => c.LimiarRiscoQualidadeReprovacao);
+        // RF-42b/RF-46. O DEFAULT das colunas (95%/90%, 40/30/20/10) mora só na migration, não em
+        // HasDefaultValue: com default no modelo, o EF omite no INSERT o valor igual ao default do CLR
+        // (0), e um peso 0 viraria o DEFAULT do banco. Aqui só existe UPDATE, mas não vale a armadilha.
+        builder.Property(c => c.MetaNoPrazo);
+        builder.Property(c => c.MetaAprovadoNaPrimeira);
+        builder.Property(c => c.PesoVolume);
+        builder.Property(c => c.PesoPrazo);
+        builder.Property(c => c.PesoQualidade);
+        builder.Property(c => c.PesoComplexidade);
+        // Leituras calculadas sobre as colunas acima — não são coluna nem tabela.
+        builder.Ignore(c => c.Metas);
+        builder.Ignore(c => c.Pesos);
     }
 }
