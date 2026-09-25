@@ -172,6 +172,7 @@ public static class ServiceCollectionExtensions
 
         // Dashboard (DashboardEndpoints)
         services.AddScoped<ObterDashboard>();
+        services.AddScoped<ObterPainelDeHoje>();
 
         return services;
     }

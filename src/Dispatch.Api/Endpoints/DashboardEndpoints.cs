@@ -9,44 +9,86 @@ public static class DashboardEndpoints
 {
     public static void MapDashboardEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/dashboard", async (
+        // Grupo só pra as duas leituras dividirem a mesma regra de papel — cada rota continua
+        // decidindo a visão (gestão ou restrita) por dentro, pelo papel do token.
+        var grupo = app.MapGroup("/dashboard")
+            .WithTags(OpenApiTags.Dashboard)
+            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
+
+        grupo.MapGet("", async (
                 PeriodoDashboard periodo,
                 ObterDashboard casoDeUso,
                 ClaimsPrincipal usuario,
                 IConferenteRepository conferentes,
                 CancellationToken cancellationToken) =>
             {
-                // RF-45/RNF: Conferente só vê os próprios números + a média da casa, nunca a
-                // lista com nome de colegas — mesmo padrão de PUT /protocolos/{id}/observacao,
-                // a restrição decide por dentro conforme o papel do token, não por rota separada.
-                // "&& !Distribuidora": alguém com os dois papéis (distribuidora que também
-                // confere) vê a visão de gestão completa sempre — o papel Conferente aqui só
-                // soma a capacidade de conferir, nunca reduz o que ela já vê como distribuidora
-                // (decisão confirmada com o dono).
-                Guid? conferenteRestritoId = null;
-                if (usuario.IsInRole(nameof(Papel.Conferente)) && !usuario.IsInRole(nameof(Papel.Distribuidora)))
+                var restricao = await ResolverVisaoRestritaAsync(usuario, conferentes, cancellationToken);
+                if (restricao.ConferenteNaoEncontrado)
                 {
-                    var usuarioId = usuario.ObterUsuarioId();
-                    var conferente = await conferentes.ObterPorUsuarioIdAsync(usuarioId, cancellationToken);
-                    if (conferente is null)
-                    {
-                        return Results.NotFound(new { motivo = "conferente não encontrado" });
-                    }
-
-                    conferenteRestritoId = conferente.Id;
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
                 }
 
                 var resultado = await casoDeUso.ExecutarAsync(
-                    periodo, conferenteRestritoId, incluirAvaliacaoDePessoal: usuario.EhAdministrador(), cancellationToken);
+                    periodo, restricao.ConferenteId, incluirAvaliacaoDePessoal: usuario.EhAdministrador(), cancellationToken);
                 return Results.Ok(ParaResponse(resultado));
             })
             .WithName("ObterDashboard")
             .WithSummary("KPIs, score (40% volume + 30% prazo + 20% qualidade + 10% complexidade) e desempenho por período (RF-42 a RF-46).")
-            .WithTags(OpenApiTags.Dashboard)
             .Produces<DashboardResponse>()
-            .Produces(StatusCodes.Status404NotFound)
-            .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Distribuidora), nameof(Papel.Conferente)));
+            .Produces(StatusCodes.Status404NotFound);
+
+        grupo.MapGet("/hoje", async (
+                ObterPainelDeHoje casoDeUso,
+                ClaimsPrincipal usuario,
+                IConferenteRepository conferentes,
+                CancellationToken cancellationToken) =>
+            {
+                var restricao = await ResolverVisaoRestritaAsync(usuario, conferentes, cancellationToken);
+                if (restricao.ConferenteNaoEncontrado)
+                {
+                    return Results.NotFound(new { motivo = "conferente não encontrado" });
+                }
+
+                var painel = await casoDeUso.ExecutarAsync(restricao.ConferenteId, cancellationToken);
+                return Results.Ok(ParaResponse(painel));
+            })
+            .WithName("ObterPainelDeHoje")
+            .WithSummary("RF-42a — \"Hoje, agora\" (gestão: conferidos hoje, fila, em risco, exceções, gargalo por equipe) ou \"Seu dia\" (conferente: conferidos hoje, na mão, em risco com ele). Hoje = dia de Brasília.")
+            .Produces<PainelDeHojeResponse>()
+            .Produces(StatusCodes.Status404NotFound);
     }
+
+    // RF-45/RNF: Conferente só vê os próprios números, nunca os de colegas — a restrição decide
+    // por dentro conforme o papel do token, não por rota separada (mesmo padrão de
+    // PUT /protocolos/{id}/observacao). "&& !Distribuidora": alguém com os dois papéis
+    // (distribuidora que também confere) vê a visão de gestão completa sempre — o papel Conferente
+    // aqui só soma a capacidade de conferir, nunca reduz o que ela já vê como distribuidora
+    // (decisão confirmada com o dono). O Administrador carrega a claim Distribuidora (ADR-0039).
+    private static async Task<VisaoRestrita> ResolverVisaoRestritaAsync(
+        ClaimsPrincipal usuario, IConferenteRepository conferentes, CancellationToken cancellationToken)
+    {
+        if (!usuario.IsInRole(nameof(Papel.Conferente)) || usuario.IsInRole(nameof(Papel.Distribuidora)))
+        {
+            return new VisaoRestrita(ConferenteId: null, ConferenteNaoEncontrado: false);
+        }
+
+        var conferente = await conferentes.ObterPorUsuarioIdAsync(usuario.ObterUsuarioId(), cancellationToken);
+        return conferente is null
+            ? new VisaoRestrita(ConferenteId: null, ConferenteNaoEncontrado: true)
+            : new VisaoRestrita(conferente.Id, ConferenteNaoEncontrado: false);
+    }
+
+    private sealed record VisaoRestrita(Guid? ConferenteId, bool ConferenteNaoEncontrado);
+
+    private static PainelDeHojeResponse ParaResponse(PainelDeHoje painel) => new(
+        painel.Visao,
+        painel.AtualizadoEm,
+        painel.ConferidosHoje,
+        painel.NaFila is { } naFila ? new NaFilaHojeResponse(naFila.Pool, naFila.ComConferente) : null,
+        painel.NaMao is { } naMao ? new NaMaoHojeResponse(naMao.Total, naMao.EmConferencia) : null,
+        new EmRiscoHojeResponse(painel.EmRisco.Estourados, painel.EmRisco.VencemEmUmaHora),
+        painel.Excecoes,
+        painel.Gargalo is { } gargalo ? new GargaloHojeResponse(gargalo.EquipeId, gargalo.Quantidade) : null);
 
     private static DashboardResponse ParaResponse(ResultadoDashboard resultado) => new(
         new KpisResponse(resultado.Kpis.AtosConferidos, resultado.Kpis.PercentualNoPrazo, resultado.Kpis.PercentualAprovado, resultado.Kpis.TempoMedio),
@@ -95,3 +137,25 @@ public sealed record ParcelasScoreResponse(double Volume, double Prazo, double Q
 public sealed record DesempenhoTipoAtoResponse(Guid TipoAtoId, string Nome, int Volume, TimeSpan? TempoMedio, double PercentualReprovacao);
 
 public sealed record CumprimentoPrazoEquipeResponse(Guid? EquipeId, string EquipeNome, Etapa Etapa, TipoPrazo? Prazo, int Total, double PercentualNoPrazo);
+
+// RF-42a. `Visao` diz qual das duas formas veio: Gestao traz NaFila/Excecoes/Gargalo e NaMao nulo;
+// Conferente traz NaMao e os três de gestão nulos. Gargalo nulo = nenhuma equipe concentra mais de
+// um protocolo em risco; EquipeId nulo dentro dele = o grupo "sem equipe". O nome da equipe o front
+// resolve (GET /equipes).
+public sealed record PainelDeHojeResponse(
+    VisaoPainelHoje Visao,
+    DateTimeOffset AtualizadoEm,
+    int ConferidosHoje,
+    NaFilaHojeResponse? NaFila,
+    NaMaoHojeResponse? NaMao,
+    EmRiscoHojeResponse EmRisco,
+    int? Excecoes,
+    GargaloHojeResponse? Gargalo);
+
+public sealed record NaFilaHojeResponse(int Pool, int ComConferente);
+
+public sealed record NaMaoHojeResponse(int Total, int EmConferencia);
+
+public sealed record EmRiscoHojeResponse(int Estourados, int VencemEmUmaHora);
+
+public sealed record GargaloHojeResponse(Guid? EquipeId, int Quantidade);
