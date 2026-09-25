@@ -128,6 +128,48 @@ public sealed class DashboardIntegracaoTests(IntegracaoFixture fixture) : Integr
         }
     }
 
+    // RF-46a/b (fatia 6): ritmo em todas as visões e "Seu tempo por tipo de ato" na restrita. Duração
+    // fixada pelo ajuste manual (36 min, vai inteira pro dono atual — ADR-0035) e referência informada
+    // (18 min) pro número ser exato: ritmo 2,00.
+    [Fact]
+    public async Task Ritmo_EmTodasAsVisoes_EMeuTempoPorTipoNaRestrita()
+    {
+        var ids = await ImportarEstouradosAsync(1);
+        var conferente = await AutenticarComoAsync(Papel.Conferente);
+        await ConcluirAsync(conferente, ids[0], aprovado: true);
+
+        var admin = await AutenticarComoAsync(Papel.Administrador);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PostAsJsonAsync($"/protocolos/{ids[0]}/ajustar-duracao", new { duracaoMinutos = 36, motivo = "teste" })).StatusCode);
+        var tipo = (await admin.GetFromJsonAsync<JsonElement>("/tipos-ato/com-uso?busca=Dashboard E2E")).GetProperty("itens")[0];
+        var tipoId = tipo.GetProperty("id").GetGuid();
+        Assert.Equal(1.00m, tipo.GetProperty("pesoComplexidade").GetDecimal());
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await admin.PutAsJsonAsync($"/tipos-ato/{tipoId}/tempo-referencia", new { minutos = 18 })).StatusCode);
+
+        var distribuidora = await AutenticarComoAsync(Papel.Distribuidora);
+        var gestao = await distribuidora.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+        Assert.Equal(2.0, gestao.GetProperty("kpis").GetProperty("ritmo").GetDouble(), 10);
+        Assert.Equal(JsonValueKind.Null, gestao.GetProperty("kpisAnterior").GetProperty("ritmo").ValueKind);
+        var linha = gestao.GetProperty("desempenho")[0];
+        Assert.Equal(JsonValueKind.Null, linha.GetProperty("score").ValueKind); // distribuidora não vê score...
+        Assert.Equal(2.0, linha.GetProperty("ritmo").GetDouble(), 10);          // ...mas vê ritmo
+        Assert.Equal("00:18:00", linha.GetProperty("tempoMedioReferencia").GetString());
+        Assert.Equal(JsonValueKind.Null, gestao.GetProperty("meuTempoPorTipo").ValueKind);
+
+        var restrita = await conferente.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+        Assert.Equal(2.0, restrita.GetProperty("kpis").GetProperty("ritmo").GetDouble(), 10);
+        Assert.Equal(2.0, restrita.GetProperty("mediaDaCasa").GetProperty("ritmo").GetDouble(), 10);
+        var porTipo = restrita.GetProperty("meuTempoPorTipo").EnumerateArray().Single();
+        Assert.Equal(tipoId, porTipo.GetProperty("tipoAtoId").GetGuid());
+        Assert.Equal(1, porTipo.GetProperty("atos").GetInt32());
+        Assert.Equal("00:36:00", porTipo.GetProperty("meuTempoMedio").GetString());
+        Assert.Equal(18, porTipo.GetProperty("referenciaMinutos").GetInt32());
+        Assert.False(string.IsNullOrEmpty(porTipo.GetProperty("nome").GetString()));
+    }
+
     private async Task<Guid[]> ImportarEstouradosAsync(int quantidade)
     {
         var andamento = DateTimeOffset.UtcNow.AddDays(-10);

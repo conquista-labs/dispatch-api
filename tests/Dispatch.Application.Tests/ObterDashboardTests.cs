@@ -63,7 +63,7 @@ public class ObterDashboardTests
         return configuracao;
     }
 
-    // Ana: 2 atos simples (peso 1), no prazo e aprovados. Bruno: 1 ato difícil (peso 3), estourado e
+    // Ana: 2 atos simples (peso 0,50), no prazo e aprovados. Bruno: 1 ato difícil (peso 1,50), estourado e
     // reprovado. Normalizando pelo melhor do grupo: Ana tem volume 1, prazo 1, qualidade 1,
     // complexidade 1/3; Bruno volume 1/2, prazo 0, qualidade 0, complexidade 1.
     private static (ObterDashboard CasoDeUso, Conferente Ana, Conferente Bruno) CenarioAnaEBruno(Configuracao? configuracao = null)
@@ -72,8 +72,8 @@ public class ObterDashboardTests
         var usuarioB = NovoUsuario("Bruno");
         var ana = NovoConferente(usuarioA.Id);
         var bruno = NovoConferente(usuarioB.Id);
-        var simples = new TipoAto(Guid.NewGuid(), "Procuração", pesoComplexidade: 1);
-        var dificil = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 3);
+        var simples = new TipoAto(Guid.NewGuid(), "Procuração", pesoComplexidade: 0.50m);
+        var dificil = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 1.50m);
         var concluidoEm = Agora.AddDays(-1);
         var protocolos = new[]
         {
@@ -180,7 +180,7 @@ public class ObterDashboardTests
     {
         var usuario = NovoUsuario("Ana");
         var conferente = NovoConferente(usuario.Id);
-        var tipo = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 3);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 2.50m);
         var protocolo = NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-1));
         var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario]);
 
@@ -190,7 +190,7 @@ public class ObterDashboardTests
         Assert.Equal("Ana", desempenho.Nome);
         Assert.Equal(1, desempenho.Volume);
         Assert.Equal(1.0, desempenho.PercentualAprovado);
-        Assert.Equal(3, desempenho.ComplexidadeMedia);
+        Assert.Equal(2.5, desempenho.ComplexidadeMedia);
         // Sozinho no grupo: é o próprio máximo em volume e complexidade → pontuação cheia nas
         // duas parcelas (40 + 10), mais prazo (sem vencimento definido = considerado no prazo,
         // 30) e qualidade (aprovado, 20) = 100.
@@ -563,7 +563,7 @@ public class ObterDashboardTests
 
         var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
 
-        Assert.Equal(new KpisDashboard(0, 0, 0, null, null), resultado.KpisAnterior);
+        Assert.Equal(new KpisDashboard(0, 0, 0, null, null, null), resultado.KpisAnterior);
         Assert.Null(resultado.Kpis.PercentualAprovadoNaPrimeira);
     }
 

@@ -103,10 +103,42 @@ public sealed class Protocolo
     // reaberto mostraria só a duração da última rodada, escondendo o tempo real que ficou em
     // conferência desde o início. Um ajuste manual (AjustarDuracao) sobrescreve esse cálculo —
     // o valor mais recente em AjustesDeDuracao, se houver, sempre vence.
-    public TimeSpan? Duracao =>
-        DuracaoAjustada ?? (IniciadoEm is { } inicio && ConcluidoEm is { } fim
-            ? _ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo.Duracao)
+    public TimeSpan? Duracao => CalcularDuracao(DuracaoAjustada, IniciadoEm, ConcluidoEm, _ciclosAnteriores.Select(c => c.Duracao));
+
+    // A mesma conta de Duracao sobre valores soltos — a mediana do tempo de referência (RF-46c) projeta
+    // só estes campos do histórico de 12 meses em vez de materializar cada Protocolo (Infrastructure).
+    public static TimeSpan? CalcularDuracao(
+        TimeSpan? ultimoAjuste, DateTimeOffset? iniciadoEm, DateTimeOffset? concluidoEm, IEnumerable<TimeSpan> ciclosAnteriores) =>
+        ultimoAjuste ?? (iniciadoEm is { } inicio && concluidoEm is { } fim
+            ? ciclosAnteriores.Aggregate(fim - inicio, (soma, ciclo) => soma + ciclo)
             : null);
+
+    // ADR-0032/0035: o tempo deste ato repartido por quem o conferiu — um item por ciclo já encerrado
+    // (CiclosAnteriores, cada um de quem o fez) mais o ciclo final (do dono atual). Com ajuste manual, o
+    // valor corrigido substitui a conta inteira e vai todo pro dono atual. Base do tempo médio por
+    // conferente e do ritmo (RF-46a) no Dashboard.
+    public IReadOnlyList<(Guid ConferenteId, TimeSpan Duracao)> TemposPorConferente()
+    {
+        if (_ajustesDeDuracao.Count > 0)
+        {
+            return DonoId is { } donoAjustado && Duracao is { } duracaoAjustada ? [(donoAjustado, duracaoAjustada)] : [];
+        }
+
+        var tempos = _ciclosAnteriores.Select(c => (c.ConferenteId, c.Duracao)).ToList();
+        if (DonoId is { } dono && IniciadoEm is { } inicio && ConcluidoEm is { } fim)
+        {
+            tempos.Add((dono, fim - inicio));
+        }
+
+        return tempos;
+    }
+
+    // Soma dos pedaços deste ato que foram de `conferenteId`; nulo se nenhum foi.
+    public TimeSpan? TempoDe(Guid conferenteId)
+    {
+        var dele = TemposPorConferente().Where(t => t.ConferenteId == conferenteId).ToList();
+        return dele.Count == 0 ? null : dele.Aggregate(TimeSpan.Zero, (soma, t) => soma + t.Duracao);
+    }
 
     public Protocolo(
         Guid id, string numero, Guid? tipoAtoId, Guid escreventeId, Etapa etapa, DateTimeOffset andamentoEm,

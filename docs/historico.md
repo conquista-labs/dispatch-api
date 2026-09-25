@@ -1010,3 +1010,56 @@ score recalculado depois do PUT, cache invalidado). Migration aplicada no Postgr
 distribuidora, dashboard por papel, pesos 10/20/30/40 mudando score e faixa, configuração restaurada).
 Suíte de integração rodada 4× seguidas sem falha. 647 testes (214 Domain + 372 Application + 61
 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Tempo de referência por tipo de ato e ritmo (fatias 5 e 6 do Dashboard v2)
+
+Contrato das fatias 5 + 6 do `PLANO-dashboard-v2.md` (RF-34a, RF-34f, RF-46a/b/c, RF-18a) e as decisões
+do dono de 25/09/2026. [ADR-0043](decisions/0043-tempo-de-referencia-calculado-na-leitura.md) (tempo de
+referência: precedência, onde calcular, sem cache) e
+[ADR-0044](decisions/0044-ritmo-so-dos-atos-concluidos.md) (ritmo só dos atos concluídos).
+- **Domain**: `PesoDeComplexidade` (decimal 0,50–2,50, passo 0,05, `Validar`); `TempoDeReferencia`
+  (`Calcular` — informado → mediana ≥ 30 em 12 meses com descarte > 4× a estimativa → estimativa
+  `round(TempoMedioPorAtoMinutos × peso)`, arredondamento escolar, mínimo 1 min; `ValidarInformado` 2–240)
+  e `OrigemTempoReferencia`; `Ritmo`/`AtoParaRitmo`/`RitmoCalculado` (razão de somas, nulo sem ato
+  elegível, `MediaSimples`); `DuracaoDeConferencia` (recorte leve). `TipoAto.PesoComplexidade` vira
+  `decimal` e ganha `TempoReferenciaMinutos` + `DefinirTempoDeReferencia` (os dois validam e lançam).
+  `Protocolo` ganha `CalcularDuracao` (estática, a mesma conta de `Duracao`), `TemposPorConferente()` (a
+  repartição por ciclo que `ObterDashboard.ConstruirTemposPorConferente` fazia inline) e `TempoDe(id)`.
+- **Migration** `ConverteTempoDeReferenciaEPesoDecimalEmTiposAto`: `peso_complexidade` int → `numeric(3,2)`
+  **convertendo o dado** no `USING` (1→1,00 · 2→1,25 · 3→1,50 · 4→1,75 · 5→2,00; ≤ 0 → 0,50; ≥ 6 → 2,50),
+  tira o `DEFAULT 1` antigo, `tempo_referencia_minutos int NULL`, e dois `CHECK` depois da conversão.
+  `Down()` pelo mapa inverso. **Precisa ir ao Neon antes do merge.**
+- **Porta** `IProtocoloRepository.ObterDuracoesConcluidasPorTipoAsync(tipoIds, desde)`: projeção (tipo,
+  início/fim, ciclos, último ajuste) das Aprovado/Reprovado da janela, soma via `Protocolo.CalcularDuracao`.
+  `ReferenciasDeTempoEmLote` (Application): uma chamada por listagem.
+- **Tipos de ato**: `GET /tipos-ato` ganha `pesoComplexidade`; `GET /tipos-ato/com-uso` ganha
+  `pesoComplexidade` decimal e `tempoReferencia` (calculado só pros tipos da página); `PUT
+  /tipos-ato/{id}/peso` aceita decimal e devolve 400 `{ motivo }` fora da faixa/passo (sai o clamp
+  silencioso); novo `PUT /tipos-ato/{id}/tempo-referencia { minutos: int | null }` (caso de uso
+  `DefinirTempoDeReferenciaDoTipoAto`, só Administrador, no grupo de gestão de tipos).
+- **Dashboard**: `ritmo` e `tempoMedioReferencia` em cada linha de `desempenho` (todas as visões, a
+  distribuidora inclusive) e na `mediaDaCasa`; `kpis.ritmo`/`kpisAnterior.ritmo` (gestão: Σ duração ÷ Σ
+  referência; restrita: o dela); `meuTempoPorTipo` na visão restrita (`null` na gestão);
+  `complexidadeMedia` = média dos pesos decimais. `CalculoDeRitmo` (Application) monta os atos.
+- Importação, `CriarTipoAto` e `AplicarSugestao` (tipo desconhecido) continuam criando tipo com o peso
+  padrão — agora `1.00m`. Gaps §35 fechado, §26 parcial (indicador "tipos em estimativa" e origem do tipo).
+
+Verificado: `TempoDeReferenciaTests` (estimativa e arredondamento 22,5→23, mínimo 1, precedência, 29 × 30
+conferências, mediana par/ímpar/segundos/mínimo, descarte na borda exata de 4×, descarte antes do mínimo,
+descarte pela estimativa com informado, validações de peso/tempo, `TipoAto` recusando valor inválido),
+`RitmoTests` (Σ/Σ ≠ média das razões, exemplo 0,76× do RF-46b, ato sem tipo e sem tempo fora, nulo sem
+elegível, média simples), `TempoPorConferenteTests` (reaberto e reatribuído, pausa, ajuste manual,
+`CalcularDuracao`); `ObterDashboardRitmoTests` (7: ritmo por pessoa/operação/trecho anterior com uma busca
+de histórico, visão restrita com média da casa e `meuTempoPorTipo`, ordenação por volume, só o ciclo de
+quem concluiu, mediana de 12 meses ignorando o mais antigo, nulo sem elegível, complexidade decimal);
+`ListarTiposAtoComUsoTests` (+1: três origens, uma busca só da página); casos de uso de peso e tempo.
+Integração (`TipoAtoTempoDeReferenciaIntegracaoTests`, 8): ida e volta do decimal e do informado no
+Postgres, "usar histórico" voltando à estimativa, 400 com motivo (peso 3, 1,33; tempo 1, 241), 404,
+`CHECK` do banco recusando 1,33 por SQL, e a **migration contra Postgres real** num banco à parte
+(migrado até a anterior, pesos 1–5/0/9 semeados, `Up` → 1,00…2,00/0,50/2,50 lidos também pela entidade,
+`Down` de volta); `DashboardIntegracaoTests` (+1: ritmo 2,00 com ajuste de 36 min e referência 18 nas
+três visões, `meuTempoPorTipo` em camelCase); `AdministradorIntegracaoTests` (+1 rota em
+`EscritasSoDoAdmin`). Migration aplicada no Postgres local (71 tipos, todos 1 → 1,00). Smoke com `dotnet
+run` na porta 5299 e token real das três contas (com-uso com `tempoReferencia`, PUT peso/tempo 204, 400s
+com motivo, 404, 403 distribuidora, dashboard nas três visões com ritmo; dado local restaurado). 723
+testes (266 Domain + 386 Application + 71 Api.Tests), build sem avisos.

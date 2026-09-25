@@ -222,6 +222,21 @@ internal sealed class FakeProtocoloRepository : IProtocoloRepository
             _protocolos.Where(p => p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
                 && p.ConcluidoEm >= desde && p.ConcluidoEm < ate).ToList());
 
+    public Task<IReadOnlyCollection<DuracaoDeConferencia>> ObterDuracoesConcluidasPorTipoAsync(
+        IReadOnlyCollection<Guid> tipoAtoIds, DateTimeOffset desde, CancellationToken cancellationToken)
+    {
+        ChamadasDeDuracoes++;
+        return Task.FromResult<IReadOnlyCollection<DuracaoDeConferencia>>(
+            _protocolos
+                .Where(p => p.Status is StatusProtocolo.Aprovado or StatusProtocolo.Reprovado
+                    && p.ConcluidoEm >= desde && p.TipoAtoId is { } tipo && tipoAtoIds.Contains(tipo) && p.Duracao is not null)
+                .Select(p => new DuracaoDeConferencia(p.TipoAtoId!.Value, p.Duracao!.Value))
+                .ToList());
+    }
+
+    // Quantas vezes o histórico de durações foi buscado — prova "uma consulta por listagem" (sem N+1).
+    public int ChamadasDeDuracoes { get; private set; }
+
     public Task<IReadOnlyCollection<(Guid RegraAlcadaId, int Total)>> ContarPorRegraAplicadaAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyCollection<(Guid RegraAlcadaId, int Total)>>(
             _protocolos

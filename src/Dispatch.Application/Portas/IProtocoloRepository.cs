@@ -59,6 +59,14 @@ public interface IProtocoloRepository
     Task<IReadOnlyCollection<Protocolo>> ObterConcluidosNoPeriodoAsync(
         DateTimeOffset desde, DateTimeOffset ate, CancellationToken cancellationToken);
 
+    // RF-46c (mediana do tempo de referência): a duração (Protocolo.Duracao — ciclos + ajuste manual) de
+    // cada conferência Aprovada/Reprovada com `ConcluidoEm >= desde`, só dos tipos pedidos. Projetada no
+    // recorte leve (tipo + duração) numa query só — o histórico de 12 meses de um tipo pode ter milhares
+    // de linhas, e materializar Protocolo traria colunas e pausas que a conta não usa. Linha sem duração
+    // (nunca iniciada) não vem.
+    Task<IReadOnlyCollection<DuracaoDeConferencia>> ObterDuracoesConcluidasPorTipoAsync(
+        IReadOnlyCollection<Guid> tipoAtoIds, DateTimeOffset desde, CancellationToken cancellationToken);
+
     // RF-33: "contador de aplicações" de cada regra de alçada — leitura agregada, igual
     // CargaAtual/Semaforo, nunca persistida na própria regra. Em lote (uma query agrupada, não
     // uma por regra) — achado numa investigação de lentidão real em produção: GET
