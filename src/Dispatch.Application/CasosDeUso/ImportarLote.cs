@@ -59,8 +59,17 @@ public sealed class ImportarLote(
         var equipesTodas = await equipes.ObterTodasAsync(cancellationToken);
         var conferentesNaEscala = await conferentes.ObterNaEscalaAsync(cancellationToken);
         var regrasAtivas = await regras.ObterAtivasAsync(cancellationToken);
+        // Tipo de ato casa ignorando caixa E acento (NormalizadorDeTexto.ComparadorDeNome): o
+        // relatório diz "INVENTARIO", o catálogo tem "Inventário" — com OrdinalIgnoreCase virava
+        // tipo novo e a confirmação cadastrava duplicata. O mesmo dicionário serve à prévia e à
+        // confirmação (as duas passam por aqui). O catálogo pode já ter duplicata por acento
+        // criada antes desta correção, e ToDictionary explodiria com chave repetida: fica um por
+        // nome — o ativo (desativar a duplicata na tela Tipos de ato decide qual vale), desempate por Id.
         var tipoPorNome = (await tiposAto.ObterTodosAsync(cancellationToken))
-            .ToDictionary(t => t.Nome, StringComparer.OrdinalIgnoreCase);
+            .OrderByDescending(t => t.Ativo)
+            .ThenBy(t => t.Id)
+            .DistinctBy(t => t.Nome, NormalizadorDeTexto.ComparadorDeNome)
+            .ToDictionary(t => t.Nome, NormalizadorDeTexto.ComparadorDeNome);
 
         // Continuidade de conferência (pedido do dono, não é RF numerado — ver
         // ResolvedorDeContinuidade): busca em lote o histórico de todos os números relevantes
@@ -75,7 +84,7 @@ public sealed class ImportarLote(
         var atribuicoes = new Dictionary<Guid, int>();
         var enviadosParaPool = 0;
         var excecoes = 0;
-        var tiposDesconhecidos = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tiposDesconhecidos = new SortedSet<string>(NormalizadorDeTexto.ComparadorDeNome);
         var escreventesSemEquipe = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var linhasPreview = persistir ? null : new List<LinhaPreviaImportacao>();
 

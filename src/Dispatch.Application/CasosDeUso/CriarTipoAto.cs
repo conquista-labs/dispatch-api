@@ -12,7 +12,8 @@ public sealed class CriarTipoAto(ITipoAtoRepository tiposAto, IUnitOfWork unitOf
     {
         var nomeNormalizado = NormalizadorDeTexto.ParaNomeProprio(nome);
         var existentes = await tiposAto.ObterTodosAsync(cancellationToken);
-        if (existentes.Any(t => string.Equals(t.Nome, nomeNormalizado, StringComparison.OrdinalIgnoreCase)))
+        // Mesma comparação da importação (ignora caixa e acento): "Inventario" já existe se há "Inventário".
+        if (existentes.Any(t => NormalizadorDeTexto.ComparadorDeNome.Equals(t.Nome, nomeNormalizado)))
         {
             return new ResultadoCriarTipoAto.JaExiste();
         }

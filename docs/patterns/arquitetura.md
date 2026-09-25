@@ -55,7 +55,8 @@ tests/
   ([ADR-0011](../decisions/0011-carga-atual-calculada-na-leitura.md)), `Duracao`, contador de usos de
   regra, uso de tipo de ato.
 - Todo "agora" vem de `IRelogio` injetado — inclusive "hoje" (`ObterConcluidosHoje`,
-  `ObterVisaoDistribuicao`). Nunca `DateTimeOffset.Now` direto.
+  `ObterVisaoDistribuicao`). Nunca `DateTimeOffset.Now` direto. "Hoje" é o dia de Brasília:
+  `FusoHorario.InicioDoDiaLocal(relogio.Agora)`, nunca `Agora.Date` (ver `motor-e-prazos.md`, "Fuso").
 
 ## Application: casos de uso
 

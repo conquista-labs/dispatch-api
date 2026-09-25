@@ -29,4 +29,20 @@ public class CriarTipoAtoTests
         Assert.IsType<ResultadoCriarTipoAto.JaExiste>(resultado);
         Assert.Equal(1, tiposAto.Quantidade);
     }
+
+    // Mesma comparação da importação (NormalizadorDeTexto.ComparadorDeNome): "Inventario" e
+    // "Inventário" são o mesmo tipo — sem isso o cadastro manual recriava a duplicata que a
+    // importação deixou de criar.
+    [Fact]
+    public async Task NomeJaExistente_SoComAcentoDiferente_NaoDuplica()
+    {
+        var existente = new Dispatch.Domain.TipoAto(Guid.NewGuid(), "Inventário");
+        var tiposAto = new FakeTipoAtoRepository([existente]);
+        var casoDeUso = new CriarTipoAto(tiposAto, new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync("INVENTARIO");
+
+        Assert.IsType<ResultadoCriarTipoAto.JaExiste>(resultado);
+        Assert.Equal(1, tiposAto.Quantidade);
+    }
 }

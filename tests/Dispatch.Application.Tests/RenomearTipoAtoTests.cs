@@ -53,4 +53,32 @@ public class RenomearTipoAtoTests
 
         Assert.IsType<ResultadoRenomearTipoAto.Sucesso>(resultado);
     }
+
+    [Fact]
+    public async Task NomeDeOutroTipoSoComAcentoDiferente_JaExiste()
+    {
+        var alvo = new TipoAto(Guid.NewGuid(), "Venda e Compra");
+        var outro = new TipoAto(Guid.NewGuid(), "Inventário");
+        var tiposAto = new FakeTipoAtoRepository([alvo, outro]);
+        var casoDeUso = new RenomearTipoAto(tiposAto, new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(alvo.Id, "Inventario");
+
+        Assert.IsType<ResultadoRenomearTipoAto.JaExiste>(resultado);
+        Assert.Equal("Venda e Compra", alvo.Nome);
+    }
+
+    // Corrigir o acento do próprio nome ("Inventario" -> "Inventário") não conflita consigo mesmo.
+    [Fact]
+    public async Task CorrigirOAcentoDoProprioNome_Renomeia()
+    {
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventario");
+        var tiposAto = new FakeTipoAtoRepository([tipo]);
+        var casoDeUso = new RenomearTipoAto(tiposAto, new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync(tipo.Id, "Inventário");
+
+        Assert.IsType<ResultadoRenomearTipoAto.Sucesso>(resultado);
+        Assert.Equal("Inventário", tipo.Nome);
+    }
 }

@@ -25,15 +25,18 @@ public sealed record Prazo(TipoPrazo Tipo, TimeOnly? HorarioDeVencimento = null)
         _ => throw new ArgumentOutOfRangeException(nameof(Tipo), Tipo, message: null)
     };
 
+    // Fim do dia de Brasília, não do dia UTC: a referência chega em UTC, e `.Date` dela dava a
+    // meia-noite UTC (21h em Brasília) — e, entre 21h e 24h locais, o fim do dia seguinte.
     private static DateTimeOffset FimDoDia(DateTimeOffset referencia) =>
-        new DateTimeOffset(referencia.Date, referencia.Offset).AddDays(1);
+        FusoHorario.InicioDoDiaLocal(referencia).AddDays(1);
 
     // "Considerar dia útil" (pedido explícito da operação): se o vencimento calculado cai num
     // sábado ou domingo, empurra pro próximo dia útil, no mesmo horário — não considera feriado,
-    // o sistema ainda não tem calendário de feriados.
+    // o sistema ainda não tem calendário de feriados. O dia da semana é o de Brasília (sexta 22h
+    // local já é sábado em UTC).
     private static DateTimeOffset ProximoDiaUtil(DateTimeOffset data)
     {
-        var diasParaEmpurrar = data.DayOfWeek switch
+        var diasParaEmpurrar = FusoHorario.ParaHorarioLocal(data).DayOfWeek switch
         {
             DayOfWeek.Saturday => 2,
             DayOfWeek.Sunday => 1,

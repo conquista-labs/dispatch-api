@@ -16,11 +16,12 @@ public class ImportarLoteTests
         IReadOnlyCollection<Conferente>? conferentes = null,
         IReadOnlyCollection<Escrevente>? escreventesIniciais = null,
         IReadOnlyCollection<Equipe>? equipes = null,
-        IReadOnlyCollection<Protocolo>? protocolosIniciais = null)
+        IReadOnlyCollection<Protocolo>? protocolosIniciais = null,
+        IReadOnlyCollection<TipoAto>? tiposIniciais = null)
     {
         escreventes = new FakeEscreventeRepository(escreventesIniciais ?? []);
         protocolos = new FakeProtocoloRepository(protocolosIniciais ?? []);
-        tiposAto = new FakeTipoAtoRepository([Inventario]);
+        tiposAto = new FakeTipoAtoRepository(tiposIniciais ?? [Inventario]);
         return new ImportarLote(
             escreventes,
             new FakeEquipeRepository(equipes ?? []),
@@ -140,6 +141,85 @@ public class ImportarLoteTests
         Assert.Equal(2, tiposAto.Quantidade);
         var protocolo = Assert.Single(protocolos.Todos);
         Assert.NotNull(protocolo.TipoAtoId);
+    }
+
+    // O relatório vem em caixa alta e sem acento ("INVENTARIO"); o catálogo tem "Inventário".
+    // Casar por OrdinalIgnoreCase (sensível a acento) tratava como tipo novo e a confirmação
+    // cadastrava um "Inventario" duplicado.
+    [Fact]
+    public async Task PreVisualizar_TipoSemAcentoNoRelatorio_CasaComOTipoAcentuadoDoCatalogo()
+    {
+        var linhas = new[] { new LinhaImportacao("262203", "INVENTARIO", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
+
+        var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+
+        Assert.Empty(resumo.TiposDesconhecidos);
+        Assert.True(Assert.Single(resumo.Linhas!).TipoConhecido);
+    }
+
+    [Fact]
+    public async Task Confirmar_TipoSemAcentoNoRelatorio_UsaOTipoExistenteSemCriarDuplicata()
+    {
+        var linhas = new[] { new LinhaImportacao("262203", "INVENTARIO", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out var tiposAto);
+
+        var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        Assert.Equal(1, tiposAto.Quantidade);
+        Assert.Empty(resumo.TiposDesconhecidos);
+        Assert.Equal(Inventario.Id, Assert.Single(protocolos.Todos).TipoAtoId);
+    }
+
+    [Fact]
+    public async Task TipoSoComCaixaDiferente_CasaComOCatalogoNaPreviaENaConfirmacao()
+    {
+        var vendaECompra = new TipoAto(Guid.NewGuid(), "Venda e Compra");
+        var linhas = new[] { new LinhaImportacao("262203", "venda e compra", "Fulano", LinhaDeCorte.AddHours(1)) };
+
+        var previa = await NovoCasoDeUso(out _, out _, out _, tiposIniciais: [Inventario, vendaECompra])
+            .PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out var tiposAto, tiposIniciais: [Inventario, vendaECompra]);
+        await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        Assert.True(Assert.Single(previa.Linhas!).TipoConhecido);
+        Assert.Equal(2, tiposAto.Quantidade);
+        Assert.Equal(vendaECompra.Id, Assert.Single(protocolos.Todos).TipoAtoId);
+    }
+
+    // Dentro do mesmo lote, a mesma grafia com e sem acento de um tipo que ainda não existe
+    // vira um tipo só — o recém-criado entra no mesmo dicionário usado pras linhas seguintes.
+    [Fact]
+    public async Task Confirmar_MesmoTipoNovoComESemAcentoNoLote_CadastraUmSo()
+    {
+        var linhas = new[]
+        {
+            new LinhaImportacao("262203", "ESCRITURA DE DOACAO", "Fulano", LinhaDeCorte.AddHours(1)),
+            new LinhaImportacao("262204", "ESCRITURA DE DOAÇÃO", "Fulano", LinhaDeCorte.AddHours(1))
+        };
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out var tiposAto);
+
+        var resumo = await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        Assert.Equal(2, tiposAto.Quantidade);
+        Assert.Single(resumo.TiposDesconhecidos);
+        Assert.Single(protocolos.Todos.Select(p => p.TipoAtoId).Distinct());
+    }
+
+    // Duplicata por acento já gravada antes da correção (o bug criava "Inventario" ao lado de
+    // "Inventário") não pode derrubar a importação com chave repetida no dicionário: vale a
+    // ativa — desativar a duplicata na tela Tipos de ato é o jeito de escolher qual fica.
+    [Fact]
+    public async Task CatalogoComDuplicataPorAcento_NaoQuebraEUsaATipoAtiva()
+    {
+        var duplicataInativa = new TipoAto(Guid.NewGuid(), "Inventario", ativo: false);
+        var linhas = new[] { new LinhaImportacao("262203", "INVENTARIO", "Fulano", LinhaDeCorte.AddHours(1)) };
+        var casoDeUso = NovoCasoDeUso(out _, out var protocolos, out var tiposAto, tiposIniciais: [duplicataInativa, Inventario]);
+
+        await casoDeUso.ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        Assert.Equal(2, tiposAto.Quantidade);
+        Assert.Equal(Inventario.Id, Assert.Single(protocolos.Todos).TipoAtoId);
     }
 
     [Fact]
