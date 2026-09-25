@@ -1,6 +1,6 @@
 ---
 name: indicadores-e-aprendizado
-description: Fórmulas e interpretações do Dashboard (score, faixa, visão restrita, tempo por ciclo) e do módulo de aprendizado sem IA (quatro propostas, limiares, dedup, descarte com memória, índice de confiança)
+description: Fórmulas e interpretações do Dashboard (período de calendário, variação, série, aprovado na 1ª, score, faixa, visão restrita, tempo por ciclo) e do módulo de aprendizado sem IA (quatro propostas, limiares, dedup, descarte com memória, índice de confiança)
 metadata:
   type: pattern
   domains: [dominio, dashboard, aprendizado, metricas]
@@ -20,17 +20,41 @@ metadata:
 
 ## Dashboard (`GET /dashboard?periodo=Semana|Mes|Trimestre`, RF-42 a RF-46)
 
-- **Período**: janela móvel a partir de `IRelogio.Agora` (7/30/90 dias), não mês calendário.
+- **Período** ([ADR-0041](../decisions/0041-periodo-do-dashboard-por-calendario.md)): **calendário no
+  dia de Brasília** (`CalendarioDoPeriodo`, Domain) — Semana = segunda 00:00 local até agora; Mes = dia
+  1; Trimestre = 1º de jan/abr/jul/out. Vale para tudo que o Dashboard calcula. `periodoInicio` e
+  `periodoFim` (UTC; fim = agora) vão na resposta. Até 2026-09-25 era janela móvel de 7/30/90 dias.
 - **Base**: `IProtocoloRepository.ObterConcluidosNoPeriodoAsync(desde, ate)` — todos os donos
-  (índice `(status, concluido_em)`).
+  (índice `(status, concluido_em)`), `ConcluidoEm` em `[inicio, fim)`.
+- **Variação (RF-42b)**: `kpisAnterior`, mesmo formato de `kpis`, sobre o **mesmo trecho** do período
+  anterior — início anterior = primeiro dia − 1 período no calendário local; fim anterior = início
+  anterior + (agora − início), **limitado ao início atual** (31/03 compara com fevereiro inteiro).
+  Segunda chamada ao mesmo `ObterConcluidosNoPeriodoAsync`, só com o trecho — não uma busca única que
+  traria o vão entre os dois. Visão restrita: também vem, com os números do próprio conferente (dono
+  atual; tempo pelos ciclos dele). O percentual da variação é conta do front.
+- **Série (RF-42c)** — `SerieDoPeriodo` (Domain): `granularidade` `Dia` (Semana/Mes) ou `Semana`
+  (Trimestre). Dia: um ponto por dia útil (seg–sex, dia local, **sem feriado**) do período **inteiro**;
+  sábado/domingo só entram se tiverem conferência. Semana: um ponto por segunda-feira, da semana que
+  contém o dia 1 do trimestre até a que contém o último dia (13–14 pontos; a 1ª pode começar no
+  trimestre anterior, mas só conta o que foi concluído dentro do período). Ponto =
+  `{ inicio: "yyyy-MM-dd", conferidos, estourados, futuro }`; `futuro` = o dia/segunda é depois de hoje
+  (hoje não é futuro), com zeros. `estourados` = concluídos depois do vencimento — o complemento do
+  `EstaNoPrazo`, a mesma definição do "no prazo". Visão restrita: só os protocolos dele (dono atual).
+- **"Aprovados na 1ª" (RF-43)**: `percentualAprovadoNaPrimeira` em `kpis`, `kpisAnterior`, cada linha
+  de `desempenho` e `mediaDaCasa` — das linhas concluídas no recorte com `NumeroDaConferencia == 1`
+  (RF-24k, [ADR-0038](../decisions/0038-numero-da-conferencia-calculado-na-leitura.md)), a fração com
+  `Status == Aprovado` **agora**: correção reprovado→aprovado dentro da janela conta (decisão 3 do dono
+  — vale o resultado atual da linha de 1ª rodada, sem gravar o original). `null` sem nenhuma 1ª
+  conferência (não é 0%). Na média da casa, média simples entre quem tem valor. Números em lote:
+  `NumeroDaConferenciaEmLote` sobre os dois trechos juntos, uma query.
 - **Score** (fórmula do **protótipo**; o requisito só nomeia fatores e pesos):
   `40·(volume/volumeMáxDoGrupo) + 30·%noPrazo + 20·%aprovado + 10·(complexidadeMédia/complexidadeMáxDoGrupo)`.
   Volume e complexidade normalizados pelo melhor do grupo; complexidade = peso médio do `TipoAto`
   (`PesoComplexidade`, RF-34f). As 4 parcelas vão **já ponderadas** ("32.4 / 40").
 - **Faixa**: `≥85` Integral, `≥70` Parcial, abaixo Fora (limiares do protótipo).
-- **Simplificação consciente**: "% aprovado" usa o resultado **atual** (`Status == Aprovado`), não
-  "aprovado na 1ª" — não há histórico do resultado original antes de uma correção; inferir por
-  `CorrigidoEm == null` não é confiável o bastante para bonificação (ver gaps).
+- **Qualidade no score**: `percentualAprovado` (todas as linhas, resultado atual) continua sendo a
+  parcela de 20 — o "aprovado na 1ª" é só KPI/coluna por enquanto. Trocar a parcela é decisão do dono
+  (mexe em bonificação).
 - **"No prazo"**: `EstaNoPrazo` único, reaproveitado por KPIs, desempenho e cumprimento por equipe.
 - **Cumprimento de prazo por equipe** (RF-43): agrupado por `(EquipeId do escrevente, Etapa)` —
   prazos diferem por etapa; "sem equipe" é grupo próprio (`EquipeNome: "sem equipe"`, prazo real
@@ -106,5 +130,5 @@ Sem tabela `evento_decisao` ([ADR-0009](../decisions/0009-aprendizado-sem-tabela
 
 ## Referências
 
-- ADR-0009, ADR-0012, ADR-0032, ADR-0035.
-- `docs/gaps-requisitos.md` (ritmo, metas, pesos configuráveis, exportar CSV, "aprovado na 1ª").
+- ADR-0009, ADR-0012, ADR-0032, ADR-0035, ADR-0038, ADR-0041.
+- `docs/gaps-requisitos.md` (ritmo, metas, pesos configuráveis, exportar CSV).

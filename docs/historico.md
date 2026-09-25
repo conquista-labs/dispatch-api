@@ -943,3 +943,34 @@ empates, visão do conferente); `PainelDeHojeIntegracaoTests` (3: sem token 401,
 e conferente → Conferente com números de um fluxo real importar → pegar → iniciar → concluir,
 administrador → Gestao). Smoke com `dotnet run` numa porta alternativa e token real das três contas.
 566 testes (167 Domain + 348 Application + 51 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Período de calendário, variação, série e aprovado na 1ª (fatias 3 e 4 do Dashboard v2)
+
+`GET /dashboard?periodo=` ganha os acréscimos do contrato das fatias 3 + 4 do `PLANO-dashboard-v2.md`
+(nada removido). Sem migration.
+- **Período por calendário** no dia de Brasília (decisão 1 do dono, [ADR-0041](decisions/0041-periodo-do-dashboard-por-calendario.md)):
+  `CalendarioDoPeriodo` (Domain) — Semana desde segunda, Mes desde o dia 1, Trimestre desde
+  jan/abr/jul/out — no lugar da janela móvel 7/30/90. `FusoHorario` ganhou `DiaLocal` e `InicioDoDia`.
+  Resposta com `periodoInicio`/`periodoFim`.
+- **`kpisAnterior`** (RF-42b): mesmo trecho do período anterior, limitado ao início atual; segunda
+  chamada ao mesmo `ObterConcluidosNoPeriodoAsync`. Também na visão restrita (números dela).
+- **`serie`** (RF-42c): `SerieDoPeriodo` (Domain) — Dia (dias úteis do período inteiro, `futuro` nos que
+  não chegaram, fim de semana só com conferência) ou Semana (trimestre, uma por segunda, 13–14 pontos);
+  estourados = complemento do `EstaNoPrazo`. Visão restrita: só dela.
+- **`percentualAprovadoNaPrimeira`** (RF-43, decisão 3 do dono) em `kpis`, `kpisAnterior`, `desempenho`
+  e `mediaDaCasa`: linhas com `NumeroDaConferencia == 1` (ADR-0038, via `NumeroDaConferenciaEmLote` sobre
+  os dois trechos, uma query) com status Aprovado agora; `null` sem 1ª conferência. Score não mudou.
+- Regras: `docs/patterns/indicadores-e-aprendizado.md`, "Dashboard". Gaps §33 fechado, §36 só com as
+  metas (fatia 2) em aberto.
+
+Verificado: `CalendarioDoPeriodoTests` (17: segunda de Brasília, domingo à noite que já é segunda UTC,
+virada de mês, trimestres, mesmo trecho com fevereiro limitado, virada de ano, duração zero, último dia
+e bissexto), `SerieDoPeriodoTests` (7: dias úteis e futuros, dia de Brasília, fim de semana com
+volume, mês inteiro, trimestre em 14 e em 13 semanas, conclusão fora do período), `FusoHorarioTests`
+(+2); `ObterDashboardTests` (+11: semana e mês de calendário, trecho anterior, visão restrita da
+variação, aprovado na 1ª com 2ª rodada fora e correção contando, nulo sem 1ª conferência, média da casa,
+série gestão/restrita/trimestre); `DashboardIntegracaoTests` (2: JSON com os campos novos nas duas
+visões, fluxo real importar → pegar → iniciar → concluir; trimestre por semana). Smoke com `dotnet run`
+na porta 5299 e token real (administrador e conferente, Mes e Trimestre; 401 sem token, 400 com
+período inválido): soma da série = `atosConferidos`. 608 testes (196 Domain + 359 Application + 53
+Api.Tests), build sem avisos.
