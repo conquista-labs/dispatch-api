@@ -89,7 +89,8 @@ vira ADR (skill `/api-adr`), lição nova vai pro pattern doc ou pra skill.**
 - **`/ef-migration`** — criar e aplicar migration (schema só muda por migration).
 - **`/api-testing-strategy`** — que teste a mudança precisa e onde ele vive.
 - **`/verify-integration`** — validar comportamento real pela HTTP (teste de integração + smoke manual).
-- **`/api-commit`** — da árvore verificada para commits no `main` (push só quando pedido — é deploy).
+- **`/api-commit`** — da árvore verificada até um PR aberto (branch + `gh pr create`; nada direto no
+  `main`, o hook bloqueia). Merge só quando o dono pedir — merge no `main` é deploy.
 - **`/prod-ops`** — qualquer coisa que toque produção (migration no Neon, SQL avulso, clone, conferir
   deploy), com as travas de confirmação e segredo.
 - **`/api-adr`** — registrar decisão com alternativas reais em `docs/decisions/`, com numeração e
@@ -119,8 +120,8 @@ dotnet reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:coverager
 ## Deploy
 
 Produção em `https://lab-dispatch-api.onrender.com` (Render, `render.yaml`), banco no Neon, front em
-`https://lab-dispatch-web.netlify.app`. **Push em `main` já é deploy** — migration que o código novo
-precisa tem de estar aplicada no Neon antes. Secrets só no dashboard do Render. Procedimentos (env
+`https://lab-dispatch-web.netlify.app`. **Merge em `main` já é deploy** (toda mudança chega por PR) —
+migration que o código novo precisa tem de estar aplicada no Neon antes do merge. Secrets só no dashboard do Render. Procedimentos (env
 vars, migration em produção, primeira conta, clone anonimizado): `docs/patterns/deploy.md`.
 
 ## Armadilhas que toda sessão precisa saber

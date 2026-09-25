@@ -1,19 +1,23 @@
 ---
 name: api-commit
-description: Leva uma mudança terminada do dispatch-api da árvore de trabalho pra commits no main — confere que o gate rodou nesta árvore, separa um commit por assunto, escreve a mensagem na voz do repositório e só faz push quando o usuário pedir (push no main é deploy no Render). Use quando o usuário pedir "commita", "fecha o commit", "sobe isso", ou ao terminar uma tarefa que ele pediu pra commitar.
+description: Leva uma mudança terminada do dispatch-api da árvore de trabalho até um pull request aberto — branch, gate rodado nesta árvore, um commit por assunto na voz do repositório, push e `gh pr create`; o merge (que é deploy no Render) só quando o usuário pedir. Use quando o usuário pedir "commita", "abre o PR", "sobe isso", ou ao terminar uma tarefa que ele pediu pra entregar.
 ---
 
 # api-commit
 
-Adaptado da metade "commits" da skill `/mr` do swap-benefits-web. Aqui não há branch nem PR: o
-dispatch-api commita direto no `main` (GitHub `conquista-labs/dispatch-api`).
+Adaptado da skill `/mr` do swap-benefits-web. **Toda mudança sai por branch + pull request** no
+GitHub (`conquista-labs/dispatch-api`) — decisão do dono de 25/09/2026. Commit e push no `main` são
+bloqueados pelo hook `guard-git.py`.
 
-> **Push no `main` é deploy.** O Render faz auto-deploy a cada push. Migration nova roda contra o
-> Neon de produção no boot. Push só quando o usuário pedir, e avisando o que vai junto (migration,
-> mudança de autorização, mudança de contrato que o front ainda não acompanha).
+> **Merge no `main` é deploy.** O Render faz auto-deploy a cada push no `main`. A migration que o
+> código novo precisa tem de estar aplicada no Neon **antes** do merge (skill `prod-ops`). O PR diz
+> o que vai junto (migration, mudança de autorização, mudança de contrato que o front ainda não
+> acompanha).
 
 ## Pré-condições — confira, não suponha
 
+0. **Está numa branch, não no `main`.** Senão: `git switch -c <tipo>/<assunto-em-kebab-case>`
+   (`feat/`, `fix/`, `chore/`, `docs/`, `test/`), em português.
 1. **O `api-gate` rodou nesta árvore exata** (build + unidade + integração com Testcontainers). Se
    algo mudou depois, rode de novo. Nunca escreva no commit uma verificação que não rodou.
 2. `git status --short` mostra só o que você quis mudar. Pode haver outra sessão no mesmo checkout:
@@ -48,12 +52,21 @@ Correção de bug e feature nova são dois commits. Quando um arquivo cobre dois
 - Nunca `--no-verify` nem `--amend` em commit que já foi pro remoto (o hook `guard-git.py` bloqueia
   os destrutivos).
 
-## Push
+## Push e PR
 
-Só quando o usuário pedir: `git push origin main`, e depois acompanhe o deploy no Render (health
-em `/health`) se ele quiser. Force push é bloqueado.
+Depois dos commits, sem perguntar de novo (o usuário já pediu a entrega):
+
+1. `git push -u origin <branch>` (push de branch não publica — o Render só observa o `main`).
+2. `gh pr create --base main --head <branch> --title "<tipo(escopo): resumo>" --body-file <arquivo>`.
+   Corpo com **O que entra**, **Decisões que valem leitura**, **Armadilhas** (sempre: "merge é
+   deploy" e o que isso publica), **Verificação** (números exatos) e **Fora de escopo**; termina
+   com a linha de atribuição de PR que a sessão fornece.
+
+**Merge só quando o usuário pedir** ("pode mergear", "vamos subir"): `gh pr merge <n> --merge`,
+depois acompanhe o deploy (skill `prod-ops` → "Conferir um deploy"; o OpenAPI de produção mostra
+campo/rota nova quando a versão entrou), `git switch main && git pull --ff-only` e
+`git branch -d <branch>`. Force push é bloqueado.
 
 ## Relatório
 
-Uma linha por commit (`hash assunto`), o que ficou de fora e por quê, se houve push e o que ele
-publicou.
+Uma linha por commit (`hash assunto`), o link do PR, o que ficou de fora e por quê.

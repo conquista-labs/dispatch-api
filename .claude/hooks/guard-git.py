@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse (Bash): recusa comando git que destrói trabalho ou escreve fora do Dispatch.
 
-Adaptado do `block-protected-branch.py` do swap-benefits-web. Aqui não existe branch protegida
-(os dois repositórios commitam direto no `main`), então as regras são sobre não perder trabalho:
+Adaptado do `block-protected-branch.py` do swap-benefits-web. Três regras:
 
 1. **Escrita git fora do Dispatch.** Só `dispatch-web` e `dispatch-api` são nossos. Outros
    repositórios da máquina (os da Swap, por exemplo) podem ser lidos (`log`, `show`, `diff`,
@@ -12,6 +11,9 @@ Adaptado do `block-protected-branch.py` do swap-benefits-web. Aqui não existe b
    (`--no-verify`). Mais de uma sessão pode estar trabalhando no mesmo checkout (há worktrees em
    `.claude/worktrees/`), e essas operações apagam o que outra deixou sem commitar. Se o usuário
    pediu isso explicitamente, ele roda o comando com `!` no prompt.
+3. **Commit ou push no `main`.** Toda mudança sai por branch + pull request (decisão do dono,
+   25/09/2026): merge no `main` do dispatch-api é deploy no Render, e o PR é onde o dono revisa.
+   `git switch -c`/`checkout -b` numa cláusula anterior do mesmo comando libera as seguintes.
 
 O comando é **tokenizado por cláusula** (`shlex`), não casado por regex: `git show HEAD:x/push.ts`
 não é push, e um `--force` dentro da mensagem de um commit não é push forçado.
@@ -24,6 +26,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 # Repositórios do Dispatch: irmãos na pasta do workspace (`dispatch/`).
@@ -37,6 +40,8 @@ ESCRITAS = {
 # `git branch`/`git tag` só escrevem com uma destas flags (sem elas é leitura: `--show-current`).
 ESCRITAS_CONDICIONAIS = {"branch", "tag"}
 FLAGS_QUE_ESCREVEM = {"-d", "-D", "-m", "-M", "-f", "--delete", "--move", "--force", "--copy", "-c"}
+
+BRANCHES_PROTEGIDAS = {"main"}
 
 OPCOES_GLOBAIS_COM_VALOR = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 SEPARADORES = re.compile(r"&&|\|\||[;|\n]")
@@ -112,6 +117,28 @@ def motivo_destrutivo(subcomando: str, tokens: list[str]) -> str | None:
     return None
 
 
+def branch_atual(repo: str) -> str:
+    try:
+        return subprocess.run(
+            ["git", "-C", repo, "branch", "--show-current"],
+            capture_output=True, text=True, timeout=5, check=False,
+        ).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def cria_branch(subcomando: str, tokens: list[str]) -> bool:
+    args = tokens[1:]
+    return (subcomando == "switch" and any(a in {"-c", "-C", "--create"} for a in args)) or (
+        subcomando == "checkout" and any(a in {"-b", "-B"} for a in args)
+    )
+
+
+def empurra_main(tokens: list[str]) -> bool:
+    """`git push origin main` / `HEAD:main` / `feat:main` — empurra o main mesmo fora dele."""
+    return any(a in BRANCHES_PROTEGIDAS or a.split(":")[-1] in BRANCHES_PROTEGIDAS for a in tokens[1:] if not a.startswith("-"))
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -125,6 +152,7 @@ def main() -> int:
     workspace = os.path.dirname(raiz_do_repo())
     nossos = [os.path.join(workspace, nome) for nome in REPOS_DO_DISPATCH]
 
+    trocou_de_branch = False
     for repo, subcomando, tokens in chamadas_git(comando, cwd):
         dentro = any(repo == r or repo.startswith(r + os.sep) for r in nossos)
         # O resto da pasta do workspace (`dispatch/`, `dispatch/.claude`, `dispatch-prototype`) não é
@@ -154,6 +182,18 @@ def main() -> int:
                     f"Pergunte ao usuário; se ele quiser mesmo, ele roda o comando com `!` no prompt.\n"
                 )
                 return 2
+
+            if cria_branch(subcomando, tokens):
+                trocou_de_branch = True
+            elif subcomando in {"commit", "push"} and not trocou_de_branch:
+                no_main = branch_atual(repo) in BRANCHES_PROTEGIDAS
+                if no_main or (subcomando == "push" and empurra_main(tokens)):
+                    sys.stderr.write(
+                        f"Bloqueado: `git {subcomando}` no `main`. Toda mudança sai por branch + PR: "
+                        f"`git switch -c feat/<assunto>` (ou fix/, chore/, docs/, test/), commit, push e "
+                        f"`gh pr create` — ver a skill web-commit/api-commit do repositório.\n"
+                    )
+                    return 2
     return 0
 
 
