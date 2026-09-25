@@ -44,4 +44,20 @@ public class FusoHorarioTests
         Assert.Equal(InicioDe26DeAgostoEmBrasilia, inicio);
         Assert.Equal(TimeSpan.Zero, inicio.Offset);
     }
+
+    [Fact]
+    public void DiaLocal_DuasDaManhaUtc_EhAVesperaEmBrasilia()
+    {
+        Assert.Equal(new DateOnly(2026, 8, 26), FusoHorario.DiaLocal(new DateTimeOffset(2026, 8, 27, 2, 0, 0, TimeSpan.Zero)));
+        Assert.Equal(new DateOnly(2026, 8, 27), FusoHorario.DiaLocal(new DateTimeOffset(2026, 8, 27, 3, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void InicioDoDia_DeUmDiaLocal_EhAsTresDaManhaUtc()
+    {
+        var inicio = FusoHorario.InicioDoDia(new DateOnly(2026, 8, 26));
+
+        Assert.Equal(InicioDe26DeAgostoEmBrasilia, inicio);
+        Assert.Equal(TimeSpan.Zero, inicio.Offset);
+    }
 }

@@ -13,10 +13,15 @@ public class ObterDashboardTests
 
     private static Protocolo NovoProtocoloConcluido(
         Guid donoId, Guid? tipoAtoId, DateTimeOffset concluidoEm, bool aprovado = true, DateTimeOffset? vencimentoEm = null,
-        TimeSpan? duracao = null, Guid? escreventeId = null, Etapa etapa = Etapa.PosConferencia)
+        TimeSpan? duracao = null, Guid? escreventeId = null, Etapa etapa = Etapa.PosConferencia,
+        string? numero = null, DateTimeOffset? andamentoEm = null)
     {
         var inicio = concluidoEm - (duracao ?? TimeSpan.FromMinutes(10));
-        var protocolo = new Protocolo(Guid.NewGuid(), "123", tipoAtoId, escreventeId ?? Guid.NewGuid(), etapa, DateTimeOffset.UtcNow);
+        // Número único por padrão: "aprovado na 1ª" (RF-24k) olha as outras linhas do mesmo Número,
+        // então dois protocolos só compartilham número quando o teste quer uma 2ª rodada.
+        var protocolo = new Protocolo(
+            Guid.NewGuid(), numero ?? Guid.NewGuid().ToString("N"), tipoAtoId, escreventeId ?? Guid.NewGuid(), etapa,
+            andamentoEm ?? DateTimeOffset.UtcNow);
         protocolo.AtribuirA(donoId, DateTimeOffset.UtcNow);
         if (vencimentoEm is { } vencimento)
         {
@@ -41,11 +46,12 @@ public class ObterDashboardTests
     private static ObterDashboard NovoCasoDeUso(
         IReadOnlyCollection<Protocolo> protocolos, IReadOnlyCollection<Conferente> conferentes,
         IReadOnlyCollection<TipoAto> tiposAto, IReadOnlyCollection<Usuario> usuarios,
-        IReadOnlyCollection<Escrevente>? escreventes = null, IReadOnlyCollection<Equipe>? equipes = null) =>
+        IReadOnlyCollection<Escrevente>? escreventes = null, IReadOnlyCollection<Equipe>? equipes = null,
+        DateTimeOffset? agora = null) =>
         new(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository(conferentes),
             new FakeTipoAtoRepository(tiposAto), new FakeEscreventeRepository(escreventes ?? []),
-            new FakeEquipeRepository(equipes ?? []), new FakeUsuarioRepository(usuarios), new FakeRelogio(Agora));
+            new FakeEquipeRepository(equipes ?? []), new FakeUsuarioRepository(usuarios), new FakeRelogio(agora ?? Agora));
 
     [Fact]
     public async Task UmSoConferenteComVolume_PontuaOMaximoEmVolumeEComplexidade()
@@ -228,7 +234,7 @@ public class ObterDashboardTests
         var usuario = NovoUsuario("Ana");
         var conferente = NovoConferente(usuario.Id);
         var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
-        // Semana = últimos 7 dias — concluído há 10 dias fica de fora.
+        // Semana = desde a segunda (calendário de Brasília) — concluído há 10 dias fica de fora.
         var protocolo = NovoProtocoloConcluido(conferente.Id, tipo.Id, Agora.AddDays(-10));
         var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario]);
 
@@ -361,5 +367,234 @@ public class ObterDashboardTests
         Assert.Null(meu.Nivel);
         Assert.NotNull(meu.Score);
         Assert.NotNull(meu.Parcelas);
+    }
+
+    // ---- Dashboard v2: período de calendário, trecho anterior, série, aprovado na 1ª ----
+
+    // Agora = seg 31/08 09h em Brasília. A semana de calendário começou hoje 00:00 local: o domingo
+    // de ontem, que a janela móvel de 7 dias contaria, fica de fora.
+    [Fact]
+    public async Task Semana_EhDeCalendario_DomingoDeOntemNaoEntraNaSemanaQueComecouHoje()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var ontem = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-1));
+        var hoje = NovoProtocoloConcluido(conferente.Id, null, Agora.AddHours(-2)); // 07h local
+        var casoDeUso = NovoCasoDeUso([ontem, hoje], [conferente], [], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Semana, conferenteRestritoId: null);
+
+        Assert.Equal(new DateTimeOffset(2026, 8, 31, 3, 0, 0, TimeSpan.Zero), resultado.PeriodoInicio);
+        Assert.Equal(Agora, resultado.PeriodoFim);
+        Assert.Equal(1, resultado.Kpis.AtosConferidos);
+    }
+
+    // Dia 03/09: "Este mês" começa em 01/09 — o 20/08 (dentro da janela móvel de 30 dias) não entra
+    // em nada do que o Dashboard calcula, nem no desempenho.
+    [Fact]
+    public async Task Mes_EhDeCalendario_ConcluidoNoMesPassadoNaoEntraEmNada()
+    {
+        var agora = new DateTimeOffset(2026, 9, 3, 15, 0, 0, TimeSpan.Zero);
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var protocolo = NovoProtocoloConcluido(conferente.Id, tipo.Id, new DateTimeOffset(2026, 8, 20, 15, 0, 0, TimeSpan.Zero));
+        var casoDeUso = NovoCasoDeUso([protocolo], [conferente], [tipo], [usuario], agora: agora);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(new DateTimeOffset(2026, 9, 1, 3, 0, 0, TimeSpan.Zero), resultado.PeriodoInicio);
+        Assert.Equal(0, resultado.Kpis.AtosConferidos);
+        Assert.Empty(resultado.Desempenho);
+        Assert.Empty(resultado.PorTipoAto);
+        // O trecho anterior é 01/08 00:00 até 03/08 12h local — o 20/08 também fica fora dele.
+        Assert.Equal(0, resultado.KpisAnterior.AtosConferidos);
+    }
+
+    // RF-42b: seg 31/08 09h local → trecho anterior = seg 24/08 00:00 até 24/08 09h local. O que foi
+    // concluído no dia 24 depois das 09h não entra (não é "o mesmo trecho").
+    [Fact]
+    public async Task KpisAnterior_Semana_ContaSoOMesmoTrechoDaSemanaPassada()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferente.Id, null, new DateTimeOffset(2026, 8, 24, 10, 0, 0, TimeSpan.Zero), aprovado: false),
+            NovoProtocoloConcluido(conferente.Id, null, new DateTimeOffset(2026, 8, 24, 13, 0, 0, TimeSpan.Zero)),
+            NovoProtocoloConcluido(conferente.Id, null, new DateTimeOffset(2026, 8, 31, 10, 0, 0, TimeSpan.Zero)),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferente], [], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Semana, conferenteRestritoId: null);
+
+        Assert.Equal(1, resultado.Kpis.AtosConferidos);
+        Assert.Equal(1, resultado.KpisAnterior.AtosConferidos);
+        Assert.Equal(0.0, resultado.KpisAnterior.PercentualAprovado);
+        Assert.Equal(0.0, resultado.KpisAnterior.PercentualAprovadoNaPrimeira);
+    }
+
+    [Fact]
+    public async Task KpisAnterior_SemNadaNoTrecho_VemZeradoComAprovadoNaPrimeiraNulo()
+    {
+        var casoDeUso = NovoCasoDeUso([], [], [], []);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(new KpisDashboard(0, 0, 0, null, null), resultado.KpisAnterior);
+        Assert.Null(resultado.Kpis.PercentualAprovadoNaPrimeira);
+    }
+
+    // RF-45 + RF-42b: o conferente recebe a variação dele, não a da operação.
+    [Fact]
+    public async Task VisaoRestrita_KpisAnteriorSaoSoOsDoProprioConferente()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id);
+        var conferenteB = NovoConferente(usuarioB.Id);
+        var noMesPassado = new DateTimeOffset(2026, 7, 10, 15, 0, 0, TimeSpan.Zero);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, null, noMesPassado, duracao: TimeSpan.FromMinutes(12)),
+            NovoProtocoloConcluido(conferenteB.Id, null, noMesPassado, aprovado: false),
+            NovoProtocoloConcluido(conferenteB.Id, null, noMesPassado, aprovado: false),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [], [usuarioA, usuarioB]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: conferenteA.Id);
+
+        Assert.Equal(1, resultado.KpisAnterior.AtosConferidos);
+        Assert.Equal(1.0, resultado.KpisAnterior.PercentualAprovado);
+        Assert.Equal(1.0, resultado.KpisAnterior.PercentualAprovadoNaPrimeira);
+        Assert.Equal(TimeSpan.FromMinutes(12), resultado.KpisAnterior.TempoMedio);
+    }
+
+    // Decisão 3 do dono: das linhas de 1ª rodada (RF-24k) concluídas no período, quantas estão
+    // aprovadas. A 2ª rodada do "A" não entra no denominador; o "B" reprovado e corrigido pra
+    // aprovado (RF-24a) conta como aprovado na 1ª. 1ª rodada: A1 (reprovado), B1 e C1 (aprovados)
+    // → 2/3. "% aprovado" (todas as linhas, resultado atual) continua 3/4 e o score não muda.
+    [Fact]
+    public async Task AprovadoNaPrimeira_SoContaA1aRodada_ECorrecaoParaAprovadoConta()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var andamento = Agora.AddDays(-5);
+        var a1 = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-4), aprovado: false, numero: "A", andamentoEm: andamento);
+        var a2 = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-2), numero: "A", andamentoEm: andamento.AddDays(2));
+        var b1 = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-3), aprovado: false, numero: "B", andamentoEm: andamento);
+        b1.CorrigirResultado(Agora.AddDays(-3).AddMinutes(5));
+        var c1 = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-3), numero: "C", andamentoEm: andamento);
+        var casoDeUso = NovoCasoDeUso([a1, a2, b1, c1], [conferente], [], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+
+        Assert.Equal(2.0 / 3, resultado.Kpis.PercentualAprovadoNaPrimeira!.Value, precision: 10);
+        Assert.Equal(0.75, resultado.Kpis.PercentualAprovado);
+        var linha = Assert.Single(resultado.Desempenho);
+        Assert.Equal(2.0 / 3, linha.PercentualAprovadoNaPrimeira!.Value, precision: 10);
+        Assert.Equal(0.75, linha.PercentualAprovado);
+        // Score continua pela aprovação atual: 40 volume + 30 prazo + 20·0,75 + 0 complexidade (sem tipo).
+        Assert.Equal(85, linha.Score);
+    }
+
+    // Só a 2ª rodada caiu no período (a 1ª foi concluída no mês passado) → nenhuma 1ª conferência:
+    // nulo, não 0%.
+    [Fact]
+    public async Task AprovadoNaPrimeira_SemNenhuma1aConferenciaNoPeriodo_EhNulo()
+    {
+        var usuario = NovoUsuario("Ana");
+        var conferente = NovoConferente(usuario.Id);
+        var andamento = new DateTimeOffset(2026, 7, 20, 15, 0, 0, TimeSpan.Zero);
+        var primeira = NovoProtocoloConcluido(conferente.Id, null, andamento.AddDays(1), aprovado: false, numero: "X", andamentoEm: andamento);
+        var segunda = NovoProtocoloConcluido(conferente.Id, null, Agora.AddDays(-2), numero: "X", andamentoEm: andamento.AddDays(3));
+        var casoDeUso = NovoCasoDeUso([primeira, segunda], [conferente], [], [usuario]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(1, resultado.Kpis.AtosConferidos);
+        Assert.Null(resultado.Kpis.PercentualAprovadoNaPrimeira);
+        Assert.Null(Assert.Single(resultado.Desempenho).PercentualAprovadoNaPrimeira);
+    }
+
+    // RF-45: a média da casa leva o "aprovado na 1ª" — média simples entre quem teve 1ª conferência.
+    [Fact]
+    public async Task VisaoRestrita_MediaDaCasaTrazAprovadoNaPrimeira()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id);
+        var conferenteB = NovoConferente(usuarioB.Id);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, null, Agora.AddDays(-1)),
+            NovoProtocoloConcluido(conferenteB.Id, null, Agora.AddDays(-1), aprovado: false),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [], [usuarioA, usuarioB]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: conferenteA.Id);
+
+        Assert.Equal(1.0, Assert.Single(resultado.Desempenho).PercentualAprovadoNaPrimeira);
+        Assert.Equal(0.5, resultado.MediaDaCasa!.PercentualAprovadoNaPrimeira);
+        Assert.Equal(1.0, resultado.Kpis.PercentualAprovadoNaPrimeira);
+    }
+
+    // RF-42c: estourado = concluído depois do vencimento (o mesmo "no prazo" dos KPIs).
+    [Fact]
+    public async Task Serie_Gestao_ContaTodosESeparaOsEstourados()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id);
+        var conferenteB = NovoConferente(usuarioB.Id);
+        var sexta28 = new DateTimeOffset(2026, 8, 28, 15, 0, 0, TimeSpan.Zero);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, null, sexta28, vencimentoEm: sexta28.AddHours(1)),
+            NovoProtocoloConcluido(conferenteB.Id, null, sexta28, vencimentoEm: sexta28.AddHours(-1)),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [], [usuarioA, usuarioB]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(GranularidadeSerie.Dia, resultado.Serie.Granularidade);
+        // Agosto/2026: 21 dias úteis, todos já passados (hoje é 31/08, segunda).
+        Assert.Equal(21, resultado.Serie.Pontos.Count);
+        Assert.Equal(new PontoDaSerie(new DateOnly(2026, 8, 28), 2, 1, Futuro: false), resultado.Serie.Pontos.Single(p => p.Inicio.Day == 28));
+        Assert.Equal(0.5, resultado.Kpis.PercentualNoPrazo);
+    }
+
+    [Fact]
+    public async Task Serie_VisaoRestrita_SoDoProprioConferente()
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var conferenteA = NovoConferente(usuarioA.Id);
+        var conferenteB = NovoConferente(usuarioB.Id);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(conferenteA.Id, null, Agora.AddHours(-1)),
+            NovoProtocoloConcluido(conferenteB.Id, null, Agora.AddHours(-1)),
+            NovoProtocoloConcluido(conferenteB.Id, null, Agora.AddHours(-1)),
+        };
+        var casoDeUso = NovoCasoDeUso(protocolos, [conferenteA, conferenteB], [], [usuarioA, usuarioB]);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Semana, conferenteRestritoId: conferenteA.Id);
+
+        Assert.Equal(1, resultado.Serie.Pontos.Sum(p => p.Conferidos));
+        Assert.Equal(new DateOnly(2026, 8, 31), resultado.Serie.Pontos[0].Inicio);
+        Assert.All(resultado.Serie.Pontos.Skip(1), p => Assert.True(p.Futuro));
+    }
+
+    [Fact]
+    public async Task Serie_Trimestre_VemPorSemana()
+    {
+        var casoDeUso = NovoCasoDeUso([], [], [], []);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Trimestre, conferenteRestritoId: null);
+
+        Assert.Equal(GranularidadeSerie.Semana, resultado.Serie.Granularidade);
+        Assert.Equal(new DateTimeOffset(2026, 7, 1, 3, 0, 0, TimeSpan.Zero), resultado.PeriodoInicio);
+        Assert.Equal(14, resultado.Serie.Pontos.Count);
     }
 }

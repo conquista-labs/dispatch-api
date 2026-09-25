@@ -3,7 +3,7 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // RF-42a ("Hoje, agora" na gestão / "Seu dia" no conferente): a foto do dia, não do período —
-// por isso é um caso de uso separado de ObterDashboard (que olha 7/30/90 dias pra trás só sobre
+// por isso é um caso de uso separado de ObterDashboard (que olha o período de calendário só sobre
 // concluídos) e uma rota própria (o front recarrega esta faixa com frequência maior que o resto).
 // "Hoje" é o dia de Brasília (FusoHorario), decidido aqui via IRelogio — a porta só sabe filtrar
 // "desde" um instante, igual a ObterConcluidosHoje e ObterVisaoDistribuicao.
