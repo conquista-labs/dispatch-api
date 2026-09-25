@@ -2,7 +2,8 @@ namespace Dispatch.Domain;
 
 // Seção 7: "o sistema que aprende é contagem, não modelo" — as quatro propostas da tabela,
 // cada uma pura função de dados já existentes (nenhuma delas precisa de um log de eventos
-// solto, ver CLAUDE.md). Limiares têm default igual ao documento; expostos como parâmetro
+// solto, ver docs/decisions/0009-aprendizado-sem-tabela-evento-decisao.md). Limiares têm
+// default igual ao documento; expostos como parâmetro
 // porque, assim como as faixas do semáforo, são configuração (tabela `config`, seção 8, ainda
 // não existe).
 public static class GeradorDeSugestoes

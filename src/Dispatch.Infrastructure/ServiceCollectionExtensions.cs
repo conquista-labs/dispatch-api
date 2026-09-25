@@ -51,7 +51,7 @@ public static class ServiceCollectionExtensions
 
         // Agrupado por arquivo de endpoint que consome (auditoria de qualidade — antes era uma
         // lista só, sem estrutura nenhuma; o projeto já foi mordido uma vez por esquecer de
-        // registrar um caso de uso aqui, ver "Motor de alçada v2" no CLAUDE.md — só falha em
+        // registrar um caso de uso aqui, ver docs/patterns/arquitetura.md, "Composition root" — só falha em
         // dotnet run, não em build/test). Uma linha faltando dentro do grupo errado continua
         // possível, mas fica bem mais fácil de notar numa lista curta e nomeada do que numa de
         // ~70 linhas soltas.

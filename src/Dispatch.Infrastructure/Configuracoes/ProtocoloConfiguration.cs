@@ -42,7 +42,7 @@ public sealed class ProtocoloConfiguration : IEntityTypeConfiguration<Protocolo>
         // de Status acima, o filtro por período ainda variava a tabela inteira de protocolos
         // com esse status, em vez de já vir estreitado pelas duas colunas juntas.
         builder.HasIndex(p => new { p.Status, p.ConcluidoEm });
-        // RF-18i/j — explícito de propósito (mesma armadilha já documentada no CLAUDE.md:
+        // RF-18i/j — explícito de propósito (mesma armadilha documentada em docs/patterns/ef-core.md:
         // propriedade só-com-getter sem declaração aqui falha o constructor binding do EF Core
         // em tempo de design, mesmo existindo de verdade).
         builder.Property(p => p.StatusAntesDeExcluir).HasConversion<string>().HasMaxLength(20);

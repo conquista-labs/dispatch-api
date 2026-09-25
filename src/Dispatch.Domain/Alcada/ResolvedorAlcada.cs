@@ -6,8 +6,9 @@ namespace Dispatch.Domain;
 // família) — confirmado ao vivo contra o simulador "Testar" da aba Alçada do protótipo v2
 // (Dispatch.dc.html, funções `bloqueioPuro`/`decideCamada`/`camadaDe`/`trilhaPura`, por volta
 // da linha 1725). O documento de requisitos formal ainda descreve o modelo anterior — ver
-// CLAUDE.md, seção "Motor de alçada v3", pra essa divergência e a decisão de documentar aqui
-// em vez de editar o `.dc.html` (gerado por ferramenta externa do dono).
+// docs/decisions/0018-motor-de-alcada-v3-cascata-de-camadas.md pra essa divergência e a
+// decisão de documentar no repo em vez de editar o `.dc.html` (gerado por ferramenta externa do
+// dono); o algoritmo atual passo a passo está em docs/patterns/motor-e-prazos.md.
 //
 // Camadas, nesta ordem (a de baixo vence a de cima quando ambas opinam sobre o mesmo caso):
 // (1) Base por nível — toda regra cujo sujeito é Nível, qualquer alvo;
@@ -26,8 +27,9 @@ namespace Dispatch.Domain;
 // camada, com a mesma prioridade da Reserva — achado em produção (Maria Vittoria tinha "Permite
 // TodosOsAtos" pessoal, camada Pessoa, e isso vencia a negação por nível de "Quinto Andar não
 // faz pré-conferência" pela regra normal de cascata, "a de baixo vence a de cima"). O pedido
-// original desse alvo sempre foi "ninguém, independente de quem" (ver CLAUDE.md, "Motor de
-// alçada v4", terceira rodada) — uma exceção pessoal (de qualquer tipo, inclusive alçada plena)
+// original desse alvo sempre foi "ninguém, independente de quem" (ver
+// docs/decisions/0030-equipe-e-etapa-absoluto-fora-da-cascata.md) — uma exceção pessoal (de
+// qualquer tipo, inclusive alçada plena)
 // não pode reabrir isso; a API já garante que ninguém cria Permite/Reserva pra este alvo
 // especificamente (só Nega), então essa negação nunca tem uma exceção own-alvo legítima pra
 // ceder — sempre venceria de qualquer forma, só não vencia de exceções de OUTRO alvo que

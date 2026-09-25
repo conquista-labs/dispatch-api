@@ -4,7 +4,7 @@ namespace Dispatch.Application;
 
 // RF-34e: exclusão de verdade (diferente de RemoverConferente, que é soft delete) — mas só
 // quando "sem nenhum uso", checado contra as duas coisas que referenciam TipoAtoId por Guid
-// solto, sem FK (ver CLAUDE.md, "Persistência de Protocolo"/"Central de Regras"): protocolos
+// solto, sem FK (ver docs/patterns/ef-core.md, "Chaves estrangeiras e índices"): protocolos
 // já distribuídos com esse tipo, e regras de alçada com AlvoAlcada.PorTipoAto apontando pra
 // ele. Mesclar dois tipos (RF-34c) fica de fora — é uma operação maior (migra as duas
 // referências pra um Id novo em vez de só bloquear), documentada como próximo passo separado.

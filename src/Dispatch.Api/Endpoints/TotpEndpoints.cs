@@ -5,8 +5,8 @@ using Dispatch.Application;
 namespace Dispatch.Api.Endpoints;
 
 // Extraído de AuthEndpoints.cs (auditoria de qualidade) — registro do autenticador TOTP é um
-// fluxo separado do login normal (ver dispatch-api/CLAUDE.md, seção "TOTP e recuperação de
-// senha"), só serve de prova de identidade na recuperação de senha.
+// fluxo separado do login normal (ver docs/decisions/0020-totp-so-para-recuperacao-de-senha.md),
+// só serve de prova de identidade na recuperação de senha.
 public static class TotpEndpoints
 {
     public static void MapTotpEndpoints(this IEndpointRouteBuilder app)

@@ -3,8 +3,8 @@ using Dispatch.Domain;
 namespace Dispatch.Application;
 
 // Seção 7: "job diário" — não existe scheduler/background job no projeto ainda (decisão
-// registrada em CLAUDE.md), então isso roda sob demanda via endpoint (só Distribuidora). Um
-// IHostedService de verdade fica pra quando isso for pra produção.
+// adiada, ver docs/gaps-requisitos.md, §29), então isso roda sob demanda via endpoint (só
+// Distribuidora). Um IHostedService de verdade fica pra quando isso for pra produção.
 public sealed class GerarSugestoes(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,

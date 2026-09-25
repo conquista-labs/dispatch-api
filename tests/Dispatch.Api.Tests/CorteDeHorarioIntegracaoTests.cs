@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Dispatch.Api.Tests;
 
 // Pedido do dono: "equipe X entra na pós-conferência depois das 16h, vence às 10h do dia
-// seguinte" — genérico por Equipe+Etapa, não hardcoded (ver dispatch-api/CLAUDE.md). O risco
+// seguinte" — genérico por Equipe+Etapa, não hardcoded (ver
+// docs/decisions/0037-corte-de-horario-por-equipe-e-etapa.md). O risco
 // real que só um teste de integração de verdade prova: Prazo ganhou um campo além de Tipo
 // (HorarioDeVencimento) e PrazoConversoes precisou de um formato composto pra não perder esse
 // campo no round-trip do banco — sem isso, reabrir um protocolo com corte quebraria depois de

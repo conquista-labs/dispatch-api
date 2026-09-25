@@ -7,7 +7,7 @@ public sealed class ObterVisaoDistribuicao(IProtocoloRepository protocolos, IRel
     // Só concluídos (Aprovado/Reprovado) sofrem corte por data nesta tela — os outros buckets
     // são trabalho em andamento, ficam pequenos por natureza. Sem isso, GET
     // /protocolos/distribuicao cresce sem limite pra sempre (achado numa auditoria de
-    // performance — ver dispatch-api/CLAUDE.md, "Corte de data no bucket concluídos").
+    // performance — ver docs/decisions/0026-corte-de-30-dias-nos-concluidos.md).
     public const int DiasHistoricoDeConcluidos = 30;
 
     public async Task<VisaoDistribuicao> ExecutarAsync(Guid? loteImportacaoId, CancellationToken cancellationToken = default)
