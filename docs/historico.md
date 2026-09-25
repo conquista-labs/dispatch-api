@@ -1071,3 +1071,11 @@ desconhecido), pro card de exceção "tipo desconhecido" mostrar o nome como vei
 `GET /protocolos/distribuicao`, `/minha-fila` e `/conferentes/{id}/fila`. Sem migration. Verificado:
 `TipoAtoNomeOriginalIntegracaoTests` (legado semeado no banco + tipo conhecido importado). 724 testes
 (266 Domain + 386 Application + 72 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Alcance considera as duas etapas (falso negativo em produção)
+
+`ObterAlcancePorConferente` avaliava "tipos permitidos" e "equipes permitidas" só em Pós: uma Pleno
+com "Nega etapa Pós" própria (só faz pré) aparecia com 0/52 tipos e sem equipe. Agora o tipo conta se
+é permitido em alguma etapa, e as equipes são avaliadas na primeira etapa liberada — corrige na origem
+também a cobertura (RF-30) e o "N com alçada" dos Tipos (RF-34a), que reusam a lista. Contrato igual,
+sem migration. 728 testes (266 Domain + 390 Application + 72 Api.Tests), build sem avisos.

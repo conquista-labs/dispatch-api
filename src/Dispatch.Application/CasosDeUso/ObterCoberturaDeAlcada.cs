@@ -3,9 +3,10 @@ namespace Dispatch.Application;
 // RF-30: aviso de cobertura na tela Conferentes — "tipo em circulação" é qualquer TipoAto que
 // aparece nos protocolos de hoje (não o catálogo inteiro; um tipo sem protocolo nenhum não é
 // um problema de cobertura agora). Reaproveita ObterAlcancePorConferente em vez de rodar
-// ResolvedorAlcada de novo — TiposPermitidosIds já resolve "esse conferente alcança esse tipo"
-// (por tipo, sem cruzar com etapa, mesma simplificação do protótipo aprovado, que checa uma
-// etapa como proxy).
+// ResolvedorAlcada de novo — TiposPermitidosIds já resolve "esse conferente alcança esse tipo
+// em pelo menos uma etapa" (Pré ou Pós, sem equipe; ver a aproximação documentada lá). Quem só
+// faz uma das etapas conta como habilitado — antes a lista só olhava Pós e quem só fazia pré
+// virava falso "ninguém habilitado".
 public sealed class ObterCoberturaDeAlcada(
     IProtocoloRepository protocolos,
     IConferenteRepository conferentes,

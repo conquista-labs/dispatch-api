@@ -100,4 +100,21 @@ public class ObterCoberturaDeAlcadaTests
         Assert.Empty(cobertura.SemNinguemHabilitado);
         Assert.Empty(cobertura.DependeDeUmaPessoa);
     }
+
+    [Fact]
+    public async Task ConferenteQueSoFazPreConferencia_ContaComoHabilitadaProTipo()
+    {
+        // Mesmo falso negativo do painel de alcance: quem nega Pós por regra própria contava como
+        // "ninguém habilitado", embora confira o tipo na pré-conferência.
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var soPre = new RegraAlcada(
+            Guid.NewGuid(), new SujeitoAlcada.PorPessoa(conferente.Id), PermissaoRegra.Nega, new AlvoAlcada.PorEtapa(Etapa.PosConferencia));
+        var casoDeUso = NovoCasoDeUso([NovoProtocolo(tipo.Id)], conferentes: [conferente], regras: [soPre], tiposAto: [tipo]);
+
+        var cobertura = await casoDeUso.ExecutarAsync();
+
+        Assert.Empty(cobertura.SemNinguemHabilitado);
+        Assert.Equal(tipo.Id, Assert.Single(cobertura.DependeDeUmaPessoa).TipoAtoId);
+    }
 }
