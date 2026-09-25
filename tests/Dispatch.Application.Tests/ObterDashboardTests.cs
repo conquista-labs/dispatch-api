@@ -47,11 +47,133 @@ public class ObterDashboardTests
         IReadOnlyCollection<Protocolo> protocolos, IReadOnlyCollection<Conferente> conferentes,
         IReadOnlyCollection<TipoAto> tiposAto, IReadOnlyCollection<Usuario> usuarios,
         IReadOnlyCollection<Escrevente>? escreventes = null, IReadOnlyCollection<Equipe>? equipes = null,
-        DateTimeOffset? agora = null) =>
+        DateTimeOffset? agora = null, Configuracao? configuracao = null) =>
         new(
             new FakeProtocoloRepository(protocolos), new FakeConferenteRepository(conferentes),
             new FakeTipoAtoRepository(tiposAto), new FakeEscreventeRepository(escreventes ?? []),
-            new FakeEquipeRepository(equipes ?? []), new FakeUsuarioRepository(usuarios), new FakeRelogio(agora ?? Agora));
+            new FakeEquipeRepository(equipes ?? []), new FakeUsuarioRepository(usuarios),
+            new FakeConfiguracaoRepository(configuracao), new FakeRelogio(agora ?? Agora));
+
+    private static Configuracao ConfiguracaoCom(MetasDoDashboard metas, PesosDoScore pesos)
+    {
+        var configuracao = new Configuracao(
+            Guid.NewGuid(), TimeSpan.FromHours(4), TimeSpan.FromMinutes(60), 1, TimeSpan.FromMinutes(15),
+            30, 18, 5, 8, 0.6, 3, 6, 0.5);
+        configuracao.DefinirMetasEPesos(metas, pesos);
+        return configuracao;
+    }
+
+    // Ana: 2 atos simples (peso 1), no prazo e aprovados. Bruno: 1 ato difícil (peso 3), estourado e
+    // reprovado. Normalizando pelo melhor do grupo: Ana tem volume 1, prazo 1, qualidade 1,
+    // complexidade 1/3; Bruno volume 1/2, prazo 0, qualidade 0, complexidade 1.
+    private static (ObterDashboard CasoDeUso, Conferente Ana, Conferente Bruno) CenarioAnaEBruno(Configuracao? configuracao = null)
+    {
+        var usuarioA = NovoUsuario("Ana");
+        var usuarioB = NovoUsuario("Bruno");
+        var ana = NovoConferente(usuarioA.Id);
+        var bruno = NovoConferente(usuarioB.Id);
+        var simples = new TipoAto(Guid.NewGuid(), "Procuração", pesoComplexidade: 1);
+        var dificil = new TipoAto(Guid.NewGuid(), "Inventário", pesoComplexidade: 3);
+        var concluidoEm = Agora.AddDays(-1);
+        var protocolos = new[]
+        {
+            NovoProtocoloConcluido(ana.Id, simples.Id, concluidoEm),
+            NovoProtocoloConcluido(ana.Id, simples.Id, concluidoEm),
+            NovoProtocoloConcluido(bruno.Id, dificil.Id, concluidoEm, aprovado: false, vencimentoEm: concluidoEm.AddHours(-1)),
+        };
+        return (NovoCasoDeUso(protocolos, [ana, bruno], [simples, dificil], [usuarioA, usuarioB], configuracao: configuracao), ana, bruno);
+    }
+
+    [Fact]
+    public async Task PesosPadrao_ScoreDe40_30_20_10()
+    {
+        var (casoDeUso, ana, bruno) = CenarioAnaEBruno();
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+
+        // Ana: 40 + 30 + 20 + 10/3 = 93,3 → 93. Bruno: 20 + 0 + 0 + 10 = 30.
+        Assert.Equal(93, resultado.Desempenho.Single(d => d.ConferenteId == ana.Id).Score);
+        Assert.Equal(30, resultado.Desempenho.Single(d => d.ConferenteId == bruno.Id).Score);
+        Assert.Equal(PesosDoScore.Padrao, resultado.Pesos);
+    }
+
+    [Fact]
+    public async Task PesosDaConfiguracao_MudamScoreFaixaEParcelas()
+    {
+        var configuracao = ConfiguracaoCom(MetasDoDashboard.Padrao, new PesosDoScore(10, 20, 30, 40));
+        var (casoDeUso, ana, bruno) = CenarioAnaEBruno(configuracao);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+
+        // Ana: 10 + 20 + 30 + 40/3 = 73,3 → 73 (sai da faixa integral). Bruno: 5 + 0 + 0 + 40 = 45.
+        var linhaAna = resultado.Desempenho.Single(d => d.ConferenteId == ana.Id);
+        Assert.Equal(73, linhaAna.Score);
+        Assert.Equal(FaixaBonificacao.Parcial, linhaAna.Faixa);
+        Assert.Equal(10, linhaAna.Parcelas!.Volume, precision: 6);
+        Assert.Equal(20, linhaAna.Parcelas.Prazo, precision: 6);
+        Assert.Equal(30, linhaAna.Parcelas.Qualidade, precision: 6);
+        Assert.Equal(40.0 / 3, linhaAna.Parcelas.Complexidade, precision: 6);
+
+        var linhaBruno = resultado.Desempenho.Single(d => d.ConferenteId == bruno.Id);
+        Assert.Equal(45, linhaBruno.Score);
+        Assert.Equal(5, linhaBruno.Parcelas!.Volume, precision: 6);
+        Assert.Equal(40, linhaBruno.Parcelas.Complexidade, precision: 6);
+        Assert.Equal(new PesosDoScore(10, 20, 30, 40), resultado.Pesos);
+    }
+
+    [Fact]
+    public async Task PesoZero_DesligaAParcela()
+    {
+        var configuracao = ConfiguracaoCom(MetasDoDashboard.Padrao, new PesosDoScore(50, 30, 20, 0));
+        var (casoDeUso, _, bruno) = CenarioAnaEBruno(configuracao);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+
+        var linhaBruno = resultado.Desempenho.Single(d => d.ConferenteId == bruno.Id);
+        Assert.Equal(0, linhaBruno.Parcelas!.Complexidade);
+        Assert.Equal(25, linhaBruno.Score);
+    }
+
+    [Fact]
+    public async Task GestaoComAdministrador_RecebeMetasEPesosDaConfiguracao()
+    {
+        var configuracao = ConfiguracaoCom(new MetasDoDashboard(0.80, 0.70), new PesosDoScore(25, 25, 25, 25));
+        var (casoDeUso, _, _) = CenarioAnaEBruno(configuracao);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null, incluirAvaliacaoDePessoal: true);
+
+        Assert.Equal(new MetasDoDashboard(0.80, 0.70), resultado.Metas);
+        Assert.Equal(new PesosDoScore(25, 25, 25, 25), resultado.Pesos);
+    }
+
+    [Fact]
+    public async Task GestaoSemAdministrador_RecebeMetasMasNaoPesos()
+    {
+        // Decisão 4 do dono: a gestão vê a barra de meta. Os pesos só servem pra ler score, que a
+        // distribuidora não vê (ADR-0039).
+        var configuracao = ConfiguracaoCom(new MetasDoDashboard(0.80, 0.70), PesosDoScore.Padrao);
+        var (casoDeUso, _, _) = CenarioAnaEBruno(configuracao);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: null);
+
+        Assert.Equal(new MetasDoDashboard(0.80, 0.70), resultado.Metas);
+        Assert.Null(resultado.Pesos);
+    }
+
+    [Fact]
+    public async Task VisaoRestrita_RecebePesosMasNaoMetas_EScoreComOsPesosDaConfiguracao()
+    {
+        var configuracao = ConfiguracaoCom(new MetasDoDashboard(0.80, 0.70), new PesosDoScore(10, 20, 30, 40));
+        var (casoDeUso, ana, _) = CenarioAnaEBruno(configuracao);
+
+        var resultado = await casoDeUso.ExecutarAsync(PeriodoDashboard.Mes, conferenteRestritoId: ana.Id);
+
+        Assert.Null(resultado.Metas);
+        Assert.Equal(new PesosDoScore(10, 20, 30, 40), resultado.Pesos);
+        var minhaLinha = Assert.Single(resultado.Desempenho);
+        Assert.Equal(73, minhaLinha.Score);
+        Assert.Equal(10, minhaLinha.Parcelas!.Volume, precision: 6);
+    }
 
     [Fact]
     public async Task UmSoConferenteComVolume_PontuaOMaximoEmVolumeEComplexidade()

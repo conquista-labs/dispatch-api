@@ -2,9 +2,11 @@ using Dispatch.Domain;
 
 namespace Dispatch.Application;
 
-// RF-42-46: score = 40% volume + 30% prazo + 20% qualidade + 10% complexidade — fórmula do
-// protótipo aprovado (o documento de requisitos só nomeia os 4 fatores e os pesos, não define
-// a fórmula matemática exata). Volume e complexidade são normalizados pelo máximo do grupo no
+// RF-42-46: score = pesoVolume·volume + pesoPrazo·prazo + pesoQualidade·qualidade +
+// pesoComplexidade·complexidade — fórmula do protótipo aprovado (o documento de requisitos só nomeia
+// os 4 fatores e os pesos, não define a fórmula matemática exata). Os pesos vêm da Configuração
+// (RF-46 "pesos configuráveis"; padrão 40/30/20/10, somam 100) e são aplicados NA LEITURA: mudar um
+// peso muda o score de qualquer período consultado depois, inclusive os já fechados (ADR-0042). Volume e complexidade são normalizados pelo máximo do grupo no
 // período (decisão do protótipo, não do requisito); prazo e qualidade já são frações diretas.
 // "Aprovados" (e a parcela de qualidade do score) usa o resultado ATUAL (Status == Aprovado) de
 // todos os concluídos. "Aprovados na 1ª" (RF-43, decisão 3 do dono) é outro número, só informativo
@@ -20,6 +22,7 @@ public sealed class ObterDashboard(
     IEscreventeRepository escreventes,
     IEquipeRepository equipes,
     IUsuarioRepository usuarios,
+    IConfiguracaoRepository configuracao,
     IRelogio relogio)
 {
     private const int ScoreIntegral = 85;
@@ -36,6 +39,9 @@ public sealed class ObterDashboard(
         CancellationToken cancellationToken = default)
     {
         var agora = relogio.Agora;
+        // Leitura cacheada (IMemoryCache, invalidada no PUT /config) — não custa uma query por request.
+        var config = await configuracao.ObterAsync(cancellationToken);
+        var pesos = config.Pesos;
         var intervalo = CalendarioDoPeriodo.Atual(periodo, agora);
         var intervaloAnterior = CalendarioDoPeriodo.MesmoTrechoAnterior(periodo, agora);
 
@@ -116,7 +122,7 @@ public sealed class ObterDashboard(
             .Select(id => CalcularDesempenho(
                 id, todosConferentes[id], usuarioPorId.GetValueOrDefault(todosConferentes[id].UsuarioId),
                 porDono.GetValueOrDefault(id, []), temposPorConferente.GetValueOrDefault(id, []), catalogoTipos, maxVolume,
-                maxComplexidadeMedia, numeroDaConferencia, mostrarFaixa: conferenteRestritoId is null))
+                maxComplexidadeMedia, numeroDaConferencia, pesos, mostrarFaixa: conferenteRestritoId is null))
             .OrderByDescending(d => d.Score)
             .ToList();
 
@@ -134,9 +140,11 @@ public sealed class ObterDashboard(
                     .OrderBy(d => d.Nome, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(d => d.ConferenteId)
                     .ToList();
+            // Metas (RF-42b): a gestão toda vê a barra de meta (decisão 4 do dono). Pesos: só quem vê
+            // score — sem Administrador, a distribuidora não vê score (ADR-0039), então nem os pesos.
             return new ResultadoDashboard(
                 intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, desempenhoDaGestao, MediaDaCasa: null, porTipoAto,
-                cumprimentoPrazoEquipe);
+                cumprimentoPrazoEquipe, Metas: config.Metas, Pesos: incluirAvaliacaoDePessoal ? pesos : null);
         }
 
         // RF-45: o conferente só vê os próprios números + a média da casa sem identificar
@@ -146,8 +154,11 @@ public sealed class ObterDashboard(
         var meuDesempenho = todosOsDesempenhos.SingleOrDefault(d => d.ConferenteId == conferenteRestritoId);
         var lista = meuDesempenho is null ? [] : (IReadOnlyList<DesempenhoConferente>)[meuDesempenho with { Nivel = null }];
         var mediaDaCasa = CalcularMediaDaCasa(todosOsDesempenhos);
+        // O conferente vê o próprio score com as parcelas (RF-45), então recebe os pesos (o máximo de
+        // cada parcela); a meta não — "só a gestão vê a barra de meta" (decisão 4 do dono).
         return new ResultadoDashboard(
-            intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: []);
+            intervalo.Inicio, intervalo.Fim, kpis, kpisAnterior, serie, lista, mediaDaCasa, PorTipoAto: [], CumprimentoPrazoEquipe: [],
+            Metas: null, Pesos: pesos);
     }
 
     private static DesempenhoConferente SemAvaliacaoDePessoal(DesempenhoConferente d) =>
@@ -260,7 +271,7 @@ public sealed class ObterDashboard(
         Guid conferenteId, Conferente conferente, Usuario? usuario, IReadOnlyCollection<Protocolo> protocolosDoConferente,
         IReadOnlyCollection<TimeSpan> temposProprios,
         IReadOnlyDictionary<Guid, TipoAto> catalogo, int maxVolume, double maxComplexidadeMedia,
-        IReadOnlyDictionary<Guid, int> numeroDaConferencia, bool mostrarFaixa)
+        IReadOnlyDictionary<Guid, int> numeroDaConferencia, PesosDoScore pesos, bool mostrarFaixa)
     {
         var volume = protocolosDoConferente.Count;
         var noPrazo = protocolosDoConferente.Count(EstaNoPrazo);
@@ -274,10 +285,12 @@ public sealed class ObterDashboard(
         var pctNoPrazo = volume == 0 ? 0 : (double)noPrazo / volume;
         var pctAprovado = volume == 0 ? 0 : (double)aprovados / volume;
 
-        var pontosVolume = maxVolume == 0 ? 0 : 40.0 * volume / maxVolume;
-        var pontosPrazo = 30.0 * pctNoPrazo;
-        var pontosQualidade = 20.0 * pctAprovado;
-        var pontosComplexidade = maxComplexidadeMedia == 0 ? 0 : 10.0 * complexidadeMedia / maxComplexidadeMedia;
+        // Cada parcela vai de 0 ao seu peso; como os pesos somam 100, o score continua em 0–100 e as
+        // faixas 85/70 continuam valendo.
+        var pontosVolume = maxVolume == 0 ? 0 : (double)pesos.Volume * volume / maxVolume;
+        var pontosPrazo = pesos.Prazo * pctNoPrazo;
+        var pontosQualidade = pesos.Qualidade * pctAprovado;
+        var pontosComplexidade = maxComplexidadeMedia == 0 ? 0 : pesos.Complexidade * complexidadeMedia / maxComplexidadeMedia;
 
         var score = (int)Math.Round(pontosVolume + pontosPrazo + pontosQualidade + pontosComplexidade);
         var faixa = mostrarFaixa
@@ -370,7 +383,12 @@ public sealed record ResultadoDashboard(
     IReadOnlyList<DesempenhoConferente> Desempenho,
     DesempenhoConferente? MediaDaCasa,
     IReadOnlyList<DesempenhoTipoAto> PorTipoAto,
-    IReadOnlyList<CumprimentoPrazoEquipe> CumprimentoPrazoEquipe);
+    IReadOnlyList<CumprimentoPrazoEquipe> CumprimentoPrazoEquipe,
+    // RF-42b: só na visão de gestão; null na visão restrita.
+    MetasDoDashboard? Metas,
+    // RF-46: pra quem vê score (Administrador; o próprio conferente na visão restrita); null pra
+    // distribuidora sem Administrador.
+    PesosDoScore? Pesos);
 
 public sealed record KpisDashboard(
     int AtosConferidos, double PercentualNoPrazo, double PercentualAprovado, double? PercentualAprovadoNaPrimeira, TimeSpan? TempoMedio);
@@ -391,7 +409,8 @@ public sealed record DesempenhoConferente(
     FaixaBonificacao? Faixa,
     ParcelasScore? Parcelas);
 
-// Pontos já ponderados (sobre 40/30/20/10), não percentuais crus — o front mostra "32.4 / 40" direto.
+// Pontos já ponderados (cada um sobre o peso da sua parcela na Configuração, padrão 40/30/20/10), não
+// percentuais crus — o front mostra "32.4 / 40" com o máximo vindo de `Pesos`.
 public sealed record ParcelasScore(double Volume, double Prazo, double Qualidade, double Complexidade);
 
 public enum FaixaBonificacao

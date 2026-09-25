@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Dispatch.Domain;
 
 namespace Dispatch.Api.Tests;
@@ -72,6 +73,59 @@ public sealed class DashboardIntegracaoTests(IntegracaoFixture fixture) : Integr
         Assert.InRange(pontos.Count, 13, 14);
         Assert.All(pontos, p => Assert.Equal(DayOfWeek.Monday, DateOnly.Parse(p.GetProperty("inicio").GetString()!).DayOfWeek));
         Assert.Equal(JsonValueKind.Null, dashboard.GetProperty("kpis").GetProperty("percentualAprovadoNaPrimeira").ValueKind);
+    }
+
+    // RF-42b/RF-46 (fatia 2): metas só pra gestão; pesos pra quem vê score (admin e o próprio
+    // conferente), null pra distribuidora; o score segue os pesos gravados na Configuração.
+    [Fact]
+    public async Task MetasEPesos_PorVisao_EScoreComOsPesosDaConfiguracao()
+    {
+        // Um ato estourado e aprovado, de tipo único (complexidade = o máximo do grupo), conferente
+        // sozinho (volume = o máximo): score = pesoVolume + 0·pesoPrazo + pesoQualidade + pesoComplexidade.
+        var ids = await ImportarEstouradosAsync(1);
+        var conferente = await AutenticarComoAsync(Papel.Conferente);
+        await ConcluirAsync(conferente, ids[0], aprovado: true);
+
+        var admin = await AutenticarComoAsync(Papel.Administrador);
+        var comoAdmin = await admin.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+        Assert.Equal(0.95, comoAdmin.GetProperty("metas").GetProperty("noPrazo").GetDouble());
+        Assert.Equal(0.90, comoAdmin.GetProperty("metas").GetProperty("aprovadoNaPrimeira").GetDouble());
+        Assert.Equal(40, comoAdmin.GetProperty("pesos").GetProperty("volume").GetInt32());
+        Assert.Equal(10, comoAdmin.GetProperty("pesos").GetProperty("complexidade").GetInt32());
+        Assert.Equal(70, comoAdmin.GetProperty("desempenho")[0].GetProperty("score").GetInt32()); // 40 + 0 + 20 + 10
+
+        var distribuidora = await AutenticarComoAsync(Papel.Distribuidora);
+        var comoDistribuidora = await distribuidora.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+        Assert.Equal(0.95, comoDistribuidora.GetProperty("metas").GetProperty("noPrazo").GetDouble());
+        Assert.Equal(JsonValueKind.Null, comoDistribuidora.GetProperty("pesos").ValueKind);
+
+        var comoConferente = await conferente.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+        Assert.Equal(JsonValueKind.Null, comoConferente.GetProperty("metas").ValueKind);
+        Assert.Equal(30, comoConferente.GetProperty("pesos").GetProperty("prazo").GetInt32());
+
+        // Pesos novos pelo PUT /config: o cache da configuração é invalidado e o score muda na hora.
+        var original = await admin.GetFromJsonAsync<JsonObject>("/config");
+        try
+        {
+            var corpo = original!.DeepClone().AsObject();
+            corpo["pesoVolume"] = 10;
+            corpo["pesoPrazo"] = 20;
+            corpo["pesoQualidade"] = 30;
+            corpo["pesoComplexidade"] = 40;
+            Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/config", corpo)).StatusCode);
+
+            var depois = await admin.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes");
+            Assert.Equal(10, depois.GetProperty("pesos").GetProperty("volume").GetInt32());
+            var linha = depois.GetProperty("desempenho")[0];
+            Assert.Equal(80, linha.GetProperty("score").GetInt32()); // 10 + 0 + 30 + 40
+            Assert.Equal(40, linha.GetProperty("parcelas").GetProperty("complexidade").GetDouble());
+            var minha = (await conferente.GetFromJsonAsync<JsonElement>("/dashboard?periodo=Mes")).GetProperty("desempenho")[0];
+            Assert.Equal(80, minha.GetProperty("score").GetInt32());
+        }
+        finally
+        {
+            Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/config", original)).StatusCode);
+        }
     }
 
     private async Task<Guid[]> ImportarEstouradosAsync(int quantidade)
