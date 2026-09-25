@@ -14,6 +14,12 @@ public sealed class ProtocoloRepository(DispatchDbContext dbContext) : IProtocol
     public async Task<IReadOnlyCollection<Protocolo>> ObterPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.Where(p => numeros.Contains(p.Numero)).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyCollection<RegistroDoNumero>> ObterRegistrosPorNumerosAsync(IReadOnlyCollection<string> numeros, CancellationToken cancellationToken) =>
+        await dbContext.Protocolos
+            .Where(p => numeros.Contains(p.Numero))
+            .Select(p => new RegistroDoNumero(p.Id, p.Numero, p.Etapa, p.AndamentoEm, p.Status))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<Protocolo>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         await dbContext.Protocolos.Where(p => ids.Contains(p.Id)).ToListAsync(cancellationToken);
 

@@ -849,3 +849,20 @@ testes, suíte rodada 3× seguidas.
 
 CLAUDE.md (~3.000 linhas de changelog) virou um índice curto; o conteúdo foi para `docs/decisions/`
 (ADR-0001 a 0037), `docs/patterns/`, este histórico e `docs/gaps-requisitos.md`. Skill `/adr` criada (hoje `/api-adr`).
+
+## 2026-09-25 — Número da conferência ("↻ 2ª conferência", RF-24k)
+
+ADR-0038. Feature 1 do `PLANO-melhorias.md`, lado do back. `RegistroDoNumero` (recorte leve de
+`Protocolo`) e `ResolvedorDeContinuidade.NumeroDaConferencia` no Domain (1 + linhas anteriores do mesmo
+Número, mesma etapa, Reprovadas). `IProtocoloRepository.ObterRegistrosPorNumerosAsync` com projeção
+(sem carregar coleções filhas) e o helper `NumeroDaConferenciaEmLote` (uma query por listagem), usados
+por `ObterMinhaFila` e `ObterVisaoDistribuicao`; `ObterDetalheProtocolo` reaproveita o histórico que já
+carrega. `ProtocoloResumo`/`DetalheProtocoloResponse` ganham `NumeroDaConferencia`;
+`HistoricoConferenciaResponse` ganha `NumeroDaConferencia` e `Observacao` (o motivo da não aprovação,
+decisão do dono). `MinhaFilaEndpoints.ParaResumo` passou a exigir o número (sem default), atualizando os
+3 chamadores (Minha fila, `/conferentes/{id}/fila`, Distribuição). Sem migration.
+
+Verificado: 16 testes de Domain (`NumeroDaConferenciaTests`, incluindo Theory dos status que não contam),
+3 de Application, e `NumeroDaConferenciaIntegracaoTests` pelo fluxo real (importar → pegar → iniciar →
+reprovar → reimportar; número 2 em `/minha-fila`, `/protocolos/distribuicao` e no detalhe, 1 na linha
+anterior). 454 testes (146 Domain + 297 Application + 11 Api.Tests), build sem avisos.

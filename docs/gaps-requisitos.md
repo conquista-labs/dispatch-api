@@ -34,12 +34,12 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §1, §2, §3, §4, §7, §12, §22, §25, §26, §27, §33, §34, §35, §36, §37 |
+| 🔴 Em aberto | §1, §2, §3, §4, §7, §12, §25, §26, §27, §33, §34, §35, §36, §37 |
 | 🟡 Parcial | §16, §19 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40 |
 | ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §10, §14, §15, §17, §20, §23, §32, §39 |
+| ✅ Fechado | §10, §14, §15, §17, §20, §22, §23, §32, §39 |
 
 **Leitura rápida.** O documento v2 cresceu bem além do que o back cobre em duas frentes: **papel
 Administrador + Contas** (§1, que arrasta RF-01n) e **Dashboard v2** (ritmo, metas, série, exportação,
@@ -202,14 +202,14 @@ itens conhecidos e pequenos (mesclar tipos, rodada, auditoria de autenticação 
 - Reabrir devolve para Atribuído sem ligar o cronômetro (ADR-0031) e recalcula o vencimento (ADR-0034).
   Diverge do texto por pedido do dono, com motivo registrado.
 
-#### §22 🔴 RF-24k — rodada de conferência e motivo da não aprovação
+#### §22 ✅ RF-24k — rodada de conferência e motivo da não aprovação
 
-- **Existe**: `ObterDetalheProtocolo.HistoricoConferencias` (outras linhas com o mesmo número).
-- **Falta**: campo `rodada` (a seção 8 prevê; "↻ 2ª conferência"), e o **motivo da não aprovação** —
-  `Reprovar` não recebe motivo.
-- **Como sabemos**: requisito; código (grep `Rodada` só em `Sugestao.cs`, contexto diferente).
-- **Onde entraria**: derivar rodada do histórico por número (sem coluna) ou persistir; `ConcluirConferencia`
-  aceitando motivo quando reprova. Também destrava §33.
+- **Fechado em 2026-09-25** (ADR-0038): `NumeroDaConferencia` calculado na leitura (sem coluna
+  `rodada`) em `ProtocoloResumo`, no detalhe e em cada linha do histórico; o motivo da não aprovação é a
+  `Observacao` da linha reprovada (decisão do dono — `Reprovar` continua sem motivo próprio).
+- **Diverge de**: §8 do documento (coluna `rodada` gravada) — ver as alternativas no ADR.
+- Não destrava §33 sozinho: "aprovado na 1ª" pede o resultado original antes de uma correção, que
+  continua não guardado.
 
 ### Prazos
 

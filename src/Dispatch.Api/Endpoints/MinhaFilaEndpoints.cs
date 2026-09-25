@@ -34,9 +34,9 @@ public static class MinhaFilaEndpoints
                 var agora = relogio.Agora;
                 var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
                 return Results.Ok(new MinhaFilaResponse(
-                    fila.PoolDisponivel.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
-                    fila.Atribuidos.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList(),
-                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente)).ToList()));
+                    fila.PoolDisponivel.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
+                    fila.Atribuidos.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
+                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList()));
             })
             .WithName("ObterMinhaFila")
             .WithSummary("As três colunas do conferente: pool disponível (já filtrado pela alçada), atribuídos e em conferência (RF-19).")
@@ -329,7 +329,8 @@ public static class MinhaFilaEndpoints
     // é mapeamento de verdade (Protocolo → DTO). Faixas do semáforo entram como parâmetro
     // (tabela `config`, seção 8) em vez de campo estático — cada chamador busca a config uma
     // vez por request via ObterConfiguracao.
-    internal static ProtocoloResumo ParaResumo(Protocolo protocolo, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente) => new(
+    internal static ProtocoloResumo ParaResumo(
+        Protocolo protocolo, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente, int numeroDaConferencia) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
@@ -346,7 +347,8 @@ public static class MinhaFilaEndpoints
         protocolo.PausadoEm,
         protocolo.ConcluidoEm,
         protocolo.Duracao,
-        protocolo.AndamentoEm);
+        protocolo.AndamentoEm,
+        numeroDaConferencia);
 
     internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo, Guid? pedidoReaberturaPendenteId) => new(
         protocolo.Id,

@@ -130,8 +130,19 @@ fora da escala). Laterais: `Excecao`, `Descartado`, `Excluido` (guarda `StatusAn
 `Duracao` = override de ajuste manual, senão soma de `CiclosAnteriores` + ciclo atual. Marcar ausente
 ou remover conferente devolve os atribuídos ao pool (RF-27); trocar senha devolve os em conferência.
 
+## Número da conferência (RF-24k)
+
+`ResolvedorDeContinuidade.NumeroDaConferencia` — `1 +` as outras linhas do mesmo `Numero`, na mesma
+etapa, com `AndamentoEm` estritamente anterior e status `Reprovado`. Aprovado (inclusive corrigido),
+aberto, Descartado e Excluído não contam; a própria linha e as posteriores também não (a linha antiga
+continua sendo a 1ª). Calculado na leitura, nunca gravado (ADR-0038): listagens usam
+`NumeroDaConferenciaEmLote` (uma query projetada pelos números distintos), o detalhe reaproveita o
+histórico que já carrega. Chega ao front em `ProtocoloResumo.NumeroDaConferencia`,
+`DetalheProtocoloResponse.NumeroDaConferencia` e em cada `HistoricoConferenciaResponse`, que também
+traz a `Observacao` da linha — o "motivo da não aprovação".
+
 ## Referências
 
-- ADRs 0002, 0007, 0011, 0013, 0017, 0018, 0022, 0024, 0030, 0031–0035, 0037.
+- ADRs 0002, 0007, 0011, 0013, 0017, 0018, 0022, 0024, 0030, 0031–0035, 0037, 0038.
 - Skill `add-domain-rule`.
 - `indicadores-e-aprendizado.md` (Dashboard e sugestões).

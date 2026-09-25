@@ -52,7 +52,7 @@ abstração está no lugar errado. Detalhes e convenções: `docs/patterns/arqui
 | `docs/patterns/testes.md` | For decidir que teste escrever; antes de declarar pronta uma mudança em persistência/DI/auth; um teste de integração ficar intermitente; medir cobertura |
 | `docs/patterns/deploy.md` | Antes de dar push com migration ou env var nova; aplicar migration no Neon; clonar produção; o Render dizer "live" e a API não responder |
 | `docs/patterns/conceitos-dotnet.md` | For explicar um mecanismo de .NET/EF/ASP.NET ao dono, ou encontrar algo que "parece mágica" |
-| `docs/decisions/` (ADR-0001 a 0037) | Antes de mudar um comportamento que parece estranho — pode ser decisão registrada. Índice abaixo |
+| `docs/decisions/` (ADR-0001 a 0038) | Antes de mudar um comportamento que parece estranho — pode ser decisão registrada. Índice abaixo |
 | `docs/gaps-requisitos.md` | For planejar trabalho novo; um RF parecer não implementado; fechar ou abrir uma lacuna (numeração §N estável) |
 | `docs/historico.md` | Precisar do contexto de uma entrega passada (arquivos, como foi verificado, contagem de testes), ou um comentário no código disser "ver CLAUDE.md, seção X" — a seção está lá com o mesmo título |
 
@@ -73,7 +73,7 @@ vira ADR (skill `/api-adr`), lição nova vai pro pattern doc ou pra skill.**
 - **Protocolo e conferência**: 0011 carga calculada na leitura · 0016 pedido de reabertura · 0019
   exclusão soft-delete · 0021 "Normal" = Média · 0022 continuidade de conferência · 0027 atribuição
   manual sem alçada · 0031 reabrir → Atribuído · 0032 tempo por ciclo · 0033 pausar · 0034 reabertura
-  recalcula vencimento · 0035 ajuste manual de duração.
+  recalcula vencimento · 0035 ajuste manual de duração · 0038 nº da conferência na leitura.
 - **Dados e leitura**: 0004 remover conferente é soft delete · 0009 aprendizado sem `evento_decisao` ·
   0023 tabela `config` de linha única · 0026 30 dias nos concluídos · 0029 paginação `{ Itens, Total }`.
 

@@ -26,4 +26,21 @@ public static class ResolvedorDeContinuidade
     // Aprovada continua bloqueando com 409, igual sempre foi.
     public static bool PodeRecriar(IReadOnlyCollection<Protocolo> historicoDoNumero) =>
         historicoDoNumero.All(p => p.Status is StatusProtocolo.Reprovado or StatusProtocolo.Descartado or StatusProtocolo.Excluido);
+
+    // RF-24k — "2ª conferência" (3ª, 4ª...). É 1 + as OUTRAS linhas do mesmo Número, na mesma
+    // etapa, com andamento anterior e que terminaram Reprovadas. Só Reprovado conta como "voltou":
+    // linha ainda aberta, Aprovada (inclusive corrigida de Reprovado), Descartada ou Excluída não é
+    // uma conferência não aprovada. Andamento igual ou posterior não conta, então a linha antiga
+    // continua sendo a 1ª mesmo depois que a nova também for reprovada.
+    //
+    // Calculado na leitura, nunca gravado (ADR-0038): um valor armazenado ficaria desatualizado
+    // com edição de etapa, excluir/restaurar uma linha anterior, correção Reprovado→Aprovado e
+    // dois do mesmo Número no mesmo lote.
+    public static int NumeroDaConferencia(RegistroDoNumero atual, IEnumerable<RegistroDoNumero> historico) =>
+        1 + historico.Count(r =>
+            r.Id != atual.Id
+            && r.Numero == atual.Numero
+            && r.Etapa == atual.Etapa
+            && r.AndamentoEm < atual.AndamentoEm
+            && r.Status == StatusProtocolo.Reprovado);
 }

@@ -18,7 +18,8 @@ public static class DistribuicaoEndpoints
                 var visao = await casoDeUso.ExecutarAsync(loteImportacaoId, cancellationToken);
                 var agora = relogio.Agora;
                 var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
-                ProtocoloResumo ParaResumo(Protocolo p) => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente);
+                ProtocoloResumo ParaResumo(Protocolo p) => MinhaFilaEndpoints.ParaResumo(
+                    p, agora, config.FaixaAtencao, config.FaixaUrgente, visao.NumeroDaConferencia.GetValueOrDefault(p.Id, 1));
 
                 return Results.Ok(new VisaoDistribuicaoResponse(
                     visao.Pool.Select(ParaResumo).ToList(),
@@ -67,7 +68,10 @@ public sealed record ProtocoloResumo(
     TimeSpan? Duracao,
     // "Data de entrada" (RF-18f) — quando o ato chegou de verdade, pedido pelo dono pra
     // aparecer no card, não só no painel de detalhe (DetalheProtocoloResponse já tinha isso).
-    DateTimeOffset AndamentoEm);
+    DateTimeOffset AndamentoEm,
+    // RF-24k: 1 = primeira conferência; 2+ = voltou depois de não aprovado (o front mostra
+    // "↻ 2ª conferência"). Calculado na leitura (ADR-0038), nunca gravado.
+    int NumeroDaConferencia);
 
 public sealed record GrupoPorConferenteResponse(Guid ConferenteId, IReadOnlyList<ProtocoloResumo> Protocolos);
 
