@@ -10,6 +10,7 @@ public abstract class IntegracaoTestBase(IntegracaoFixture fixture) : IAsyncLife
 {
     private const string EmailDistribuidora = "distribuidora@cartorio.com";
     private const string EmailConferente = "conferente-rf27@cartorio.com";
+    private const string EmailAdministrador = "administrador@cartorio.com";
 
     protected IntegracaoFixture Fixture { get; } = fixture;
 
@@ -29,8 +30,19 @@ public abstract class IntegracaoTestBase(IntegracaoFixture fixture) : IAsyncLife
         var seed = await cliente.PostAsync("/dev/seed-e2e", content: null);
         seed.EnsureSuccessStatusCode();
 
-        var email = papel == Papel.Distribuidora ? EmailDistribuidora : EmailConferente;
-        var login = await cliente.PostAsJsonAsync("/auth/login", new { email, senha = SenhaDeTeste });
+        var email = papel switch
+        {
+            Papel.Distribuidora => EmailDistribuidora,
+            Papel.Administrador => EmailAdministrador,
+            _ => EmailConferente,
+        };
+        return await LogarAsync(cliente, email, SenhaDeTeste);
+    }
+
+    // Login sem re-semear — pra contas criadas pelo próprio teste (ex.: uma conta nova via /contas).
+    protected async Task<HttpClient> LogarAsync(HttpClient cliente, string email, string senha)
+    {
+        var login = await cliente.PostAsJsonAsync("/auth/login", new { email, senha });
         login.EnsureSuccessStatusCode();
 
         var autenticado = await login.Content.ReadFromJsonAsync<RespostaLogin>();

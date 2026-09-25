@@ -19,7 +19,9 @@ public sealed class CorteDeHorarioIntegracaoTests(IntegracaoFixture fixture) : I
     [Fact]
     public async Task ProtocoloCriadoDepoisDoCorte_UsaCorteDeHorario_ESobreviveARoundTripEReabertura()
     {
-        var distribuidora = await AutenticarComoAsync(Papel.Distribuidora);
+        // Criar equipe, tipo de ato e escrevente é da Central de regras — só Administrador desde o
+        // ADR-0039 (o admin também faz tudo o que a distribuidora faz, inclusive atribuir e reabrir).
+        var distribuidora = await AutenticarComoAsync(Papel.Administrador);
 
         var equipeId = await CriarEquipeComCorteAsync(distribuidora);
         var tipoAtoId = await CriarTipoAtoAsync(distribuidora);

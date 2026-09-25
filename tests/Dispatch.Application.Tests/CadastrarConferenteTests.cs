@@ -36,4 +36,27 @@ public class CadastrarConferenteTests
 
         Assert.IsType<ResultadoCadastroConferente.EmailJaCadastrado>(resultado);
     }
+
+    // RF-45: a mesma regra da senha inicial de Contas — 8+, e a troca fica obrigatória no primeiro acesso.
+    [Fact]
+    public async Task SenhaInicialCurta_Rejeita()
+    {
+        var casoDeUso = new CadastrarConferente(
+            new FakeUsuarioRepository([]), new FakeConferenteRepository([]), new FakeHashDeSenha(), new FakeUnitOfWork());
+
+        var resultado = await casoDeUso.ExecutarAsync("Fulano", "fulano@cartorio.com", "1234567", Nivel.Junior, jornadaHoras: 8);
+
+        Assert.IsType<ResultadoCadastroConferente.SenhaInicialCurta>(resultado);
+    }
+
+    [Fact]
+    public async Task ContaNova_ExigeTrocaDeSenhaNoPrimeiroAcesso()
+    {
+        var usuarios = new FakeUsuarioRepository([]);
+        var casoDeUso = new CadastrarConferente(usuarios, new FakeConferenteRepository([]), new FakeHashDeSenha(), new FakeUnitOfWork());
+
+        await casoDeUso.ExecutarAsync("Fulano", "fulano@cartorio.com", "senha-123", Nivel.Junior, jornadaHoras: 8);
+
+        Assert.True((await usuarios.ObterPorEmailAsync("fulano@cartorio.com", CancellationToken.None))!.TrocarSenhaNoProximoAcesso);
+    }
 }

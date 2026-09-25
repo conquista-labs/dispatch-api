@@ -12,5 +12,8 @@ public interface IUsuarioRepository
     Task<IReadOnlyCollection<Usuario>> ObterVariosPorIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
 
     Task<bool> ExisteComEmailAsync(string email, CancellationToken cancellationToken);
+
+    // Contas (RF-44): as contas de gestão (Distribuidora e Administrador), ativas ou não.
+    Task<IReadOnlyCollection<Usuario>> ObterPorPapeisAsync(IReadOnlyCollection<Papel> papeis, CancellationToken cancellationToken);
     void Adicionar(Usuario usuario);
 }

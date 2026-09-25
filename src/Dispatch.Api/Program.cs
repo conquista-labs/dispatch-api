@@ -105,6 +105,29 @@ app.UseHttpsRedirection();
 app.UseCors(CorsPolicy);
 
 app.UseAuthentication();
+
+// RF-45 / ADR-0040 — conta com senha inicial: enquanto o token carrega a claim trocar_senha, ele só
+// vale pra ver quem está logado e trocar a senha. Middleware (e não policy nem endpoint filter)
+// porque é um ponto só pra TODA rota autenticada: policy teria de ser anexada a cada grupo, e a
+// FallbackPolicy do ASP.NET só vale pra rota sem política própria — não pegaria as nossas. Fica
+// entre UseAuthentication (o usuário já está identificado) e UseAuthorization.
+app.Use(async (context, next) =>
+{
+    if (context.User.HasClaim(c => c.Type == ClaimsDoDispatch.TrocarSenha)
+        && !RotasLiberadasComTrocaDeSenhaPendente.Contains(context.Request.Path.Value ?? ""))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            codigo = "troca_de_senha_obrigatoria",
+            motivo = "troque a senha inicial antes de continuar",
+        });
+        return;
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 
 // Liveness pura — é o healthCheckPath do render.yaml, decide se o Render considera o
@@ -141,6 +164,7 @@ app.MapSugestaoEndpoints();
 app.MapTipoAtoEndpoints();
 app.MapDashboardEndpoints();
 app.MapConfiguracaoEndpoints();
+app.MapContaEndpoints();
 
 // Só em Development — ver DevSeedEndpoints.cs. Nunca registrado em produção.
 if (app.Environment.IsDevelopment())
@@ -154,3 +178,10 @@ app.Run();
 // (tests/Dispatch.Api.Tests) precisa dela pública pra subir a API em memória. Declarar a
 // partial aqui é o jeito oficial de expor só o tipo, sem mudar nada do comportamento acima.
 public partial class Program;
+
+public partial class Program
+{
+    // Rotas que um token com troca de senha pendente ainda pode chamar (ver o middleware acima).
+    private static readonly HashSet<string> RotasLiberadasComTrocaDeSenhaPendente =
+        new(StringComparer.OrdinalIgnoreCase) { "/auth/me", "/auth/trocar-senha" };
+}

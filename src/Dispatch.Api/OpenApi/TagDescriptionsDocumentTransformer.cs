@@ -19,6 +19,7 @@ internal sealed class TagDescriptionsDocumentTransformer : IOpenApiDocumentTrans
             new() { Name = OpenApiTags.CentralDeRegras, Description = "Alçada e prazos por equipe (RF-31 a RF-38). Só Distribuidora." },
             new() { Name = OpenApiTags.MinhaFila, Description = "Fila e ações do próprio conferente — pegar, iniciar, concluir e ver concluídos do dia (RF-19 a RF-24). Só Conferente." },
             new() { Name = OpenApiTags.Dashboard, Description = "KPIs, score e desempenho por período (RF-42 a RF-46). Distribuidora vê tudo; Conferente só os próprios números." },
+            new() { Name = OpenApiTags.Contas, Description = "Contas de gestão — administradores e distribuidoras (RF-44 a RF-47). Só Administrador." },
             new() { Name = OpenApiTags.Sistema, Description = "Endpoints operacionais, sem regra de negócio." }
         };
 

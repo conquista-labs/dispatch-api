@@ -59,6 +59,12 @@ public static class ServiceCollectionExtensions
         // Auth (AuthEndpoints)
         services.AddScoped<Autenticar>();
         services.AddScoped<ObterUsuarioAtual>();
+        services.AddScoped<TrocarSenhaInicial>();
+
+        // Contas (ContaEndpoints) — perfil Administrador
+        services.AddScoped<CriarConta>();
+        services.AddScoped<ListarContas>();
+        services.AddScoped<DesativarConta>();
 
         // Totp (TotpEndpoints)
         services.AddScoped<RegistrarTotp>();

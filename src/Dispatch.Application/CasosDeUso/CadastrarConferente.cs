@@ -19,12 +19,20 @@ public sealed class CadastrarConferente(
         double jornadaHoras,
         CancellationToken cancellationToken = default)
     {
+        // Antes, qualquer senha passava (o front pedia 6 caracteres). Agora é a mesma regra da
+        // senha inicial de Contas (RF-45): 8+, e troca obrigatória no primeiro acesso.
+        if (!RegrasDeSenha.ServeComoSenhaInicial(senha))
+        {
+            return new ResultadoCadastroConferente.SenhaInicialCurta();
+        }
+
         if (await usuarios.ExisteComEmailAsync(email, cancellationToken))
         {
             return new ResultadoCadastroConferente.EmailJaCadastrado();
         }
 
         var usuario = new Usuario(Guid.NewGuid(), nome, email, hashDeSenha.Hash(senha), Papel.Conferente);
+        usuario.ExigirTrocaDeSenha();
         var conferente = new Conferente(Guid.NewGuid(), usuario.Id, nivel, jornadaHoras, naEscala: true, cargaAtual: 0);
 
         usuarios.Adicionar(usuario);

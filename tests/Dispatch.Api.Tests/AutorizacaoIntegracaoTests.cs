@@ -20,11 +20,12 @@ public sealed class AutorizacaoIntegracaoTests(IntegracaoFixture fixture) : Inte
         Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
     }
 
-    // Par do teste acima: prova que o 403 é sobre papel, não sobre um request malformado.
+    // Par do teste acima: prova que o 403 é sobre papel, não sobre um request malformado. Desde o
+    // perfil Administrador (ADR-0039), cadastrar pessoas é só do admin.
     [Fact]
-    public async Task Distribuidora_CadastraConferente()
+    public async Task Administrador_CadastraConferente()
     {
-        var cliente = await AutenticarComoAsync(Papel.Distribuidora);
+        var cliente = await AutenticarComoAsync(Papel.Administrador);
 
         var resposta = await cliente.PostAsJsonAsync("/conferentes", NovoConferente("conferente-novo@cartorio.com"));
 

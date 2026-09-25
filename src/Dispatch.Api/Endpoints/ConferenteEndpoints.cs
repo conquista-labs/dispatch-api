@@ -33,6 +33,8 @@ public static class ConferenteEndpoints
                         Results.Created($"/conferentes/{sucesso.ConferenteId}", new CadastrarConferenteResponse(sucesso.ConferenteId)),
                     ResultadoCadastroConferente.EmailJaCadastrado =>
                         Results.Conflict(new { motivo = "e-mail já cadastrado" }),
+                    ResultadoCadastroConferente.SenhaInicialCurta => Results.BadRequest(
+                        new { motivo = $"a senha inicial precisa ter pelo menos {RegrasDeSenha.ComprimentoMinimoSenhaInicial} caracteres" }),
                     _ => throw new InvalidOperationException($"Resultado de cadastro não mapeado: {resultado.GetType().Name}")
                 };
             })

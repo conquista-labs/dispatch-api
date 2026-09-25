@@ -36,6 +36,10 @@ public sealed class EmissorDeTokenJwt(IOptions<JwtOptions> opcoes) : IEmissorDeT
             new(JwtRegisteredClaimNames.Iat, agora.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
         };
         claims.AddRange(papeis.Select(papel => new Claim(ClaimTypes.Role, papel.ToString())));
+        if (usuario.TrocarSenhaNoProximoAcesso)
+        {
+            claims.Add(new Claim(ClaimsDoDispatch.TrocarSenha, "true"));
+        }
 
         var token = new JwtSecurityToken(
             issuer: jwt.Emissor,

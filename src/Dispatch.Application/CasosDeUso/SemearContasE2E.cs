@@ -20,18 +20,23 @@ public sealed class SemearContasE2E(
 
     public async Task ExecutarAsync(CancellationToken cancellationToken = default)
     {
-        await GarantirDistribuidoraAsync("Distribuidora Teste", "distribuidora@cartorio.com", cancellationToken);
+        await GarantirContaDeGestaoAsync("Distribuidora Teste", "distribuidora@cartorio.com", Papel.Distribuidora, cancellationToken);
+        // Perfil Administrador (ADR-0039): conta própria, pra os testes cobrirem as duas visões —
+        // a distribuidora continua distribuidora (combo com Conferente), sem cargo nem score.
+        await GarantirContaDeGestaoAsync("Administrador Teste", "administrador@cartorio.com", Papel.Administrador, cancellationToken);
         await GarantirConferenteAsync("Conferente RF27", "conferente-rf27@cartorio.com", cancellationToken);
         await GarantirConferenteAsync("Conferente Visual", "conferente-visual@cartorio.com", cancellationToken);
         await unitOfWork.SalvarAsync(cancellationToken);
     }
 
-    private async Task GarantirDistribuidoraAsync(string nome, string email, CancellationToken cancellationToken)
+    // Usuario.Papel não muda depois de criado — uma conta existente com esse e-mail e outro papel
+    // fica como está (não acontece com as contas de teste, que só nascem aqui).
+    private async Task GarantirContaDeGestaoAsync(string nome, string email, Papel papel, CancellationToken cancellationToken)
     {
         var usuario = await usuarios.ObterPorEmailAsync(email, cancellationToken);
         if (usuario is null)
         {
-            usuarios.Adicionar(new Usuario(Guid.NewGuid(), nome, email, hashDeSenha.Hash(Senha), Papel.Distribuidora));
+            usuarios.Adicionar(new Usuario(Guid.NewGuid(), nome, email, hashDeSenha.Hash(Senha), papel));
             return;
         }
 
