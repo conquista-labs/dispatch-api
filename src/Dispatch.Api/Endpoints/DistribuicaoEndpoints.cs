@@ -50,7 +50,10 @@ public sealed record ProtocoloResumo(
     // desconhecido, RF-09), mesma regra de Protocolo.TipoAtoNomeOriginal. Sem ele o card de
     // exceção "tipo desconhecido" não tinha o que mostrar no tipo de ato (o detalhe já expunha).
     string? TipoAtoNomeOriginal,
-    Guid EscreventeId,
+    // Anulável só na resposta (o Protocolo sempre tem escrevente): GET /minha-fila manda null nos
+    // itens do pool e das atribuídas — o conferente não escolhe o ato pelo escrevente/equipe
+    // (ADR-0046). Em qualquer outra leitura vem sempre preenchido.
+    Guid? EscreventeId,
     Etapa Etapa,
     Prioridade Prioridade,
     StatusProtocolo Status,
