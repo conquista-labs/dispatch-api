@@ -34,16 +34,16 @@ fundo). Onde não investigamos, está dito.
 
 | Visão | Itens |
 | ----- | ----- |
-| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §27, §37 |
+| 🔴 Em aberto | §2, §3, §4, §7, §12, §25, §27 |
 | 🟡 Parcial | §16, §19, §26 |
-| ❔ Não verificado | §5, §6, §9, §11 |
+| ❔ Não verificado | §5, §6, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
-| ⚪ Divergência consciente / fora do back | §13, §21, §28, §30, §31, §38, §41, §42 |
+| ⚪ Divergência consciente / fora do back | §9, §13, §21, §28, §30, §31, §37, §38, §41, §42 |
 | ✅ Fechado | §1, §8, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §35, §36, §39 |
 
-**Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
-**Dashboard v2** (só a exportação — §37; hoje, variação, série, aprovado na 1ª, metas e pesos
-configuráveis, tempo de referência e ritmo já entregues), um projeto à parte. Fora isso, o que resta são itens conhecidos e pequenos (mesclar
+**Leitura rápida.** O papel Administrador + Contas (§1) está fechado; o **Dashboard v2**
+está entregue por inteiro (hoje, variação, série, aprovado na 1ª, metas e pesos configuráveis, tempo
+de referência, ritmo e a exportação em CSV — esta no front, §37). Fora isso, o que resta são itens conhecidos e pequenos (mesclar
 tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 ---
@@ -129,12 +129,11 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
   o andamento escrito. A resposta devolve a etapa detectada, mas o pedido de importação continua recebendo
   `etapa` como campo do lote (a tela pode pré-preencher com o que veio) — RF-05a preservado.
 
-#### §9 ❔ RF-10a — excluir linha do lote no passo 2
+#### §9 ⚪ RF-10a — excluir linha do lote no passo 2
 
-- **Situação**: não investigado. Como a confirmação reprocessa exatamente as linhas enviadas (nada fica
-  guardado entre prévia e confirmação), é provável que baste o front não enviar a linha — sem mudança no
-  back.
-- **Como sabemos**: requisito + desenho de `ImportarLote` (CLAUDE.md).
+- **Situação**: resolvido **no front, sem mudança no back** (dispatch-web #22, 2026-09-25). Como a
+  confirmação reprocessa exatamente as linhas enviadas (nada fica guardado entre prévia e confirmação), o
+  front refaz `/pre-visualizar` com as linhas que sobraram e confirma só essas.
 
 #### §10 ✅ `LoteImportacao` (seção 8)
 
@@ -340,10 +339,12 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
   front.
 - **Como sabemos**: código.
 
-#### §37 🔴 RF-44 (Dashboard) — exportar CSV
+#### §37 ⚪ RF-44 (Dashboard) — exportar CSV
 
-- **Como sabemos**: requisito; grep sem `text/csv`. Pode ser resolvido no front a partir do JSON, mas
-  a decisão não foi tomada.
+- **Situação**: resolvido **no front** a partir do JSON do `GET /dashboard` (dispatch-web #16,
+  2026-09-25) — decisão do dono no PLANO-dashboard-v2 (decisão 5): só a tabela de produção do período;
+  score, faixa e nível só quando quem exporta é Administrador, o que o back já garante cortando esses
+  campos pra quem não é (ADR-0039). Sem endpoint `text/csv`.
 
 #### §38 ⚪ RF-45 — "sem faixa de bônus" lido como nem a própria faixa
 
