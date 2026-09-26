@@ -36,7 +36,8 @@ public static class MinhaFilaEndpoints
                 return Results.Ok(new MinhaFilaResponse(
                     fila.PoolDisponivel.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
                     fila.Atribuidos.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList()));
+                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
+                    ParaFaixas(config)));
             })
             .WithName("ObterMinhaFila")
             .WithSummary("As três colunas do conferente: pool disponível (já filtrado pela alçada), atribuídos e em conferência (RF-19).")
@@ -351,6 +352,11 @@ public static class MinhaFilaEndpoints
         protocolo.AndamentoEm,
         numeroDaConferencia);
 
+    // Mesmas faixas que o Semaforo de cada item usou — a legenda "Prazo do ato" da Minha fila
+    // mostra os limites de verdade, e o Conferente puro não lê GET /config (é só gestão).
+    internal static FaixasSemaforoResponse ParaFaixas(Configuracao config) =>
+        new((int)config.FaixaAtencao.TotalMinutes, (int)config.FaixaUrgente.TotalMinutes);
+
     internal static ProtocoloConcluidoResumo ParaResumoConcluido(Protocolo protocolo, Guid? pedidoReaberturaPendenteId) => new(
         protocolo.Id,
         protocolo.Numero,
@@ -366,7 +372,11 @@ public static class MinhaFilaEndpoints
 public sealed record MinhaFilaResponse(
     IReadOnlyList<ProtocoloResumo> PoolDisponivel,
     IReadOnlyList<ProtocoloResumo> Atribuidos,
-    IReadOnlyList<ProtocoloResumo> EmConferencia);
+    IReadOnlyList<ProtocoloResumo> EmConferencia,
+    FaixasSemaforoResponse Faixas);
+
+// Limites do semáforo da Configuração (seção 8) em minutos inteiros, como GET /config expõe.
+public sealed record FaixasSemaforoResponse(int AtencaoMinutos, int UrgenteMinutos);
 
 public sealed record ConcluirConferenciaRequest(bool Aprovado);
 

@@ -13,12 +13,19 @@ public sealed record ResumoImportacao(
     int EnviadosParaPool,
     int Excecoes,
     IReadOnlyList<string> TiposDesconhecidos,
+    // Quantas linhas processadas (depois da linha de corte) caíram em cada tipo novo deste lote,
+    // na mesma ordem de TiposDesconhecidos — que continua existindo como está (o front em
+    // produção lê a lista de nomes; a contagem é aditiva).
+    IReadOnlyList<TipoDesconhecidoContagem> TiposDesconhecidosContagem,
     IReadOnlyList<string> EscreventesSemEquipe,
     // RF-08: só na prévia (nulo na confirmação — o front não usa e o lote pode ter centenas de
     // linhas, não vale carregar isso na resposta de gravar).
     IReadOnlyList<LinhaPreviaImportacao>? Linhas);
 
 public sealed record AtribuicaoPorConferente(Guid ConferenteId, int Quantidade);
+
+// Nome já normalizado — o mesmo texto que vai em ResumoImportacao.TiposDesconhecidos.
+public sealed record TipoDesconhecidoContagem(string Nome, int Quantidade);
 
 // RF-08: pra cada linha, a regra que gerou o prazo (equipe + etapa) e quantos conferentes
 // tinham alçada pra ela. Equipe vai por nome aqui (e não só um Id, como ProtocoloResumo faz)

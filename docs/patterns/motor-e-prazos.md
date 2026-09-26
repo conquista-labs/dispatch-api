@@ -129,7 +129,8 @@ Ordem de avaliação para um conferente e um caso:
 `Semaforo.Calcular` (sempre computado): verde / amarelo (menos que `FaixaAtencao`) / laranja (menos
 que `FaixaUrgente`) / vermelho (vencido). As faixas vêm de `Configuracao` (padrão 4h/60min) e
 `faixaUrgente` precisa ser menor que `faixaAtencao` (senão o laranja nunca aparece — validado no
-`PUT /config`). Pool, atribuídos de Minha fila e colunas ordenam por `VencimentoEm`, nulos por último.
+`PUT /config`). As duas leituras de fila devolvem as faixas em minutos (`faixas`), pra legenda do
+front sem depender de `GET /config` (só gestão). Pool, atribuídos de Minha fila e colunas ordenam por `VencimentoEm`, nulos por último.
 
 ## Ciclo de vida do protocolo (resumo)
 

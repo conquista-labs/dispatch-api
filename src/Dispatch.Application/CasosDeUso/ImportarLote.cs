@@ -85,6 +85,8 @@ public sealed class ImportarLote(
         var enviadosParaPool = 0;
         var excecoes = 0;
         var tiposDesconhecidos = new SortedSet<string>(NormalizadorDeTexto.ComparadorDeNome);
+        var idsDosTiposNovos = new HashSet<Guid>();
+        var linhasPorTipoNovo = new Dictionary<string, int>(NormalizadorDeTexto.ComparadorDeNome);
         var escreventesSemEquipe = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         var linhasPreview = persistir ? null : new List<LinhaPreviaImportacao>();
 
@@ -112,7 +114,6 @@ public sealed class ImportarLote(
                 novosEscreventes.Add(escrevente);
             }
 
-            var tipoJaExistia = tipoPorNome.ContainsKey(linha.TipoAto);
             if (!tipoPorNome.TryGetValue(linha.TipoAto, out var tipoAto))
             {
                 // Tipo de ato novo entra direto no catálogo (nome normalizado) — não fica
@@ -126,7 +127,19 @@ public sealed class ImportarLote(
                 tipoAto = new TipoAto(Guid.NewGuid(), NormalizadorDeTexto.ParaNomeProprio(linha.TipoAto));
                 tipoPorNome[tipoAto.Nome] = tipoAto;
                 novosTipos.Add(tipoAto);
+                idsDosTiposNovos.Add(tipoAto.Id);
                 tiposDesconhecidos.Add(tipoAto.Nome);
+            }
+
+            // "Conhecido" é "já estava no catálogo antes deste lote", não "está no dicionário
+            // agora": o tipo criado na 1ª linha entra em tipoPorNome, e perguntar ao dicionário
+            // marcava a 2ª linha do mesmo tipo novo como conhecida (sem o destaque na prévia).
+            // Por Id, então "INVENTARIO" e "Inventário" na mesma rodada — que o comparador já
+            // resolve pro mesmo TipoAto — saem com a mesma marcação e somam na mesma contagem.
+            var tipoEhNovoNesteLote = idsDosTiposNovos.Contains(tipoAto.Id);
+            if (tipoEhNovoNesteLote)
+            {
+                linhasPorTipoNovo[tipoAto.Nome] = linhasPorTipoNovo.GetValueOrDefault(tipoAto.Nome) + 1;
             }
 
             var protocolo = new Protocolo(
@@ -155,7 +168,7 @@ public sealed class ImportarLote(
             };
 
             linhasPreview?.Add(new LinhaPreviaImportacao(
-                linha.Protocolo, linha.TipoAto, TipoConhecido: tipoJaExistia, linha.Escrevente,
+                linha.Protocolo, linha.TipoAto, TipoConhecido: !tipoEhNovoNesteLote, linha.Escrevente,
                 resolucaoPrazo.Equipe?.Nome, resolucaoPrazo.Prazo.Tipo, protocolo.VencimentoEm,
                 protocolo.VencimentoEm is { } vencimento ? Semaforo.Calcular(vencimento, agora, faixaAtencao, faixaUrgente) : null,
                 JaExiste: false, comAlcada));
@@ -205,6 +218,8 @@ public sealed class ImportarLote(
             enviadosParaPool,
             excecoes,
             tiposDesconhecidos.ToList(),
+            // Mesma ordem de TiposDesconhecidos (o SortedSet dita), pra o front poder parear as duas.
+            tiposDesconhecidos.Select(nome => new TipoDesconhecidoContagem(nome, linhasPorTipoNovo[nome])).ToList(),
             escreventesSemEquipe.ToList(),
             linhasPreview);
     }

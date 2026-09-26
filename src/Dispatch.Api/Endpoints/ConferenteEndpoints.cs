@@ -177,7 +177,8 @@ public static class ConferenteEndpoints
                 return Results.Ok(new MinhaFilaResponse(
                     fila.PoolDisponivel.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
                     fila.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList()));
+                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
+                    MinhaFilaEndpoints.ParaFaixas(config)));
             })
             .WithName("ObterFilaDoConferente")
             .WithSummary("Mesma leitura de Minha fila (RF-19), só que de um conferente específico — pra Distribuidora acompanhar, nunca agir.")

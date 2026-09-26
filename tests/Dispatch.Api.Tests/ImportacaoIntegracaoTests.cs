@@ -42,6 +42,24 @@ public sealed class ImportacaoIntegracaoTests(IntegracaoFixture fixture) : Integ
         await NoBancoAsync(async db => Assert.Equal(2, await db.Protocolos.CountAsync()));
     }
 
+    // Contrato JSON da contagem por tipo novo (camelCase, na mesma ordem de tiposDesconhecidos)
+    // e a marcação de TODAS as linhas do tipo novo na prévia, pelo pipeline real.
+    [Fact]
+    public async Task Previa_TipoNovoEmDuasLinhas_ContagemEMarcacaoNoJson()
+    {
+        var cliente = await AutenticarComoAsync(Papel.Distribuidora);
+
+        var resposta = await cliente.PostAsJsonAsync("/protocolos/importar/pre-visualizar", Lote(Andamento.AddDays(-1)));
+        Assert.True(resposta.IsSuccessStatusCode, await resposta.Content.ReadAsStringAsync());
+        var resumo = await resposta.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+
+        Assert.Equal("Venda e Compra", resumo.GetProperty("tiposDesconhecidos").EnumerateArray().Single().GetString());
+        var contagem = resumo.GetProperty("tiposDesconhecidosContagem").EnumerateArray().Single();
+        Assert.Equal("Venda e Compra", contagem.GetProperty("nome").GetString());
+        Assert.Equal(2, contagem.GetProperty("quantidade").GetInt32());
+        Assert.All(resumo.GetProperty("linhas").EnumerateArray(), l => Assert.False(l.GetProperty("tipoConhecido").GetBoolean()));
+    }
+
     private static object Lote(DateTimeOffset linhaDeCorte) => new
     {
         etapa = nameof(Etapa.PosConferencia),

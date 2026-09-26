@@ -30,7 +30,9 @@ metadata:
 - Mapeamento compartilhado não se duplica: `MinhaFilaEndpoints.ParaResumo`/`ParaResumoConcluido`
   (`internal`) servem Minha fila, Distribuição e `/conferentes/{id}/fila`. `ProtocoloResumo` é o DTO
   magro dos cards (hoje com `Prioridade`, `IniciadoEm`, `ConcluidoEm`, `Duracao`, `PausadoEm`,
-  `AndamentoEm`, `EscreventeId`...); `DetalheProtocoloResponse` é o do painel.
+  `AndamentoEm`, `EscreventeId`...); `DetalheProtocoloResponse` é o do painel. `MinhaFilaResponse`
+  (Minha fila e `/conferentes/{id}/fila`) leva também `faixas: { atencaoMinutos, urgenteMinutos }`
+  (`ParaFaixas`) — os limites do semáforo pra legenda, porque o Conferente puro não lê `GET /config`.
 
 ## Back manda o fato cru, front resolve o nome
 

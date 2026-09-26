@@ -206,6 +206,86 @@ public class ImportarLoteTests
         Assert.Single(protocolos.Todos.Select(p => p.TipoAtoId).Distinct());
     }
 
+    // "Conhecido" é "já estava no catálogo antes do lote": o tipo criado na 1ª linha entra no
+    // dicionário do laço, e perguntar a ele marcava a 2ª linha em diante como conhecida.
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task PreVisualizar_TodasAsLinhasDeUmTipoNovo_SaemComoDesconhecidas(int quantidade)
+    {
+        var linhas = Enumerable.Range(0, quantidade)
+            .Select(i => new LinhaImportacao($"26220{i}", "ATA NOTARIAL", "Fulano", LinhaDeCorte.AddHours(1 + i)))
+            .Append(new LinhaImportacao("262299", "Inventário", "Fulano", LinhaDeCorte.AddHours(1)))
+            .ToList();
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
+
+        var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+
+        Assert.All(resumo.Linhas!.Where(l => l.TipoAto == "ATA NOTARIAL"), l => Assert.False(l.TipoConhecido));
+        Assert.True(resumo.Linhas!.Single(l => l.TipoAto == "Inventário").TipoConhecido);
+        Assert.Equal(new TipoDesconhecidoContagem("Ata Notarial", quantidade), Assert.Single(resumo.TiposDesconhecidosContagem));
+    }
+
+    // Grafia com e sem acento do mesmo tipo novo na mesma rodada: um tipo só, as duas linhas
+    // marcadas como desconhecidas e somadas na mesma contagem.
+    [Fact]
+    public async Task PreVisualizar_MesmoTipoNovoComESemAcento_MarcacaoEContagemUnicas()
+    {
+        var linhas = new[]
+        {
+            new LinhaImportacao("262203", "ESCRITURA DE DOACAO", "Fulano", LinhaDeCorte.AddHours(1)),
+            new LinhaImportacao("262204", "Escritura de Doação", "Fulano", LinhaDeCorte.AddHours(2)),
+            new LinhaImportacao("262205", "escritura de doação", "Fulano", LinhaDeCorte.AddHours(3))
+        };
+        var casoDeUso = NovoCasoDeUso(out _, out _, out _);
+
+        var resumo = await casoDeUso.PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+
+        Assert.All(resumo.Linhas!, l => Assert.False(l.TipoConhecido));
+        var nome = Assert.Single(resumo.TiposDesconhecidos);
+        Assert.Equal(new TipoDesconhecidoContagem(nome, 3), Assert.Single(resumo.TiposDesconhecidosContagem));
+    }
+
+    // Contagem só das linhas processadas (as de antes da linha de corte não contam), na mesma
+    // ordem de TiposDesconhecidos — e igual na prévia e na confirmação.
+    [Fact]
+    public async Task Contagem_PorTipoNovo_IgnoraLinhaDeCorte_MesmaOrdemDosNomes_NaPreviaENaConfirmacao()
+    {
+        var linhas = new[]
+        {
+            new LinhaImportacao("262201", "USUCAPIAO", "Fulano", LinhaDeCorte.AddHours(1)),
+            new LinhaImportacao("262202", "ATA NOTARIAL", "Fulano", LinhaDeCorte.AddHours(1)),
+            new LinhaImportacao("262203", "USUCAPIAO", "Fulano", LinhaDeCorte.AddHours(2)),
+            new LinhaImportacao("262204", "ATA NOTARIAL", "Fulano", LinhaDeCorte.AddHours(-1)),
+            new LinhaImportacao("262205", "Inventário", "Fulano", LinhaDeCorte.AddHours(1))
+        };
+
+        var previa = await NovoCasoDeUso(out _, out _, out _)
+            .PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+        var confirmacao = await NovoCasoDeUso(out _, out _, out _)
+            .ConfirmarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte);
+
+        foreach (var resumo in new[] { previa, confirmacao })
+        {
+            Assert.Equal(["Ata Notarial", "Usucapiao"], resumo.TiposDesconhecidos);
+            Assert.Equal(
+                [new TipoDesconhecidoContagem("Ata Notarial", 1), new TipoDesconhecidoContagem("Usucapiao", 2)],
+                resumo.TiposDesconhecidosContagem);
+        }
+    }
+
+    [Fact]
+    public async Task Contagem_SemTipoNovo_EhVazia()
+    {
+        var linhas = new[] { new LinhaImportacao("262203", "INVENTARIO", "Fulano", LinhaDeCorte.AddHours(1)) };
+
+        var resumo = await NovoCasoDeUso(out _, out _, out _)
+            .PreVisualizarAsync(linhas, Etapa.PreConferencia, LinhaDeCorte, FaixaAtencao, FaixaUrgente);
+
+        Assert.Empty(resumo.TiposDesconhecidosContagem);
+        Assert.True(Assert.Single(resumo.Linhas!).TipoConhecido);
+    }
+
     // Duplicata por acento já gravada antes da correção (o bug criava "Inventario" ao lado de
     // "Inventário") não pode derrubar a importação com chave repetida no dicionário: vale a
     // ativa — desativar a duplicata na tela Tipos de ato é o jeito de escolher qual fica.
