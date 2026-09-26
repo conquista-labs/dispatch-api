@@ -22,6 +22,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- .xls sintéticos (nomes fictícios) do conector de relatório — gerados por
+       Conectores/Fixtures/gerar_fixtures.py; copiados pra saída pra o teste abrir pelo caminho. -->
+  <ItemGroup>
+    <None Include="Conectores/Fixtures/*.xls" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Dispatch.Api\Dispatch.Api.csproj" />
   </ItemGroup>

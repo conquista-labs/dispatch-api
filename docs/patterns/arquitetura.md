@@ -88,7 +88,12 @@ tests/
 - Portas em `Application/Portas/`: `IProtocoloRepository`, `IConferenteRepository`, `IUsuarioRepository`,
   `IEquipeRepository`, `IEscreventeRepository`, `ITipoAtoRepository`, `IRegraAlcadaRepository`,
   `ISugestaoRepository`, `IConfiguracaoRepository`, `IRelogio`, `IHashDeSenha`, `IEmissorDeToken`,
-  `IUnitOfWork`...
+  `IConversorDeRelatorio`, `IUnitOfWork`...
+- **Porta com vários adaptadores**: `IConversorDeRelatorio` (conector de relatório do cartório,
+  [ADR-0045](../decisions/0045-conector-de-relatorio-por-cartorio.md)) é registrada uma vez por formato, e o
+  caso de uso recebe `IEnumerable<IConversorDeRelatorio>` — o container entrega todos os registros. Cada
+  adaptador devolve `FormatoNaoReconhecido` pro que não é dele; o caso de uso usa o primeiro que reconhece.
+  Adaptadores moram em `Infrastructure/Conectores/`.
 - **`IUnitOfWork`**: métodos de escrita dos repositórios (`Adicionar`) só marcam estado; o caso de
   uso chama `unitOfWork.SalvarAsync()` **uma vez** no fim. Equivale ao `prisma.$transaction([...])`,
   só que explícito por injeção. O projeto não usa `BeginTransactionAsync` em lugar nenhum — premissa

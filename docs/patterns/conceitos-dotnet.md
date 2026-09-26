@@ -55,6 +55,24 @@ metadata:
   obrigatória (ADR-0040).
 - **`IMemoryCache`**: cache em memória do processo (`AddMemoryCache()`), usado para a configuração.
 
+- **`IFormFile` e `multipart/form-data`**: parâmetro `IFormFile` num endpoint minimal API faz o framework
+  ler o corpo como formulário multipart (o `FormData` do navegador) e entregar a parte do arquivo já
+  bufferizada (memória ou disco temporário). Base64 dentro de JSON funcionaria, mas incha ~33% e obriga o front
+  a montar a string. Usado em `/protocolos/importar/converter` (ADR-0045).
+- **Antiforgery**: rota minimal API que lê formulário ganha validação anti-CSRF por padrão e, sem
+  `app.UseAntiforgery()`, falha em runtime (`... contains anti-forgery metadata, but a middleware was not
+  found`). CSRF é o navegador anexando um cookie sozinho a um post forjado; com token Bearer no header não há
+  cookie, então a rota usa `.DisableAntiforgery()`.
+- **Vários registros da mesma interface no DI**: `AddSingleton<IX, A>()` + `AddSingleton<IX, B>()` e um
+  construtor pedindo `IEnumerable<IX>` recebe os dois, na ordem de registro (pedindo `IX` sozinho, vem o
+  último). É o jeito de ter "um adaptador por formato" (`IConversorDeRelatorio`).
+- **Code pages (`CodePagesEncodingProvider`)**: o .NET moderno traz de fábrica só UTF-8/UTF-16/ASCII/Latin-1;
+  encodings antigos do Windows (1252...) estão no runtime mas precisam de
+  `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` antes de usar. O `.xls` (BIFF8) usa code page,
+  e o ExcelDataReader exige o registro — feito no construtor estático do adaptador.
+- **Construtor estático** (`static NomeDaClasse() { ... }`): roda uma única vez por processo, antes do primeiro
+  uso da classe — bom pra inicialização global que pertence àquela classe (o registro de code pages acima).
+
 ## EF Core
 
 - **`DbContext` + change tracker**: o contexto rastreia as entidades que carregou; `SaveChanges`

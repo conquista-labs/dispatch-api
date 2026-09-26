@@ -1079,3 +1079,19 @@ com "Nega etapa Pós" própria (só faz pré) aparecia com 0/52 tipos e sem equi
 é permitido em alguma etapa, e as equipes são avaliadas na primeira etapa liberada — corrige na origem
 também a cobertura (RF-30) e o "N com alçada" dos Tipos (RF-34a), que reusam a lista. Contrato igual,
 sem migration. 728 testes (266 Domain + 390 Application + 72 Api.Tests), build sem avisos.
+
+## 2026-09-25 — Conector de relatório do cartório (.xls)
+
+`POST /protocolos/importar/converter` (Distribuidora, `multipart/form-data`, campo `arquivo`) recebe o
+"Relatório de Andamentos dos Protocolos" que o sistema do cartório exporta em `.xls` e devolve `{ conector,
+etapa, linhas, totalDeclarado, totalLido }` — as linhas no formato de `/pre-visualizar`. Não grava nada. Erros
+400 `{ codigo, motivo }`: `formato_nao_reconhecido`, `etapas_misturadas`, `totais_nao_conferem`,
+`relatorio_vazio`, `arquivo_ausente`; 413 `arquivo_grande_demais` (> 5 MB). Porta `IConversorDeRelatorio`
+(Application) + adaptador `ConversorRelatorioDeAndamentosXls` (Infrastructure/Conectores, ExcelDataReader 3.9)
++ caso de uso `ConverterRelatorio` — [ADR-0045](decisions/0045-conector-de-relatorio-por-cartorio.md); fecha
+gaps §8 para `.xls`. Sem migration. Verificado: unidade do adaptador sobre `.xls` sintéticos
+(`Conectores/Fixtures/gerar_fixtures.py`, nomes fictícios), caso de uso com fakes, integração do endpoint (200
+com offset -03:00 no JSON, 400s, 413, 403 Conferente, linhas convertidas aceitas por `/pre-visualizar`); o
+adaptador leu o relatório real do dono **localmente** (26 protocolos, 12 blocos, totais batendo; arquivo fora
+do repo). `dotnet run` na porta 5301: `/health` ok, rota no OpenAPI, 401 sem token. 750 testes (266 Domain +
+393 Application + 91 Api.Tests), build sem avisos; cobertura de linha 81% / branch 70,8% / método 83,1%.

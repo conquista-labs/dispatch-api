@@ -1,4 +1,5 @@
 using Dispatch.Application;
+using Dispatch.Infrastructure.Conectores;
 using Dispatch.Infrastructure.Repositorios;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -45,6 +46,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEmissorDeToken, EmissorDeTokenJwt>();
         services.AddSingleton<ITotp, TotpComOtpNet>();
         services.AddSingleton<ICifrador, CifradorAes>();
+        // Conector de relatório do cartório (ADR-0045). Um por formato de relatório; ConverterRelatorio
+        // recebe todos (IEnumerable) e usa o primeiro que reconhecer o arquivo. Singleton porque não
+        // guarda estado nenhum entre chamadas.
+        services.AddSingleton<IConversorDeRelatorio, ConversorRelatorioDeAndamentosXls>();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Secao));
         services.Configure<TotpOptions>(configuration.GetSection(TotpOptions.Secao));
@@ -117,6 +122,7 @@ public static class ServiceCollectionExtensions
 
         // Importação (ImportacaoEndpoints)
         services.AddScoped<ImportarLote>();
+        services.AddScoped<ConverterRelatorio>();
 
         // Distribuição (DistribuicaoEndpoints)
         services.AddScoped<ObterVisaoDistribuicao>();

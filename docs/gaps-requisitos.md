@@ -38,8 +38,8 @@ fundo). Onde não investigamos, está dito.
 | 🟡 Parcial | §16, §19, §26 |
 | ❔ Não verificado | §5, §6, §9, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
-| ⚪ Divergência consciente / fora do back | §8, §13, §21, §28, §30, §31, §38, §41, §42 |
-| ✅ Fechado | §1, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §35, §36, §39 |
+| ⚪ Divergência consciente / fora do back | §13, §21, §28, §30, §31, §38, §41, §42 |
+| ✅ Fechado | §1, §8, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §35, §36, §39 |
 
 **Leitura rápida.** O papel Administrador + Contas (§1) está fechado; a frente grande que resta é o
 **Dashboard v2** (só a exportação — §37; hoje, variação, série, aprovado na 1ª, metas e pesos
@@ -117,10 +117,17 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 ### Importação
 
-#### §8 ⚪ RF-05 — `.csv/.xlsx` e upload de arquivo
+#### §8 ✅ RF-05 — `.csv/.xlsx` e upload de arquivo
 
-- **Situação**: o back recebe CSV como texto colado; `.xlsx` não é aceito. O relatório real é PDF,
-  convertido fora do sistema. Decisão registrada: ADR-0005.
+- **Situação (até 2026-09-25)**: o back recebia só linhas prontas (CSV colado); o relatório era PDF,
+  convertido fora do sistema (ADR-0005).
+- **Fechado em 2026-09-25** para o formato que o cartório exporta hoje: `POST /protocolos/importar/converter`
+  recebe o `.xls` (upload multipart) e devolve etapa, linhas e totais conferidos — conector por formato,
+  ADR-0045. Continua de fora, por falta de relatório nesse formato: upload de `.xlsx` e de `.csv` (a colagem
+  segue valendo); cada um entra como outro adaptador de `IConversorDeRelatorio`.
+- **Divergência com RF-05a**: o requisito diz que "o relatório não traz essa coluna" (etapa); o `.xls` real traz
+  o andamento escrito. A resposta devolve a etapa detectada, mas o pedido de importação continua recebendo
+  `etapa` como campo do lote (a tela pode pré-preencher com o que veio) — RF-05a preservado.
 
 #### §9 ❔ RF-10a — excluir linha do lote no passo 2
 
