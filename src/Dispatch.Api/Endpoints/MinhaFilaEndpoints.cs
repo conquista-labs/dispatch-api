@@ -33,14 +33,13 @@ public static class MinhaFilaEndpoints
                 var fila = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
                 var agora = relogio.Agora;
                 var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
-                return Results.Ok(new MinhaFilaResponse(
-                    fila.PoolDisponivel.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.Atribuidos.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.EmConferencia.Select(p => ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    ParaFaixas(config)));
+                // ADR-0046: na fila do próprio conferente, o escrevente (e por ele a equipe) só aparece
+                // no que já está em conferência — pool e atribuídas saem sem, pra ninguém escolher o
+                // ato por quem fez. A visão de gestão (GET /conferentes/{id}/fila) continua com tudo.
+                return Results.Ok(ParaFilaResponse(fila, agora, config, ocultarEscreventeAntesDeConferir: true));
             })
             .WithName("ObterMinhaFila")
-            .WithSummary("As três colunas do conferente: pool disponível (já filtrado pela alçada), atribuídos e em conferência (RF-19).")
+            .WithSummary("As três colunas do conferente: pool disponível (alçada + ordem da vez), atribuídos e em conferência (RF-19), e a regra do pool (ordem obrigatória, limite na mão, próximo da vez). escreventeId sai null no pool e nas atribuídas.")
             .Produces<MinhaFilaResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -58,17 +57,29 @@ public static class MinhaFilaEndpoints
                 }
 
                 var resultado = await casoDeUso.ExecutarAsync(id, conferente, cancellationToken);
+                // `codigo` só nos dois desfechos novos (ADR-0046): o front reage diferente a cada um. Os
+                // de antes ficam exatamente como estavam (status e corpo), o front em produção lê assim.
                 return resultado switch
                 {
                     ResultadoPegarProtocolo.Sucesso => Results.NoContent(),
                     ResultadoPegarProtocolo.NaoEncontrado => Results.NotFound(new { motivo = "protocolo não encontrado" }),
                     ResultadoPegarProtocolo.NaoEstaNoPool => Results.Conflict(new { motivo = "protocolo não está no pool" }),
                     ResultadoPegarProtocolo.SemAlcada => Results.Forbid(),
-                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado}")
+                    ResultadoPegarProtocolo.LimiteNaMao limite => Results.Conflict(new
+                    {
+                        codigo = "limite_na_mao",
+                        motivo = $"você já tem {limite.NaMao} {(limite.NaMao == 1 ? "ato" : "atos")} na mão (limite {limite.Limite}) — conclua algum antes de pegar outro"
+                    }),
+                    ResultadoPegarProtocolo.ForaDaVez => Results.Conflict(new
+                    {
+                        codigo = "fora_da_vez",
+                        motivo = "é preciso pegar o primeiro da fila do pool"
+                    }),
+                    _ => throw new InvalidOperationException($"Resultado não mapeado: {resultado.GetType().Name}")
                 };
             })
             .WithName("PegarProtocolo")
-            .WithSummary("Pega um protocolo do pool pra si — só funciona se estiver no pool e dentro da alçada do conferente (RF-20).")
+            .WithSummary("Pega um protocolo do pool pra si (RF-20): precisa estar no pool, na alçada, com a mão abaixo do limite (409 limite_na_mao) e, com a ordem obrigatória ligada, ser o primeiro da vez (409 fora_da_vez).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
@@ -331,12 +342,13 @@ public static class MinhaFilaEndpoints
     // (tabela `config`, seção 8) em vez de campo estático — cada chamador busca a config uma
     // vez por request via ObterConfiguracao.
     internal static ProtocoloResumo ParaResumo(
-        Protocolo protocolo, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente, int numeroDaConferencia) => new(
+        Protocolo protocolo, DateTimeOffset agora, TimeSpan faixaAtencao, TimeSpan faixaUrgente, int numeroDaConferencia,
+        bool ocultarEscrevente = false) => new(
         protocolo.Id,
         protocolo.Numero,
         protocolo.TipoAtoId,
         protocolo.TipoAtoNomeOriginal,
-        protocolo.EscreventeId,
+        ocultarEscrevente ? null : protocolo.EscreventeId,
         protocolo.Etapa,
         protocolo.Prioridade,
         protocolo.Status,
@@ -351,6 +363,23 @@ public static class MinhaFilaEndpoints
         protocolo.Duracao,
         protocolo.AndamentoEm,
         numeroDaConferencia);
+
+    // As duas leituras de fila (a do próprio conferente e a de gestão) montam a resposta aqui, pra que
+    // `regraDoPool` e a ordem saiam iguais nas duas — só o corte do escrevente difere.
+    internal static MinhaFilaResponse ParaFilaResponse(
+        MinhaFila fila, DateTimeOffset agora, Configuracao config, bool ocultarEscreventeAntesDeConferir)
+    {
+        ProtocoloResumo Resumo(Protocolo p, bool ocultarEscrevente) => ParaResumo(
+            p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1), ocultarEscrevente);
+
+        return new MinhaFilaResponse(
+            fila.PoolDisponivel.Select(p => Resumo(p, ocultarEscreventeAntesDeConferir)).ToList(),
+            fila.Atribuidos.Select(p => Resumo(p, ocultarEscreventeAntesDeConferir)).ToList(),
+            fila.EmConferencia.Select(p => Resumo(p, ocultarEscrevente: false)).ToList(),
+            ParaFaixas(config),
+            new RegraDoPoolResponse(
+                fila.RegraDoPool.OrdemObrigatoria, fila.RegraDoPool.LimiteNaMao, fila.RegraDoPool.NaMao, fila.RegraDoPool.ProximoId));
+    }
 
     // Mesmas faixas que o Semaforo de cada item usou — a legenda "Prazo do ato" da Minha fila
     // mostra os limites de verdade, e o Conferente puro não lê GET /config (é só gestão).
@@ -373,7 +402,13 @@ public sealed record MinhaFilaResponse(
     IReadOnlyList<ProtocoloResumo> PoolDisponivel,
     IReadOnlyList<ProtocoloResumo> Atribuidos,
     IReadOnlyList<ProtocoloResumo> EmConferencia,
-    FaixasSemaforoResponse Faixas);
+    FaixasSemaforoResponse Faixas,
+    RegraDoPoolResponse RegraDoPool);
+
+// ADR-0046. naMao = atribuídos + em conferência. proximoId = o primeiro do pool disponível na ordem da
+// vez enquanto naMao < limiteNaMao (senão null) — vem preenchido mesmo com ordemObrigatoria false (o
+// campo quer dizer "o próximo da vez"; com a chave desligada o front pode ignorar).
+public sealed record RegraDoPoolResponse(bool OrdemObrigatoria, int LimiteNaMao, int NaMao, Guid? ProximoId);
 
 // Limites do semáforo da Configuração (seção 8) em minutos inteiros, como GET /config expõe.
 public sealed record FaixasSemaforoResponse(int AtencaoMinutos, int UrgenteMinutos);

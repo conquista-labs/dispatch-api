@@ -130,11 +130,27 @@ Ordem de avaliação para um conferente e um caso:
 que `FaixaUrgente`) / vermelho (vencido). As faixas vêm de `Configuracao` (padrão 4h/60min) e
 `faixaUrgente` precisa ser menor que `faixaAtencao` (senão o laranja nunca aparece — validado no
 `PUT /config`). As duas leituras de fila devolvem as faixas em minutos (`faixas`), pra legenda do
-front sem depender de `GET /config` (só gestão). Pool, atribuídos de Minha fila e colunas ordenam por `VencimentoEm`, nulos por último.
+front sem depender de `GET /config` (só gestão). Atribuídos de Minha fila e colunas ordenam por `VencimentoEm`, nulos por último.
+O **pool disponível** das duas leituras de fila ordena pela **vez** (`OrdemDoPool`, Domain): prioridade
+decrescente → `VencimentoEm` (nulo por último) → `AndamentoEm` → `Numero` → `Id`
+([ADR-0046](../decisions/0046-pool-em-ordem-e-limite-na-mao.md)).
+
+## Regra do pool (ADR-0046)
+
+- `PegarProtocolo` só aceita o **primeiro da vez** do pool disponível do conferente (com
+  `Configuracao.PoolEmOrdemObrigatoria`, padrão ligada) e só com **na mão** (atribuídos + em conferência,
+  pausado conta) abaixo de `Configuracao.LimiteDeAtosNaMao` (padrão 5). O limite vence a vez.
+- `PoolDoConferente` (Application, `internal`) é o único lugar que monta "pool disponível + ordem + regra":
+  `ObterMinhaFila` e `PegarProtocolo` passam por ele — se um dos dois filtrar ou ordenar por conta própria,
+  o botão do front e o servidor discordam.
+- Não travados pela regra: `AtribuirManualmente`, `AtribuirAoMenosCarregado`, o motor e a continuidade
+  (podem passar do limite); o Iniciar (só RF-21, `LimiteDeAtosSimultaneos`, que conta só em conferência).
+- `RegraDoPool.ProximoId` = primeiro da ordem se `NaMao < LimiteNaMao`, senão `null` — preenchido mesmo
+  com a chave desligada.
 
 ## Ciclo de vida do protocolo (resumo)
 
-`Pool` → (`PegarProtocolo`/motor/manual) `Atribuido` → `IniciarConferencia` (limite de simultâneos da
+`Pool` → (`PegarProtocolo` na vez e abaixo do limite na mão / motor / manual) `Atribuido` → `IniciarConferencia` (limite de simultâneos da
 config, padrão 1; pausado conta) `Conferindo` ⇄ `Pausar`/`Retomar` → `Aprovado`/`Reprovado`
 (`CorrigirResultado` dentro da janela; `ReabrirConferencia` → `Atribuido` do mesmo dono, ou `Pool` se
 fora da escala). Laterais: `Excecao`, `Descartado`, `Excluido` (guarda `StatusAntesDeExcluir`).

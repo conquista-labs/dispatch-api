@@ -34,6 +34,10 @@ public sealed class ConfiguracaoConfiguration : IEntityTypeConfiguration<Configu
         builder.Property(c => c.PesoPrazo);
         builder.Property(c => c.PesoQualidade);
         builder.Property(c => c.PesoComplexidade);
+        // ADR-0046 (regra do pool). Mesma razão das metas: o DEFAULT (5 / true) só na migration — com
+        // HasDefaultValue(true) o EF omitiria no INSERT o false (default do CLR) e ele viraria true.
+        builder.Property(c => c.LimiteDeAtosNaMao);
+        builder.Property(c => c.PoolEmOrdemObrigatoria);
         // Leituras calculadas sobre as colunas acima — não são coluna nem tabela.
         builder.Ignore(c => c.Metas);
         builder.Ignore(c => c.Pesos);

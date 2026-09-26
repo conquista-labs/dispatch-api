@@ -19,7 +19,7 @@ public static class ConfiguracaoEndpoints
         grupo.MapGet("/", async (ObterConfiguracao casoDeUso, CancellationToken cancellationToken) =>
                 Results.Ok(ParaResponse(await casoDeUso.ExecutarAsync(cancellationToken))))
             .WithName("ObterConfiguracao")
-            .WithSummary("Os valores de configuração do sistema: faixas do semáforo, limites, janelas, limiares de aprendizado, metas do Dashboard (RF-42b) e pesos do score (RF-46).")
+            .WithSummary("Os valores de configuração do sistema: faixas do semáforo, limites, janelas, limiares de aprendizado, metas do Dashboard (RF-42b), pesos do score (RF-46) e a regra do pool (limite na mão, ordem obrigatória — ADR-0046).")
             .Produces<ConfiguracaoResponse>();
 
         grupo.MapPut("/", async (ConfiguracaoRequest request, AtualizarConfiguracao casoDeUso, CancellationToken cancellationToken) =>
@@ -32,6 +32,7 @@ public static class ConfiguracaoEndpoints
                     request.LimiarEscreventeOrfao, request.LimiarRiscoQualidadeCasos, request.LimiarRiscoQualidadeReprovacao,
                     request.MetaNoPrazo, request.MetaAprovadoNaPrimeira,
                     request.PesoVolume, request.PesoPrazo, request.PesoQualidade, request.PesoComplexidade,
+                    request.LimiteDeAtosNaMao, request.PoolEmOrdemObrigatoria,
                     cancellationToken);
                 return resultado switch
                 {
@@ -43,7 +44,7 @@ public static class ConfiguracaoEndpoints
             })
             .WithName("AtualizarConfiguracao")
             .RequireAuthorization(policy => policy.RequireRole(nameof(Papel.Administrador)))
-            .WithSummary("Substitui os 12 valores operacionais juntos. Metas (RF-42b, frações 0,50–1,00) e pesos do score (RF-46, inteiros ≥ 0 somando 100) são opcionais: ausente/null mantém o atual.")
+            .WithSummary("Substitui os 12 valores operacionais juntos. Metas (RF-42b, frações 0,50–1,00), pesos do score (RF-46, inteiros ≥ 0 somando 100), limiteDeAtosNaMao (≥ 1) e poolEmOrdemObrigatoria (ADR-0046) são opcionais: ausente/null mantém o atual.")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status400BadRequest);
     }
@@ -55,20 +56,24 @@ public static class ConfiguracaoEndpoints
         (int)c.JanelaDeCorrecao.TotalMinutes, c.DiasDeMemoriaDescarte, c.TempoMedioPorAtoMinutos,
         c.LimiarTipoDesconhecido, c.LimiarPrazoIrrealCasos, c.LimiarPrazoIrrealEstouro,
         c.LimiarEscreventeOrfao, c.LimiarRiscoQualidadeCasos, c.LimiarRiscoQualidadeReprovacao,
-        c.MetaNoPrazo, c.MetaAprovadoNaPrimeira, c.PesoVolume, c.PesoPrazo, c.PesoQualidade, c.PesoComplexidade);
+        c.MetaNoPrazo, c.MetaAprovadoNaPrimeira, c.PesoVolume, c.PesoPrazo, c.PesoQualidade, c.PesoComplexidade,
+        c.LimiteDeAtosNaMao, c.PoolEmOrdemObrigatoria);
 }
 
 // Metas: frações 0–1 (RF-42b). Pesos: inteiros que somam 100, cada um o máximo da sua parcela (RF-46).
+// LimiteDeAtosNaMao/PoolEmOrdemObrigatoria: regra do pool (ADR-0046) — no fim, campo novo em DTO existente.
 public sealed record ConfiguracaoResponse(
     int FaixaAtencaoMinutos, int FaixaUrgenteMinutos, int LimiteDeAtosSimultaneos, int JanelaDeCorrecaoMinutos,
     int DiasDeMemoriaDescarte, double TempoMedioPorAtoMinutos, int LimiarTipoDesconhecido, int LimiarPrazoIrrealCasos,
     double LimiarPrazoIrrealEstouro, int LimiarEscreventeOrfao, int LimiarRiscoQualidadeCasos, double LimiarRiscoQualidadeReprovacao,
-    double MetaNoPrazo, double MetaAprovadoNaPrimeira, int PesoVolume, int PesoPrazo, int PesoQualidade, int PesoComplexidade);
+    double MetaNoPrazo, double MetaAprovadoNaPrimeira, int PesoVolume, int PesoPrazo, int PesoQualidade, int PesoComplexidade,
+    int LimiteDeAtosNaMao, bool PoolEmOrdemObrigatoria);
 
-// Os 6 últimos são opcionais (ausente/null = mantém o atual): o front anterior manda o PUT sem eles.
+// Os 8 últimos são opcionais (ausente/null = mantém o atual): o front anterior manda o PUT sem eles.
 public sealed record ConfiguracaoRequest(
     int FaixaAtencaoMinutos, int FaixaUrgenteMinutos, int LimiteDeAtosSimultaneos, int JanelaDeCorrecaoMinutos,
     int DiasDeMemoriaDescarte, double TempoMedioPorAtoMinutos, int LimiarTipoDesconhecido, int LimiarPrazoIrrealCasos,
     double LimiarPrazoIrrealEstouro, int LimiarEscreventeOrfao, int LimiarRiscoQualidadeCasos, double LimiarRiscoQualidadeReprovacao,
     double? MetaNoPrazo = null, double? MetaAprovadoNaPrimeira = null,
-    int? PesoVolume = null, int? PesoPrazo = null, int? PesoQualidade = null, int? PesoComplexidade = null);
+    int? PesoVolume = null, int? PesoPrazo = null, int? PesoQualidade = null, int? PesoComplexidade = null,
+    int? LimiteDeAtosNaMao = null, bool? PoolEmOrdemObrigatoria = null);

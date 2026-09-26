@@ -128,9 +128,10 @@ public sealed class ConfiguracaoIntegracaoTests(IntegracaoFixture fixture) : Int
     }
 
     private static readonly string[] CamposNovos =
-        ["metaNoPrazo", "metaAprovadoNaPrimeira", "pesoVolume", "pesoPrazo", "pesoQualidade", "pesoComplexidade"];
+        ["metaNoPrazo", "metaAprovadoNaPrimeira", "pesoVolume", "pesoPrazo", "pesoQualidade", "pesoComplexidade",
+         "limiteDeAtosNaMao", "poolEmOrdemObrigatoria"];
 
-    // O corpo que o front anterior manda: os 12 de sempre, sem nenhum dos 6 novos.
+    // O corpo que o front anterior manda: os 12 de sempre, sem nenhum dos opcionais (metas, pesos, regra do pool).
     private static JsonObject CorpoDoFrontAnterior(JsonObject lido)
     {
         var corpo = lido.DeepClone().AsObject();
@@ -142,7 +143,7 @@ public sealed class ConfiguracaoIntegracaoTests(IntegracaoFixture fixture) : Int
         return corpo;
     }
 
-    // GET e PUT usam os mesmos nomes — devolver o que foi lido restaura os 18 valores.
+    // GET e PUT usam os mesmos nomes — devolver o que foi lido restaura os 20 valores.
     private static async Task RestaurarAsync(HttpClient admin, JsonObject original)
     {
         var resposta = await admin.PutAsJsonAsync("/config", original);

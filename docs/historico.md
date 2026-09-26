@@ -1119,3 +1119,41 @@ vazio); `FaixasNaFilaIntegracaoTests` (padrão 240/60 e depois de `PUT /config` 
 `dotnet run` na porta 5302: `/health` 200, `/minha-fila` 401 sem token, schemas novos no OpenAPI. 757 testes
 (266 Domain + 398 Application + 93 Api.Tests), build sem avisos; cobertura de linha 81,2% / branch 70,9% /
 método 83,2%.
+
+## 2026-09-26 — Pool em ordem obrigatória e limite de atos na mão
+
+Regra de produto do dono ([ADR-0046](decisions/0046-pool-em-ordem-e-limite-na-mao.md), gaps §44): o
+conferente só pega do pool o **primeiro da vez** e só com menos atos **na mão** (atribuídos + em
+conferência) que o limite; na própria Minha fila, não vê o escrevente dos atos que ainda não está
+conferindo.
+
+- **Domain** (`Fila/RegraDoPool.cs`): `OrdemDoPool.Ordenar` (prioridade decrescente → `VencimentoEm`, nulo por
+  último → `AndamentoEm` → `Numero` → `Id`), `RegraDoPool` (`Calcular`, `Avaliar` → `DecisaoDoPegar`).
+  `Configuracao.LimiteDeAtosNaMao` (padrão 5, ≥ 1) e `PoolEmOrdemObrigatoria` (padrão `true`) com
+  `DefinirRegraDoPool`.
+- **Application**: `PoolDoConferente` (`internal`) é a lista única — alçada + ordem + regra — usada por
+  `ObterMinhaFila` (ganhou `IConfiguracaoRepository` e `MinhaFila.RegraDoPool`) e `PegarProtocolo` (ganhou
+  `IConfiguracaoRepository`; `ResultadoPegarProtocolo` virou hierarquia fechada com `LimiteNaMao(NaMao,
+  Limite)` e `ForaDaVez`). `AtualizarConfiguracao` aceita os dois campos como opcionais.
+- **Api**: `GET /minha-fila` e `GET /conferentes/{id}/fila` ganham `regraDoPool: { ordemObrigatoria,
+  limiteNaMao, naMao, proximoId }` (montados em `MinhaFilaEndpoints.ParaFilaResponse`); em `/minha-fila`,
+  `escreventeId` sai `null` no pool e nas atribuídas (`ProtocoloResumo.EscreventeId` virou `Guid?`).
+  `POST /minha-fila/{id}/pegar` ganha 409 `{ codigo: "limite_na_mao" | "fora_da_vez", motivo }`; 404, 409
+  "não está no pool" e 403 inalterados. `GET/PUT /config` com `limiteDeAtosNaMao` e
+  `poolEmOrdemObrigatoria` (PUT só Administrador, opcionais, 400 com motivo para limite < 1).
+- **Migration** `20260926210154_AdicionaRegraDoPoolEmConfiguracao`: `limite_de_atos_na_mao integer NOT NULL
+  DEFAULT 5`, `pool_em_ordem_obrigatoria boolean NOT NULL DEFAULT true` (defaults editados à mão sobre o
+  0/false gerado). **Aplicar no Neon antes do merge.**
+
+Verificado: `RegraDoPoolTests` (Domain, 21: cada precedência da ordem, determinismo, `ProximoId` com mão
+cheia/pool vazio/chave desligada, limite vencendo a vez, validação ≥ 1); `PegarProtocoloTests` (fora da vez,
+Alta vence vencimento, primeiro fora da alçada não tira a vez, chave desligada, mão cheia contando
+atribuídos + em conferência com e sem chave, concluídos e de outro não contam, corrida sequencial →
+`NaoEstaNoPool`), `ObterMinhaFilaTests` (+2), `AtualizarConfiguracaoTests` (+4), `AtribuirManualmenteTests`
+(+1: distribuidora atribui acima do limite); `PoolEmOrdemIntegracaoTests` (6: ordem e `regraDoPool` nas
+duas rotas, 409 `fora_da_vez`/`limite_na_mao`, segundo conferente → 409 sem `codigo`, `escreventeId` null
+no pool/atribuídas e presente em `emConferencia` e na visão de gestão, chave desligada, 400 e 403 do PUT,
+colunas relidas do Postgres). `dotnet run --no-launch-profile` na porta 5303: `/health` 200, 401 sem
+token, schemas novos no OpenAPI, `GET /minha-fila` com `regraDoPool` e `escreventeId` null, 409
+`fora_da_vez` num segundo do pool, 400 no `PUT /config` com limite 0. 800 testes (287 Domain + 414
+Application + 99 Api.Tests), build sem avisos; cobertura de linha 81,5% / branch 71,3% / método 83,5%.

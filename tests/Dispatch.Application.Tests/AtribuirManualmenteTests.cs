@@ -89,4 +89,27 @@ public class AtribuirManualmenteTests
 
         Assert.Equal(ResultadoAtribuirManualmente.ProtocoloNaoEncontrado, resultado);
     }
+
+    // ADR-0046: o limite de atos na mão só trava o conferente pegando do pool — a distribuidora
+    // atribuindo na mão continua podendo passar dele (AtribuirManualmente nem lê a Configuração).
+    [Fact]
+    public async Task ConferenteComAMaoCheia_DistribuidoraAindaAtribui()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var naMao = Enumerable.Range(1, Configuracao.LimiteDeAtosNaMaoPadrao).Select(i =>
+        {
+            var p = new Protocolo(Guid.NewGuid(), $"{i}", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+            p.AtribuirA(conferente.Id, DateTimeOffset.UtcNow);
+            return p;
+        }).ToList();
+        var protocolo = new Protocolo(Guid.NewGuid(), "999", Guid.NewGuid(), Guid.NewGuid(), Etapa.PreConferencia, DateTimeOffset.UtcNow);
+        var casoDeUso = new AtribuirManualmente(
+            new FakeProtocoloRepository([.. naMao, protocolo]), new FakeConferenteRepository([conferente]), new FakeUnitOfWork(),
+            new FakeRelogio(DateTimeOffset.UtcNow));
+
+        var resultado = await casoDeUso.ExecutarAsync(protocolo.Id, conferente.Id);
+
+        Assert.Equal(ResultadoAtribuirManualmente.Sucesso, resultado);
+        Assert.Equal(conferente.Id, protocolo.DonoId);
+    }
 }

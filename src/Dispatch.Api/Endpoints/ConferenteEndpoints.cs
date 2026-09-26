@@ -174,11 +174,8 @@ public static class ConferenteEndpoints
                 var fila = await casoDeUso.ExecutarAsync(conferente, cancellationToken);
                 var agora = relogio.Agora;
                 var config = await obterConfiguracao.ExecutarAsync(cancellationToken);
-                return Results.Ok(new MinhaFilaResponse(
-                    fila.PoolDisponivel.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.Atribuidos.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    fila.EmConferencia.Select(p => MinhaFilaEndpoints.ParaResumo(p, agora, config.FaixaAtencao, config.FaixaUrgente, fila.NumeroDaConferencia.GetValueOrDefault(p.Id, 1))).ToList(),
-                    MinhaFilaEndpoints.ParaFaixas(config)));
+                // Gestão vê tudo, inclusive o escrevente do pool e das atribuídas (ADR-0046).
+                return Results.Ok(MinhaFilaEndpoints.ParaFilaResponse(fila, agora, config, ocultarEscreventeAntesDeConferir: false));
             })
             .WithName("ObterFilaDoConferente")
             .WithSummary("Mesma leitura de Minha fila (RF-19), só que de um conferente específico — pra Distribuidora acompanhar, nunca agir.")

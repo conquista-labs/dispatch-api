@@ -61,6 +61,11 @@ metadata:
 - Distribuidora vendo a fila de alguém: `GET /conferentes/{id}/fila` e `/concluidos-hoje` resolvem o
   `Conferente` pelo id da URL; os casos de uso (`ObterMinhaFila`/`ObterConcluidosHoje`) nunca
   dependeram de "quem está logado".
+- **Recorte por rota, não por papel** (ADR-0046): `GET /minha-fila` manda `escreventeId: null` no pool e nas
+  atribuídas (o conferente não escolhe o ato por quem fez); `GET /conferentes/{id}/fila` manda tudo. O
+  Conferente não tem outro caminho para ligar escrevente a um ato: `GET /protocolos/{id}/detalhe` é só
+  Distribuidora, e `GET /escreventes` lista nomes sem ato. Rota nova que o Conferente leia e que traga
+  `escreventeId` de ato fora de conferência precisa do mesmo recorte.
 - `POST /dev/seed-e2e` é anônimo e só existe em Development (gate no `Program.cs`). Semeia também
   `distribuidora@` e `administrador@cartorio.com` (senha `Senha123!`).
 

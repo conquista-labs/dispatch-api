@@ -18,6 +18,7 @@ public sealed class AtualizarConfiguracao(IConfiguracaoRepository configuracao, 
         double limiarPrazoIrrealEstouro, int limiarEscreventeOrfao, int limiarRiscoQualidadeCasos,
         double limiarRiscoQualidadeReprovacao, double? metaNoPrazo = null, double? metaAprovadoNaPrimeira = null,
         int? pesoVolume = null, int? pesoPrazo = null, int? pesoQualidade = null, int? pesoComplexidade = null,
+        int? limiteDeAtosNaMao = null, bool? poolEmOrdemObrigatoria = null,
         CancellationToken cancellationToken = default)
     {
         var motivo = Validar(
@@ -34,13 +35,20 @@ public sealed class AtualizarConfiguracao(IConfiguracaoRepository configuracao, 
         // anterior, que mutar+salvar aqui não persistiria (ver IConfiguracaoRepository).
         var atual = await configuracao.ObterParaEdicaoAsync(cancellationToken);
 
+        // Regra do pool (ADR-0046): mesmo tratamento das metas — opcional, null mantém o atual.
+        var limiteNaMao = limiteDeAtosNaMao ?? atual.LimiteDeAtosNaMao;
+        if (Configuracao.ValidarLimiteDeAtosNaMao(limiteNaMao) is { } motivoLimite)
+        {
+            return new ResultadoAtualizarConfiguracao.ValorInvalido(motivoLimite);
+        }
+
         var metas = new MetasDoDashboard(
             metaNoPrazo ?? atual.MetaNoPrazo, metaAprovadoNaPrimeira ?? atual.MetaAprovadoNaPrimeira);
         var pesos = new PesosDoScore(
             pesoVolume ?? atual.PesoVolume, pesoPrazo ?? atual.PesoPrazo, pesoQualidade ?? atual.PesoQualidade,
             pesoComplexidade ?? atual.PesoComplexidade);
         // Regra no Domain (MetasDoDashboard/PesosDoScore); aqui só vira desfecho. Antes de mutar
-        // qualquer coisa — nada dos 18 valores muda quando um deles é recusado.
+        // qualquer coisa — nada dos 20 valores muda quando um deles é recusado.
         var motivoMetasOuPesos = metas.Validar() ?? pesos.Validar();
         if (motivoMetasOuPesos is not null)
         {
@@ -52,6 +60,7 @@ public sealed class AtualizarConfiguracao(IConfiguracaoRepository configuracao, 
             limiarTipoDesconhecido, limiarPrazoIrrealCasos, limiarPrazoIrrealEstouro, limiarEscreventeOrfao, limiarRiscoQualidadeCasos,
             limiarRiscoQualidadeReprovacao);
         atual.DefinirMetasEPesos(metas, pesos);
+        atual.DefinirRegraDoPool(limiteNaMao, poolEmOrdemObrigatoria ?? atual.PoolEmOrdemObrigatoria);
         await unitOfWork.SalvarAsync(cancellationToken);
         configuracao.InvalidarCache();
 

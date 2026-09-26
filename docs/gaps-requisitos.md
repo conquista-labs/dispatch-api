@@ -38,7 +38,7 @@ fundo). Onde não investigamos, está dito.
 | 🟡 Parcial | §16, §19, §26 |
 | ❔ Não verificado | §5, §6, §11 |
 | ⏸ Adiado | §18, §24, §29, §40, §43 |
-| ⚪ Divergência consciente / fora do back | §9, §13, §21, §28, §30, §31, §37, §38, §41, §42 |
+| ⚪ Divergência consciente / fora do back | §9, §13, §21, §28, §30, §31, §37, §38, §41, §42, §44 |
 | ✅ Fechado | §1, §8, §10, §14, §15, §17, §20, §22, §23, §32, §33, §34, §35, §36, §39 |
 
 **Leitura rápida.** O papel Administrador + Contas (§1) está fechado; o **Dashboard v2**
@@ -171,7 +171,9 @@ tipos, RF-01m/n, auditoria de autenticação sem leitura).
 
 #### §16 🟡 "Filas e listas ordenam sempre pelo vencimento mais próximo" (seção 5)
 
-- **Feito**: pool (Distribuição e Minha fila) e "Atribuídas a você".
+- **Feito**: pool (Distribuição e Minha fila) e "Atribuídas a você". O pool da Minha fila (e de
+  `/conferentes/{id}/fila`) passou a ordenar pela vez, com prioridade **antes** do vencimento (§44,
+  ADR-0046) — divergência consciente do "sempre pelo vencimento".
 - **Falta**: buckets `emConferencia`, `concluidos`, `excecoes`, `atribuidos` da Distribuição sem
   `ORDER BY` (registrado como "gap conhecido à parte" no corte de concluídos).
 - **Onde entraria**: `ObterVisaoDistribuicao`.
@@ -393,3 +395,17 @@ Conferente), RF-30b–d, RNF-05 a RNF-13. Ver `../dispatch-web/CLAUDE.md`.
 - **Como sabemos**: código (`ListarRegrasAlcada`, `ObterDetalheProtocolo`), análise da Feature 3.
 - **Onde entraria**: um sujeito `SujeitoAlcada.Todos` para regras que valem pra todos, deixando as de
   nível só como exceções visíveis ao admin. **Reavaliar** se o dono achar a inferência um problema.
+
+#### §44 ⚪ Pool em ordem obrigatória, limite de atos na mão e escrevente escondido (além de RF-20)
+
+- **O que é**: regra do dono de 2026-09-26 ([ADR-0046](decisions/0046-pool-em-ordem-e-limite-na-mao.md)) —
+  o conferente só pega o primeiro da vez do pool dele (prioridade → vencimento → entrada), só com menos atos
+  na mão que `LimiteDeAtosNaMao` (padrão 5), e não vê o escrevente dos atos do pool e das atribuídas na
+  própria Minha fila. Não está no documento: RF-20 não fala em ordem, RF-21 limita só os em conferência.
+- **Tensões com o documento**: RF-24f ("filtros aplicados ao pool — é assim que o conferente encontra o que
+  quer pegar") — o filtro continua, mas só o primeiro da vez do pool **inteiro** dele pode ser pego, e o
+  filtro por equipe perde o `escreventeId` no pool/atribuídas do conferente; seção 5 ("filas ordenam sempre
+  pelo vencimento") — o pool agora põe prioridade antes do vencimento (ver §16).
+- **Como sabemos**: código (`OrdemDoPool`, `RegraDoPool`, `PoolDoConferente`, `PegarProtocolo`).
+- **Risco registrado**: duas chamadas simultâneas de pegar podem furar o limite ou a vez (sem token de
+  concorrência em `Protocolo`, como antes da regra).

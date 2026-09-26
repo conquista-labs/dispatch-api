@@ -32,7 +32,11 @@ metadata:
   magro dos cards (hoje com `Prioridade`, `IniciadoEm`, `ConcluidoEm`, `Duracao`, `PausadoEm`,
   `AndamentoEm`, `EscreventeId`...); `DetalheProtocoloResponse` é o do painel. `MinhaFilaResponse`
   (Minha fila e `/conferentes/{id}/fila`) leva também `faixas: { atencaoMinutos, urgenteMinutos }`
-  (`ParaFaixas`) — os limites do semáforo pra legenda, porque o Conferente puro não lê `GET /config`.
+  (`ParaFaixas`) — os limites do semáforo pra legenda, porque o Conferente puro não lê `GET /config` — e
+  `regraDoPool: { ordemObrigatoria, limiteNaMao, naMao, proximoId }` (ADR-0046). As duas leituras montam a
+  resposta em `MinhaFilaEndpoints.ParaFilaResponse`; a de `/minha-fila` passa
+  `ocultarEscreventeAntesDeConferir: true` e `escreventeId` sai `null` no pool e nas atribuídas
+  (`ProtocoloResumo.EscreventeId` é `Guid?` só por isso — em qualquer outra leitura vem preenchido).
 
 ## Back manda o fato cru, front resolve o nome
 
@@ -55,8 +59,10 @@ metadata:
 - Corpo de erro sempre `{ motivo: "..." }` — inclusive 404 (`Results.NotFound()` vazio foi corrigido
   na auditoria de qualidade). Quando o front precisa reagir diferente a cada desfecho (não só mostrar o
   texto), o corpo leva também `codigo` em **snake_case** estável — `{ codigo: "senha_fraca", motivo }`
-  (`AuthEndpoints`, `ContaEndpoints`, `/protocolos/importar/converter`). O front decide pelo `codigo`, nunca
-  pelo texto do `motivo`.
+  (`AuthEndpoints`, `ContaEndpoints`, `/protocolos/importar/converter`, `POST /minha-fila/{id}/pegar` com
+  `limite_na_mao`/`fora_da_vez`). O front decide pelo `codigo`, nunca pelo texto do `motivo`. Desfecho
+  **novo** num endpoint que já existe ganha `codigo`; os antigos ficam com o corpo que o front em produção já
+  lê (não se acrescenta `codigo` retroativamente só por simetria).
 - **Upload de arquivo** (`/protocolos/importar/converter`, [ADR-0045](../decisions/0045-conector-de-relatorio-por-cartorio.md)):
   `multipart/form-data` com `IFormFile?` (anulável, pra devolver o nosso 400 `arquivo_ausente` em vez do 400
   vazio do binding), `.DisableAntiforgery()` (sem ele a rota falha em runtime — a autenticação é Bearer, sem

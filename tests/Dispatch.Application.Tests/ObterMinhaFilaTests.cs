@@ -16,7 +16,7 @@ public class ObterMinhaFilaTests
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([permitido, negado]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([regra]),
-            new FakeTipoAtoRepository([tipo]));
+            new FakeTipoAtoRepository([tipo]), new FakeConfiguracaoRepository());
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -24,6 +24,8 @@ public class ObterMinhaFilaTests
         Assert.Equal(permitido.Id, resultado.Id);
     }
 
+    // ADR-0046: a ordem do pool agora é a da vez (OrdemDoPool) — entre prioridades iguais continua
+    // valendo "quem vence antes", sem vencimento por último.
     [Fact]
     public async Task PoolDisponivel_OrdenaPorVencimentoAscendente()
     {
@@ -40,7 +42,7 @@ public class ObterMinhaFilaTests
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
-            new FakeTipoAtoRepository([tipo]));
+            new FakeTipoAtoRepository([tipo]), new FakeConfiguracaoRepository());
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -67,7 +69,7 @@ public class ObterMinhaFilaTests
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([venceDepois, semVencimento, vencePrimeiro]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
-            new FakeTipoAtoRepository([]));
+            new FakeTipoAtoRepository([]), new FakeConfiguracaoRepository());
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -92,7 +94,7 @@ public class ObterMinhaFilaTests
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([atribuido, emConferencia, deOutroConferente]), new FakeEscreventeRepository([]), new FakeRegraAlcadaRepository([]),
-            new FakeTipoAtoRepository([]));
+            new FakeTipoAtoRepository([]), new FakeConfiguracaoRepository());
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
@@ -117,11 +119,59 @@ public class ObterMinhaFilaTests
 
         var casoDeUso = new ObterMinhaFila(
             new FakeProtocoloRepository([reprovadaAntes, voltou, primeiraVez]), new FakeEscreventeRepository([]),
-            new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]));
+            new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]), new FakeConfiguracaoRepository());
 
         var fila = await casoDeUso.ExecutarAsync(conferente);
 
         Assert.Equal(2, fila.NumeroDaConferencia[voltou.Id]);
         Assert.Equal(1, fila.NumeroDaConferencia[primeiraVez.Id]);
+    }
+
+    // ADR-0046: a leitura usa a mesma ordem da vez que o PegarProtocolo — Alta vence quem vence antes.
+    [Fact]
+    public async Task PoolDisponivel_PrioridadeAltaNoTopo_EProximoIdEhOPrimeiro()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var agora = DateTimeOffset.UtcNow;
+        var normalVencendo = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, agora);
+        normalVencendo.DefinirPrazo(new Prazo(TipoPrazo.UmaHora), agora);
+        var altaSemVencimento = new Protocolo(Guid.NewGuid(), "2", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, agora, Prioridade.Alta);
+
+        var casoDeUso = new ObterMinhaFila(
+            new FakeProtocoloRepository([normalVencendo, altaSemVencimento]), new FakeEscreventeRepository([]),
+            new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]), new FakeConfiguracaoRepository());
+
+        var fila = await casoDeUso.ExecutarAsync(conferente);
+
+        Assert.Equal([altaSemVencimento.Id, normalVencendo.Id], fila.PoolDisponivel.Select(p => p.Id));
+        Assert.Equal(new RegraDoPool(OrdemObrigatoria: true, LimiteNaMao: 5, NaMao: 0, ProximoId: altaSemVencimento.Id), fila.RegraDoPool);
+    }
+
+    // naMao = atribuídos + em conferência (pausado incluído); na mão cheia, proximoId some.
+    [Fact]
+    public async Task RegraDoPool_ContaAtribuidosEEmConferencia_ESemProximoNaMaoCheia()
+    {
+        var conferente = new Conferente(Guid.NewGuid(), Guid.NewGuid(), Nivel.Pleno, 8, naEscala: true, cargaAtual: 0);
+        var tipo = new TipoAto(Guid.NewGuid(), "Inventário");
+        var agora = DateTimeOffset.UtcNow;
+        var atribuido = new Protocolo(Guid.NewGuid(), "1", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, agora);
+        atribuido.AtribuirA(conferente.Id, agora);
+        var pausado = new Protocolo(Guid.NewGuid(), "2", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, agora);
+        pausado.AtribuirA(conferente.Id, agora);
+        pausado.IniciarConferencia(agora);
+        pausado.Pausar(agora);
+        var noPool = new Protocolo(Guid.NewGuid(), "3", tipo.Id, Guid.NewGuid(), Etapa.PosConferencia, agora);
+        var configuracao = new FakeConfiguracaoRepository();
+        (await configuracao.ObterAsync(default)).DefinirRegraDoPool(limiteDeAtosNaMao: 2, poolEmOrdemObrigatoria: true);
+
+        var casoDeUso = new ObterMinhaFila(
+            new FakeProtocoloRepository([atribuido, pausado, noPool]), new FakeEscreventeRepository([]),
+            new FakeRegraAlcadaRepository([]), new FakeTipoAtoRepository([tipo]), configuracao);
+
+        var fila = await casoDeUso.ExecutarAsync(conferente);
+
+        Assert.Equal(new RegraDoPool(OrdemObrigatoria: true, LimiteNaMao: 2, NaMao: 2, ProximoId: null), fila.RegraDoPool);
+        Assert.Equal([noPool.Id], fila.PoolDisponivel.Select(p => p.Id));
     }
 }
