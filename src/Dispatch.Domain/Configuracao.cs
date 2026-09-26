@@ -47,6 +47,15 @@ public sealed class Configuracao
     public int PesoQualidade { get; private set; } = PesosDoScore.Padrao.Qualidade;
     public int PesoComplexidade { get; private set; } = PesosDoScore.Padrao.Complexidade;
 
+    // Regra do pool (ADR-0046, decisão do dono de 2026-09-26): quantos atos um conferente pode ter "na
+    // mão" (atribuídos + em conferência) e ainda pegar do pool, e se ele só pode pegar o primeiro da
+    // vez (OrdemDoPool). Diferente de LimiteDeAtosSimultaneos (RF-21), que conta só "em conferência" e
+    // trava o Iniciar. Os dois valem só pro conferente pegando — atribuição manual e motor não olham.
+    // Mesmo molde das metas: fora do construtor, com o padrão aqui e mudança só por DefinirRegraDoPool.
+    public const int LimiteDeAtosNaMaoPadrao = 5;
+    public int LimiteDeAtosNaMao { get; private set; } = LimiteDeAtosNaMaoPadrao;
+    public bool PoolEmOrdemObrigatoria { get; private set; } = true;
+
     public MetasDoDashboard Metas => new(MetaNoPrazo, MetaAprovadoNaPrimeira);
     public PesosDoScore Pesos => new(PesoVolume, PesoPrazo, PesoQualidade, PesoComplexidade);
 
@@ -110,4 +119,20 @@ public sealed class Configuracao
         PesoQualidade = pesos.Qualidade;
         PesoComplexidade = pesos.Complexidade;
     }
+
+    // Mesma defesa de DefinirMetasEPesos: a Application já devolveu 400 com motivo; aqui garante que
+    // nenhum caminho grave limite < 1 (um limite 0 travaria todo conferente de pegar qualquer coisa).
+    public void DefinirRegraDoPool(int limiteDeAtosNaMao, bool poolEmOrdemObrigatoria)
+    {
+        if (ValidarLimiteDeAtosNaMao(limiteDeAtosNaMao) is { } motivo)
+        {
+            throw new ArgumentException(motivo);
+        }
+
+        LimiteDeAtosNaMao = limiteDeAtosNaMao;
+        PoolEmOrdemObrigatoria = poolEmOrdemObrigatoria;
+    }
+
+    public static string? ValidarLimiteDeAtosNaMao(int limiteDeAtosNaMao) =>
+        limiteDeAtosNaMao < 1 ? "limiteDeAtosNaMao precisa ser pelo menos 1" : null;
 }

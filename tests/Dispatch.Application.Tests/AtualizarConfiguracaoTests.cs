@@ -126,4 +126,56 @@ public class AtualizarConfiguracaoTests
         Assert.Equal(MetasDoDashboard.Padrao, atual.Metas);
         Assert.Equal(PesosDoScore.Padrao, atual.Pesos);
     }
+
+    // ADR-0046: a regra do pool entra no PUT como opcional — o front anterior não manda e não pode
+    // resetar o que o administrador escolheu.
+    private static Task<ResultadoAtualizarConfiguracao> AtualizarRegraDoPoolAsync(
+        AtualizarConfiguracao casoDeUso, int? limiteDeAtosNaMao, bool? poolEmOrdemObrigatoria, int faixaAtencaoMinutos = 240) =>
+        casoDeUso.ExecutarAsync(
+            TimeSpan.FromMinutes(faixaAtencaoMinutos), TimeSpan.FromMinutes(60), 1, TimeSpan.FromMinutes(15), 30, 18, 5, 8, 0.6, 3, 6, 0.5,
+            limiteDeAtosNaMao: limiteDeAtosNaMao, poolEmOrdemObrigatoria: poolEmOrdemObrigatoria);
+
+    [Fact]
+    public async Task RegraDoPool_Informada_Atualiza()
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+
+        var resultado = await AtualizarRegraDoPoolAsync(casoDeUso, limiteDeAtosNaMao: 3, poolEmOrdemObrigatoria: false);
+
+        Assert.IsType<ResultadoAtualizarConfiguracao.Sucesso>(resultado);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+        Assert.Equal(3, atual.LimiteDeAtosNaMao);
+        Assert.False(atual.PoolEmOrdemObrigatoria);
+    }
+
+    [Fact]
+    public async Task RegraDoPool_Ausente_MantemAAtual()
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+        atual.DefinirRegraDoPool(limiteDeAtosNaMao: 2, poolEmOrdemObrigatoria: false);
+
+        var resultado = await AtualizarRegraDoPoolAsync(casoDeUso, limiteDeAtosNaMao: null, poolEmOrdemObrigatoria: null);
+
+        Assert.IsType<ResultadoAtualizarConfiguracao.Sucesso>(resultado);
+        Assert.Equal(2, atual.LimiteDeAtosNaMao);
+        Assert.False(atual.PoolEmOrdemObrigatoria);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-3)]
+    public async Task LimiteNaMaoAbaixoDeUm_RejeitaComMotivoSemMudarNada(int limite)
+    {
+        var casoDeUso = NovoCasoDeUso(out var configuracao);
+        var atual = await configuracao.ObterAsync(CancellationToken.None);
+
+        var resultado = await AtualizarRegraDoPoolAsync(casoDeUso, limite, poolEmOrdemObrigatoria: false, faixaAtencaoMinutos: 180);
+
+        var invalido = Assert.IsType<ResultadoAtualizarConfiguracao.ValorInvalido>(resultado);
+        Assert.Contains("limiteDeAtosNaMao", invalido.Motivo);
+        Assert.Equal(5, atual.LimiteDeAtosNaMao);
+        Assert.True(atual.PoolEmOrdemObrigatoria);
+        Assert.Equal(TimeSpan.FromHours(4), atual.FaixaAtencao);
+    }
 }
