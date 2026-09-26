@@ -1095,3 +1095,27 @@ com offset -03:00 no JSON, 400s, 413, 403 Conferente, linhas convertidas aceitas
 adaptador leu o relatório real do dono **localmente** (26 protocolos, 12 blocos, totais batendo; arquivo fora
 do repo). `dotnet run` na porta 5301: `/health` ok, rota no OpenAPI, 401 sem token. 750 testes (266 Domain +
 393 Application + 91 Api.Tests), build sem avisos; cobertura de linha 81% / branch 70,8% / método 83,1%.
+
+## 2026-09-26 — Faixas do semáforo na fila; tipo novo marcado em todas as linhas da prévia
+
+Três mudanças aditivas, sem migration, sem campo removido:
+
+- **Faixas na fila**: `GET /minha-fila` e `GET /conferentes/{id}/fila` ganharam `faixas: { atencaoMinutos,
+  urgenteMinutos }` (de `Configuracao.FaixaAtencao`/`FaixaUrgente`, minutos inteiros) — a legenda "Prazo do
+  ato" da Minha fila mostra os valores reais e o Conferente puro não lê `GET /config`.
+  `MinhaFilaEndpoints.ParaFaixas` + `FaixasSemaforoResponse`.
+- **Bug da prévia**: só a 1ª linha de um tipo novo saía `tipoConhecido: false` — `ImportarLote` perguntava ao
+  `tipoPorNome`, que o próprio laço já tinha preenchido ao criar o tipo. Agora a marcação vem de um
+  `HashSet` com os Ids dos tipos criados neste lote; como o casamento por nome ignora caixa e acento,
+  "INVENTARIO" e "Inventário" do mesmo tipo novo caem no mesmo `TipoAto` e saem com a mesma marcação.
+- **Contagem por tipo novo**: `ResumoImportacao.tiposDesconhecidosContagem: [{ nome, quantidade }]` (prévia e
+  confirmação), linhas processadas (depois da linha de corte) por tipo novo, na mesma ordem de
+  `tiposDesconhecidos` (que continua igual).
+
+Verificado: `ImportarLoteTests` (+5: duas e três linhas do mesmo tipo novo, grafias com/sem acento somando
+numa contagem, linha de corte fora da contagem e mesma ordem na prévia e na confirmação, sem tipo novo →
+vazio); `FaixasNaFilaIntegracaoTests` (padrão 240/60 e depois de `PUT /config` 150/45, nas duas rotas);
+`ImportacaoIntegracaoTests` (+1: JSON camelCase da contagem e `tipoConhecido: false` nas duas linhas).
+`dotnet run` na porta 5302: `/health` 200, `/minha-fila` 401 sem token, schemas novos no OpenAPI. 757 testes
+(266 Domain + 398 Application + 93 Api.Tests), build sem avisos; cobertura de linha 81,2% / branch 70,9% /
+método 83,2%.
